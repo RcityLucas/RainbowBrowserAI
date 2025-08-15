@@ -1,0 +1,137 @@
+[package]
+name = "rainbow-browser-ai"
+version = "8.0.0"
+edition = "2021"
+rust-version = "1.75"
+authors = ["Rainbow City Team <dev@rainbowcity.ai>"]
+description = "智能浏览器AI助手 - 基于LLM的真正智能网页自动化工具"
+homepage = "https://github.com/rainbow-city/browser-ai"
+repository = "https://github.com/rainbow-city/browser-ai"
+license = "MIT"
+keywords = ["ai", "browser", "automation", "llm", "assistant"]
+categories = ["web-programming", "automation", "ai"]
+readme = "README.md"
+
+[features]
+default = ["core"]
+core = []
+apps = ["core"]
+webdriver = ["thirtyfour", "reqwest"]
+web-server = ["warp", "tower", "tower-http"]
+standalone = []
+
+[dependencies]
+# 异步运行时
+tokio = { version = "1.35", features = ["full"] }
+tokio-util = "0.7"
+futures = "0.3"
+
+# 序列化
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+bincode = "1.3"
+
+# HTTP客户端 - 可选功能
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], optional = true }
+
+# WebDriver (浏览器控制) - 可选功能
+thirtyfour = { version = "0.31", optional = true }
+# chromiumoxide = { version = "0.6", optional = true }
+
+# 数据库 (SurrealDB) - 禁用有问题的依赖
+# surrealdb = { version = "1.5", optional = true }
+
+# 错误处理
+anyhow = "1.0"
+thiserror = "1.0"
+
+# 时间处理
+chrono = { version = "0.4", features = ["serde"] }
+
+# UUID生成
+uuid = { version = "1.6", features = ["v4", "serde"] }
+
+# 并发
+parking_lot = "0.12"
+dashmap = "6.0"
+rayon = "1.10"
+
+# 日志
+log = "0.4"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Web服务器 (可选)
+warp = { version = "0.3", optional = true }
+tower = { version = "0.4", optional = true }
+tower-http = { version = "0.5", features = ["fs", "cors"], optional = true }
+
+# 系统信息 - 禁用有问题的依赖
+# sysinfo = "0.29"
+
+# 配置管理 - 禁用有问题的依赖
+# clap = { version = "4.4", features = ["derive"] }
+# config = "0.13"
+
+# 其他工具
+regex = "1.10"
+sha2 = "0.10"
+lazy_static = "1.4"
+once_cell = "1.19"
+
+# URL处理
+url = "2.5"
+
+# HTML解析 - 禁用有问题的依赖
+# scraper = "0.17"
+
+# 异步trait支持
+async-trait = "0.1"
+
+# 嵌入式浏览器支持 (用于独立可执行文件)
+# 使用内置HTTP服务器实现，无需额外依赖
+
+[dev-dependencies]
+tokio-test = "0.4"
+temp-dir = "0.1"
+
+[[bin]]
+name = "rainbow-browser"
+path = "src/main.rs"
+
+[[bin]]
+name = "rainbow-browser-standalone"
+path = "src/bin/standalone.rs"
+
+[[example]]
+name = "practical_demo"
+path = "examples/practical_demo.rs"
+
+[[example]]
+name = "simple_demo"
+path = "examples/simple_demo.rs"
+
+[lib]
+name = "rainbow_browser_ai"
+path = "src/lib.rs"
+
+[profile.dev]
+opt-level = 0
+debug = true
+split-debuginfo = "unpacked"
+
+[profile.release]
+opt-level = 3
+debug = false
+lto = "fat"
+panic = "abort"
+strip = true
+codegen-units = 1
+
+[profile.release-standalone]
+inherits = "release"
+opt-level = "z"
+lto = "fat"
+panic = "abort"
+strip = "symbols"
+codegen-units = 1

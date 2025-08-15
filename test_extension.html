@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RainbowBrowserAI - 扩展测试页面</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 800px;
+            width: 100%;
+            padding: 40px;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 32px;
+        }
+        
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 16px;
+        }
+        
+        .test-section {
+            margin: 30px 0;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+        }
+        
+        .test-section h2 {
+            color: #667eea;
+            margin-bottom: 15px;
+            font-size: 20px;
+        }
+        
+        .form-group {
+            margin: 15px 0;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #555;
+            font-weight: 500;
+        }
+        
+        input, textarea, select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 5px;
+            transition: transform 0.2s;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin: 20px 0;
+        }
+        
+        .search-box {
+            display: flex;
+            gap: 10px;
+            margin: 20px 0;
+        }
+        
+        .search-box input {
+            flex: 1;
+        }
+        
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        
+        .data-table th, .data-table td {
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        .data-table th {
+            background: #667eea;
+            color: white;
+        }
+        
+        .links-list {
+            list-style: none;
+            margin: 20px 0;
+        }
+        
+        .links-list li {
+            padding: 10px;
+            background: white;
+            margin: 5px 0;
+            border-radius: 5px;
+            border: 1px solid #e0e0e0;
+        }
+        
+        .links-list a {
+            color: #667eea;
+            text-decoration: none;
+        }
+        
+        .links-list a:hover {
+            text-decoration: underline;
+        }
+        
+        .product-card {
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            padding: 15px;
+            margin: 10px 0;
+            background: white;
+        }
+        
+        .product-price {
+            color: #ff4444;
+            font-size: 24px;
+            font-weight: bold;
+        }
+        
+        .status-message {
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+            text-align: center;
+        }
+        
+        .status-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .status-info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🌈 RainbowBrowserAI 测试页面</h1>
+        <p class="subtitle">测试浏览器扩展的各种功能</p>
+        
+        <div class="status-info status-message">
+            💡 提示：安装扩展后，点击页面右下角的彩虹按钮，或按 Ctrl+Shift+R 激活AI助手
+        </div>
+        
+        <!-- 搜索测试 -->
+        <div class="test-section">
+            <h2>🔍 搜索功能测试</h2>
+            <div class="search-box">
+                <input type="search" placeholder="输入搜索关键词..." id="searchInput">
+                <button onclick="performSearch()">搜索</button>
+            </div>
+            <p>试试说："搜索人工智能" 或 "search for AI news"</p>
+        </div>
+        
+        <!-- 表单填写测试 -->
+        <div class="test-section">
+            <h2>✍️ 表单填写测试</h2>
+            <form id="testForm">
+                <div class="form-group">
+                    <label>姓名</label>
+                    <input type="text" name="name" placeholder="请输入姓名">
+                </div>
+                <div class="form-group">
+                    <label>邮箱</label>
+                    <input type="email" name="email" placeholder="请输入邮箱">
+                </div>
+                <div class="form-group">
+                    <label>电话</label>
+                    <input type="tel" name="phone" placeholder="请输入电话">
+                </div>
+                <div class="form-group">
+                    <label>留言</label>
+                    <textarea name="message" rows="3" placeholder="请输入留言"></textarea>
+                </div>
+                <button type="submit">提交表单</button>
+            </form>
+            <p>试试说："填写表单" 或 "fill the form with test data"</p>
+        </div>
+        
+        <!-- 按钮点击测试 -->
+        <div class="test-section">
+            <h2>🖱️ 点击操作测试</h2>
+            <div class="button-group">
+                <button id="loginBtn">登录</button>
+                <button id="registerBtn">注册</button>
+                <button id="nextBtn">下一页</button>
+                <button id="submitBtn">提交</button>
+                <button id="cancelBtn">取消</button>
+            </div>
+            <p>试试说："点击登录按钮" 或 "click the next button"</p>
+        </div>
+        
+        <!-- 数据提取测试 -->
+        <div class="test-section">
+            <h2>📋 数据提取测试</h2>
+            
+            <h3>商品列表</h3>
+            <div class="product-card">
+                <h4>iPhone 15 Pro</h4>
+                <div class="product-price">¥8,999</div>
+                <p>最新款苹果手机，钛金属设计</p>
+            </div>
+            <div class="product-card">
+                <h4>MacBook Pro</h4>
+                <div class="product-price">¥14,999</div>
+                <p>M3芯片，性能强劲</p>
+            </div>
+            <div class="product-card">
+                <h4>AirPods Pro</h4>
+                <div class="product-price">¥1,999</div>
+                <p>主动降噪，音质出色</p>
+            </div>
+            
+            <p>试试说："提取所有价格" 或 "extract all product names"</p>
+        </div>
+        
+        <!-- 链接列表测试 -->
+        <div class="test-section">
+            <h2>🔗 链接导航测试</h2>
+            <ul class="links-list">
+                <li><a href="https://www.google.com">Google 搜索</a></li>
+                <li><a href="https://www.github.com">GitHub 代码托管</a></li>
+                <li><a href="https://www.stackoverflow.com">Stack Overflow 问答</a></li>
+                <li><a href="https://www.mozilla.org">Mozilla 开发者</a></li>
+            </ul>
+            <p>试试说："提取所有链接" 或 "navigate to GitHub"</p>
+        </div>
+        
+        <!-- 数据表格测试 -->
+        <div class="test-section">
+            <h2>📊 表格数据测试</h2>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>产品名称</th>
+                        <th>价格</th>
+                        <th>库存</th>
+                        <th>状态</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>笔记本电脑</td>
+                        <td>¥5,999</td>
+                        <td>50</td>
+                        <td>有货</td>
+                    </tr>
+                    <tr>
+                        <td>无线鼠标</td>
+                        <td>¥199</td>
+                        <td>200</td>
+                        <td>有货</td>
+                    </tr>
+                    <tr>
+                        <td>机械键盘</td>
+                        <td>¥699</td>
+                        <td>0</td>
+                        <td>缺货</td>
+                    </tr>
+                </tbody>
+            </table>
+            <p>试试说："提取表格数据" 或 "find products in stock"</p>
+        </div>
+        
+        <div class="status-success status-message">
+            ✅ 页面加载完成！现在可以测试RainbowBrowserAI扩展的各种功能了。
+        </div>
+    </div>
+    
+    <script>
+        // 测试页面的交互脚本
+        function performSearch() {
+            const query = document.getElementById('searchInput').value;
+            alert(`搜索: ${query}`);
+        }
+        
+        // 为所有按钮添加点击事件
+        document.querySelectorAll('button').forEach(button => {
+            button.addEventListener('click', function(e) {
+                if (this.type !== 'submit' && this.textContent !== '搜索') {
+                    console.log(`点击了按钮: ${this.textContent}`);
+                }
+            });
+        });
+        
+        // 表单提交处理
+        document.getElementById('testForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            alert('表单已提交！');
+        });
+        
+        console.log('🌈 RainbowBrowserAI 测试页面已加载');
+    </script>
+</body>
+</html>

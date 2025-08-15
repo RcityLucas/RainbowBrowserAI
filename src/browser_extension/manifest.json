@@ -1,0 +1,58 @@
+{
+  "manifest_version": 3,
+  "name": "RainbowBrowserAI Assistant",
+  "version": "8.0.0",
+  "description": "AI-powered browser automation assistant - control your browser with natural language",
+  "permissions": [
+    "activeTab",
+    "tabs",
+    "storage",
+    "scripting",
+    "webNavigation",
+    "contextMenus"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "css": ["rainbow.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/rainbow-16.png",
+      "32": "icons/rainbow-32.png",
+      "48": "icons/rainbow-48.png",
+      "128": "icons/rainbow-128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/rainbow-16.png",
+    "32": "icons/rainbow-32.png",
+    "48": "icons/rainbow-48.png",
+    "128": "icons/rainbow-128.png"
+  },
+  "commands": {
+    "activate-ai": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+R",
+        "mac": "Command+Shift+R"
+      },
+      "description": "Activate RainbowBrowserAI"
+    }
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["rainbow-ui.html", "rainbow.css", "icons/*"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}

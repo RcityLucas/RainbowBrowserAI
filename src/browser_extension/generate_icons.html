@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Generate Rainbow Icons</title>
+    <style>
+        canvas { 
+            border: 1px solid #ccc; 
+            margin: 10px; 
+            display: inline-block;
+        }
+        .icon-container {
+            text-align: center;
+            padding: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="icon-container">
+        <h2>🌈 RainbowBrowserAI Icon Generator</h2>
+        <p>Right-click each canvas and save as PNG with the specified filename</p>
+        
+        <div>
+            <h3>rainbow-16.png</h3>
+            <canvas id="icon16" width="16" height="16"></canvas>
+        </div>
+        
+        <div>
+            <h3>rainbow-32.png</h3>
+            <canvas id="icon32" width="32" height="32"></canvas>
+        </div>
+        
+        <div>
+            <h3>rainbow-48.png</h3>
+            <canvas id="icon48" width="48" height="48"></canvas>
+        </div>
+        
+        <div>
+            <h3>rainbow-128.png</h3>
+            <canvas id="icon128" width="128" height="128"></canvas>
+        </div>
+    </div>
+
+    <script>
+        function drawRainbowIcon(canvasId, size) {
+            const canvas = document.getElementById(canvasId);
+            const ctx = canvas.getContext('2d');
+            
+            // Create gradient background
+            const gradient = ctx.createLinearGradient(0, 0, size, size);
+            gradient.addColorStop(0, '#667eea');
+            gradient.addColorStop(1, '#764ba2');
+            
+            // Draw rounded square background
+            const radius = size * 0.2;
+            ctx.beginPath();
+            ctx.moveTo(radius, 0);
+            ctx.lineTo(size - radius, 0);
+            ctx.quadraticCurveTo(size, 0, size, radius);
+            ctx.lineTo(size, size - radius);
+            ctx.quadraticCurveTo(size, size, size - radius, size);
+            ctx.lineTo(radius, size);
+            ctx.quadraticCurveTo(0, size, 0, size - radius);
+            ctx.lineTo(0, radius);
+            ctx.quadraticCurveTo(0, 0, radius, 0);
+            ctx.closePath();
+            
+            ctx.fillStyle = gradient;
+            ctx.fill();
+            
+            // Draw rainbow emoji
+            ctx.font = `${size * 0.6}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('🌈', size / 2, size / 2);
+        }
+        
+        // Generate all icons
+        drawRainbowIcon('icon16', 16);
+        drawRainbowIcon('icon32', 32);
+        drawRainbowIcon('icon48', 48);
+        drawRainbowIcon('icon128', 128);
+    </script>
+</body>
+</html>
