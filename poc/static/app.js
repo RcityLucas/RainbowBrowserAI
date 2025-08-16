@@ -93,6 +93,15 @@ class RainbowDashboard {
         document.getElementById('real-time-updates')?.addEventListener('change', (e) => {
             this.toggleRealTimeUpdates(e.target.checked);
         });
+
+        // Plugin management
+        document.getElementById('discover-plugins')?.addEventListener('click', () => {
+            this.discoverPlugins();
+        });
+
+        document.getElementById('refresh-plugins')?.addEventListener('click', () => {
+            this.loadPlugins();
+        });
     }
 
     // Tab Management
@@ -116,6 +125,10 @@ class RainbowDashboard {
                 break;
             case 'metrics':
                 this.refreshMetrics();
+                break;
+            case 'plugins':
+                this.loadPlugins();
+                this.loadPluginMetrics();
                 break;
         }
     }
@@ -638,6 +651,19 @@ class RainbowDashboard {
                 }
             });
 
+            this.eventSource.addEventListener('plugin', (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    this.updatePluginMetrics(data);
+                    if (data.action !== 'status') {
+                        this.showNotification(`Plugin ${data.action}: ${data.plugin_name}`, 'info');
+                        this.loadPlugins(); // Refresh plugin list
+                    }
+                } catch (error) {
+                    console.error('Error parsing plugin event:', error);
+                }
+            });
+
             this.eventSource.addEventListener('heartbeat', (event) => {
                 try {
                     const data = JSON.parse(event.data);
@@ -728,6 +754,254 @@ class RainbowDashboard {
             setTimeout(() => notification.remove(), 300);
         }, 3000);
     }
+
+    // Plugin Management Methods
+    async loadPlugins() {
+        try {
+            const response = await this.makeRequest('/plugins', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'list' })
+            });
+
+            if (response.plugins) {
+                this.displayPlugins(response.plugins);
+            }
+        } catch (error) {
+            console.error('Error loading plugins:', error);
+            this.showNotification('Failed to load plugins', 'error');
+        }
+    }
+
+    async discoverPlugins() {
+        try {
+            this.showNotification('Discovering plugins...', 'info');
+            const response = await this.makeRequest('/plugins', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'discover' })
+            });
+
+            this.showNotification(response.message, 'success');
+            await this.loadPlugins(); // Refresh the list
+        } catch (error) {
+            console.error('Error discovering plugins:', error);
+            this.showNotification('Failed to discover plugins', 'error');
+        }
+    }
+
+    displayPlugins(plugins) {
+        const grid = document.getElementById('plugins-grid');
+        if (!grid) return;
+
+        if (plugins.length === 0) {
+            grid.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-puzzle-piece"></i>
+                    <p>No plugins discovered yet</p>
+                    <button class="btn btn-primary" onclick="dashboard.discoverPlugins()">
+                        <i class="fas fa-search"></i> Discover Plugins
+                    </button>
+                </div>
+            `;
+            return;
+        }
+
+        grid.innerHTML = plugins.map(plugin => `
+            <div class="plugin-card" data-plugin-id="${plugin.id}">
+                <div class="plugin-type">${plugin.plugin_type}</div>
+                <div class="plugin-header">
+                    <div class="plugin-info">
+                        <h4>${plugin.name}</h4>
+                        <div class="version">v${plugin.version}</div>
+                    </div>
+                    <div class="plugin-status ${plugin.state.toLowerCase().replace(/\s+/g, '-')}">
+                        <i class="fas ${this.getPluginStatusIcon(plugin.state)}"></i>
+                        ${plugin.state}
+                    </div>
+                </div>
+                <div class="plugin-description">${plugin.description}</div>
+                <div class="plugin-meta">
+                    ${plugin.author ? `<div class="meta-item"><i class="fas fa-user"></i> ${plugin.author}</div>` : ''}
+                    ${plugin.dependencies.length > 0 ? `<div class="meta-item"><i class="fas fa-link"></i> ${plugin.dependencies.length} deps</div>` : ''}
+                    ${plugin.permissions.length > 0 ? `<div class="meta-item"><i class="fas fa-shield-alt"></i> ${plugin.permissions.length} perms</div>` : ''}
+                </div>
+                <div class="plugin-actions">
+                    ${this.getPluginActions(plugin)}
+                </div>
+                ${plugin.dependencies.length > 0 ? `
+                    <div class="plugin-dependencies">
+                        ${plugin.dependencies.map(dep => `<span class="dep-tag">${dep}</span>`).join('')}
+                    </div>
+                ` : ''}
+            </div>
+        `).join('');
+    }
+
+    getPluginStatusIcon(state) {
+        const iconMap = {
+            'Discovered': 'fa-eye',
+            'Loading': 'fa-spinner fa-spin',
+            'Loaded': 'fa-check-circle',
+            'Active': 'fa-play-circle',
+            'Suspended': 'fa-pause-circle',
+            'Unloading': 'fa-spinner fa-spin',
+            'Error': 'fa-exclamation-triangle'
+        };
+        return iconMap[state] || 'fa-question-circle';
+    }
+
+    getPluginActions(plugin) {
+        const state = plugin.state.toLowerCase();
+        let actions = [];
+
+        if (state === 'discovered') {
+            actions.push(`<button class="btn btn-primary" onclick="dashboard.loadPlugin('${plugin.id}')">
+                <i class="fas fa-download"></i> Load
+            </button>`);
+        } else if (state === 'loaded' || state === 'active') {
+            actions.push(`<button class="btn btn-warning" onclick="dashboard.unloadPlugin('${plugin.id}')">
+                <i class="fas fa-stop"></i> Unload
+            </button>`);
+            actions.push(`<button class="btn btn-secondary" onclick="dashboard.reloadPlugin('${plugin.id}')">
+                <i class="fas fa-redo"></i> Reload
+            </button>`);
+            actions.push(`<button class="btn btn-info" onclick="dashboard.configurePlugin('${plugin.id}', '${plugin.name}')">
+                <i class="fas fa-cog"></i> Configure
+            </button>`);
+        } else if (state.includes('error')) {
+            actions.push(`<button class="btn btn-secondary" onclick="dashboard.reloadPlugin('${plugin.id}')">
+                <i class="fas fa-redo"></i> Retry
+            </button>`);
+        }
+
+        return actions.join('');
+    }
+
+    async loadPlugin(pluginId) {
+        try {
+            this.showNotification('Loading plugin...', 'info');
+            const response = await this.makeRequest('/plugins', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'load', plugin_id: pluginId })
+            });
+
+            this.showNotification(response.message, 'success');
+            await this.loadPlugins();
+        } catch (error) {
+            console.error('Error loading plugin:', error);
+            this.showNotification('Failed to load plugin', 'error');
+        }
+    }
+
+    async unloadPlugin(pluginId) {
+        try {
+            this.showNotification('Unloading plugin...', 'info');
+            const response = await this.makeRequest('/plugins', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'unload', plugin_id: pluginId })
+            });
+
+            this.showNotification(response.message, 'success');
+            await this.loadPlugins();
+        } catch (error) {
+            console.error('Error unloading plugin:', error);
+            this.showNotification('Failed to unload plugin', 'error');
+        }
+    }
+
+    async reloadPlugin(pluginId) {
+        try {
+            this.showNotification('Reloading plugin...', 'info');
+            const response = await this.makeRequest('/plugins', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'reload', plugin_id: pluginId })
+            });
+
+            this.showNotification(response.message, 'success');
+            await this.loadPlugins();
+        } catch (error) {
+            console.error('Error reloading plugin:', error);
+            this.showNotification('Failed to reload plugin', 'error');
+        }
+    }
+
+    configurePlugin(pluginId, pluginName) {
+        const modal = document.getElementById('plugin-config-modal');
+        const nameElement = document.getElementById('config-plugin-name');
+        const form = document.getElementById('plugin-config-form');
+        
+        nameElement.textContent = `Configure ${pluginName}`;
+        modal.style.display = 'flex';
+        
+        // Store plugin ID for form submission
+        form.dataset.pluginId = pluginId;
+        
+        // Set up form submission
+        form.onsubmit = async (e) => {
+            e.preventDefault();
+            await this.savePluginConfig(pluginId);
+        };
+    }
+
+    async savePluginConfig(pluginId) {
+        try {
+            const settingsText = document.getElementById('plugin-settings').value;
+            let config;
+            
+            try {
+                config = JSON.parse(settingsText || '{}');
+            } catch (parseError) {
+                this.showNotification('Invalid JSON configuration', 'error');
+                return;
+            }
+
+            this.showNotification('Saving plugin configuration...', 'info');
+            const response = await this.makeRequest('/plugins', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    action: 'configure', 
+                    plugin_id: pluginId,
+                    config: config
+                })
+            });
+
+            this.showNotification(response.message, 'success');
+            this.closePluginConfig();
+            await this.loadPlugins();
+        } catch (error) {
+            console.error('Error saving plugin configuration:', error);
+            this.showNotification('Failed to save plugin configuration', 'error');
+        }
+    }
+
+    closePluginConfig() {
+        const modal = document.getElementById('plugin-config-modal');
+        const settingsTextarea = document.getElementById('plugin-settings');
+        
+        modal.style.display = 'none';
+        settingsTextarea.value = '';
+    }
+
+    updatePluginMetrics(data) {
+        // Update plugin metrics in the UI
+        document.getElementById('total-plugins').textContent = data.total_plugins || 0;
+        document.getElementById('active-plugins').textContent = data.active_plugins || 0;
+        document.getElementById('failed-plugins').textContent = data.failed_plugins || 0;
+    }
+
+    async loadPluginMetrics() {
+        try {
+            const response = await this.makeRequest('/plugins/metrics');
+            this.updatePluginMetrics(response);
+        } catch (error) {
+            console.error('Error loading plugin metrics:', error);
+        }
+    }
 }
 
 // Initialize dashboard when DOM is ready
@@ -735,6 +1009,19 @@ let dashboard;
 document.addEventListener('DOMContentLoaded', () => {
     dashboard = new RainbowDashboard();
 });
+
+// Global functions for modal controls
+function closePluginConfig() {
+    if (dashboard) {
+        dashboard.closePluginConfig();
+    }
+}
+
+function discoverPlugins() {
+    if (dashboard) {
+        dashboard.discoverPlugins();
+    }
+}
 
 // Add slide out animation
 const style = document.createElement('style');

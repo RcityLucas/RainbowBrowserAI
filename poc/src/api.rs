@@ -23,7 +23,7 @@ use std::convert::Infallible;
 use crate::{
     SimpleBrowser, BrowserPool, LLMService, WorkflowEngine, Workflow,
     MetricsCollector, SecurityMiddleware, Config, CostTracker,
-    ParsedCommand, ScreenshotOptions,
+    ParsedCommand, ScreenshotOptions, PluginManager,
 };
 
 /// API state shared across handlers
@@ -36,6 +36,7 @@ pub struct ApiState {
     pub config: Arc<Config>,
     pub cost_tracker: Arc<RwLock<CostTracker>>,
     pub sessions: Arc<RwLock<HashMap<String, BrowserSession>>>,
+    pub plugin_manager: Arc<RwLock<PluginManager>>,
 }
 
 /// Browser session for stateful operations
@@ -80,6 +81,14 @@ pub enum SseEvent {
     Heartbeat {
         timestamp: String,
         uptime_seconds: u64,
+    },
+    #[serde(rename = "plugin")]
+    Plugin {
+        action: String, // "loaded", "unloaded", "error", "discovered"
+        plugin_id: String,
+        plugin_name: String,
+        total_plugins: usize,
+        active_plugins: usize,
     },
 }
 
@@ -240,6 +249,42 @@ pub struct CostOperation {
     pub operation: String,
     pub cost: f64,
     pub timestamp: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct PluginRequest {
+    pub action: String, // "list", "load", "unload", "reload", "configure", "discover"
+    pub plugin_id: Option<String>,
+    pub config: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct PluginResponse {
+    pub success: bool,
+    pub message: String,
+    pub plugins: Option<Vec<PluginInfo>>,
+    pub plugin_id: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct PluginInfo {
+    pub id: String,
+    pub name: String,
+    pub version: String,
+    pub description: String,
+    pub plugin_type: String,
+    pub state: String,
+    pub author: Option<String>,
+    pub dependencies: Vec<String>,
+    pub permissions: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct PluginMetrics {
+    pub total_plugins: usize,
+    pub active_plugins: usize,
+    pub failed_plugins: usize,
+    pub discovered_plugins: usize,
 }
 
 // API Handlers
@@ -628,6 +673,227 @@ pub async fn cost_handler(State(state): State<ApiState>) -> Result<Json<CostResp
     }))
 }
 
+/// Manage plugins
+pub async fn plugin_handler(
+    State(state): State<ApiState>,
+    Json(req): Json<PluginRequest>,
+) -> Result<Json<PluginResponse>, ApiError> {
+    // Rate limiting
+    state.security.check_request("api").await
+        .map_err(|_| ApiError {
+            error: "Rate limit exceeded".to_string(),
+            details: None,
+            code: 429,
+        })?;
+    
+    let plugin_manager = state.plugin_manager.read().await;
+    
+    match req.action.as_str() {
+        "list" => {
+            let registry = plugin_manager.registry.read().await;
+            let plugins = registry.list_plugins();
+            
+            let plugin_list: Vec<PluginInfo> = plugins.iter().map(|plugin| {
+                PluginInfo {
+                    id: plugin.id.to_string(),
+                    name: plugin.manifest.plugin.name.clone(),
+                    version: plugin.manifest.plugin.version.clone(),
+                    description: plugin.manifest.plugin.description.clone(),
+                    plugin_type: format!("{:?}", plugin.manifest.plugin.plugin_type),
+                    state: format!("{:?}", plugin.state),
+                    author: Some(plugin.manifest.plugin.author.clone()),
+                    dependencies: plugin.manifest.dependencies.as_ref()
+                        .map(|deps| vec![deps.runtime_version.clone()])
+                        .unwrap_or_default(),
+                    permissions: plugin.manifest.capabilities.as_ref()
+                        .map(|caps| caps.permissions.iter().map(|p| format!("{:?}", p)).collect())
+                        .unwrap_or_default(),
+                }
+            }).collect();
+            
+            Ok(Json(PluginResponse {
+                success: true,
+                message: format!("Found {} plugins", plugin_list.len()),
+                plugins: Some(plugin_list),
+                plugin_id: None,
+            }))
+        }
+        
+        "discover" => {
+            drop(plugin_manager); // Release read lock
+            let mut plugin_manager = state.plugin_manager.write().await;
+            
+            let plugins_dir = std::path::Path::new("plugins");
+            let discovered = if plugins_dir.exists() {
+                plugin_manager.discover_plugins(plugins_dir).await
+                    .map_err(|e| ApiError {
+                        error: "Failed to discover plugins".to_string(),
+                        details: Some(e.to_string()),
+                        code: 500,
+                    })?
+            } else {
+                Vec::new()
+            };
+            
+            Ok(Json(PluginResponse {
+                success: true,
+                message: format!("Discovered {} plugins", discovered.len()),
+                plugins: None,
+                plugin_id: None,
+            }))
+        }
+        
+        "load" => {
+            if let Some(plugin_id) = req.plugin_id {
+                drop(plugin_manager); // Release read lock
+                let plugin_manager = state.plugin_manager.read().await;
+                
+                plugin_manager.load_plugin_by_string_id(&plugin_id).await
+                    .map_err(|e| ApiError {
+                        error: "Failed to load plugin".to_string(),
+                        details: Some(e.to_string()),
+                        code: 500,
+                    })?;
+                
+                Ok(Json(PluginResponse {
+                    success: true,
+                    message: format!("Plugin '{}' loaded successfully", plugin_id),
+                    plugins: None,
+                    plugin_id: Some(plugin_id),
+                }))
+            } else {
+                Err(ApiError {
+                    error: "Plugin ID required".to_string(),
+                    details: None,
+                    code: 400,
+                })
+            }
+        }
+        
+        "unload" => {
+            if let Some(plugin_id) = req.plugin_id {
+                drop(plugin_manager); // Release read lock
+                let plugin_manager = state.plugin_manager.read().await;
+                
+                plugin_manager.unload_plugin_by_string_id(&plugin_id).await
+                    .map_err(|e| ApiError {
+                        error: "Failed to unload plugin".to_string(),
+                        details: Some(e.to_string()),
+                        code: 500,
+                    })?;
+                
+                Ok(Json(PluginResponse {
+                    success: true,
+                    message: format!("Plugin '{}' unloaded successfully", plugin_id),
+                    plugins: None,
+                    plugin_id: Some(plugin_id),
+                }))
+            } else {
+                Err(ApiError {
+                    error: "Plugin ID required".to_string(),
+                    details: None,
+                    code: 400,
+                })
+            }
+        }
+        
+        "reload" => {
+            if let Some(plugin_id) = req.plugin_id {
+                drop(plugin_manager); // Release read lock
+                let plugin_manager = state.plugin_manager.read().await;
+                
+                // Unload first, then load
+                let _ = plugin_manager.unload_plugin_by_string_id(&plugin_id).await;
+                plugin_manager.load_plugin_by_string_id(&plugin_id).await
+                    .map_err(|e| ApiError {
+                        error: "Failed to reload plugin".to_string(),
+                        details: Some(e.to_string()),
+                        code: 500,
+                    })?;
+                
+                Ok(Json(PluginResponse {
+                    success: true,
+                    message: format!("Plugin '{}' reloaded successfully", plugin_id),
+                    plugins: None,
+                    plugin_id: Some(plugin_id),
+                }))
+            } else {
+                Err(ApiError {
+                    error: "Plugin ID required".to_string(),
+                    details: None,
+                    code: 400,
+                })
+            }
+        }
+        
+        "configure" => {
+            if let Some(plugin_id) = req.plugin_id {
+                if let Some(config) = req.config {
+                    drop(plugin_manager); // Release read lock
+                    let plugin_manager = state.plugin_manager.read().await;
+                    
+                    plugin_manager.configure_plugin_by_string_id(&plugin_id, config).await
+                        .map_err(|e| ApiError {
+                            error: "Failed to configure plugin".to_string(),
+                            details: Some(e.to_string()),
+                            code: 500,
+                        })?;
+                    
+                    Ok(Json(PluginResponse {
+                        success: true,
+                        message: format!("Plugin '{}' configured successfully", plugin_id),
+                        plugins: None,
+                        plugin_id: Some(plugin_id),
+                    }))
+                } else {
+                    Err(ApiError {
+                        error: "Configuration data required".to_string(),
+                        details: None,
+                        code: 400,
+                    })
+                }
+            } else {
+                Err(ApiError {
+                    error: "Plugin ID required".to_string(),
+                    details: None,
+                    code: 400,
+                })
+            }
+        }
+        
+        _ => Err(ApiError {
+            error: "Invalid action".to_string(),
+            details: Some("Valid actions: list, discover, load, unload, reload, configure".to_string()),
+            code: 400,
+        })
+    }
+}
+
+/// Get plugin metrics
+pub async fn plugin_metrics_handler(State(state): State<ApiState>) -> Result<Json<PluginMetrics>, ApiError> {
+    let plugin_manager = state.plugin_manager.read().await;
+    let registry = plugin_manager.registry.read().await;
+    let plugins = registry.list_plugins();
+    
+    let total_plugins = plugins.len();
+    let active_plugins = plugins.iter()
+        .filter(|p| matches!(p.state, crate::plugins::types::PluginState::Active))
+        .count();
+    let failed_plugins = plugins.iter()
+        .filter(|p| matches!(p.state, crate::plugins::types::PluginState::Error(_)))
+        .count();
+    let discovered_plugins = plugins.iter()
+        .filter(|p| matches!(p.state, crate::plugins::types::PluginState::Discovered))
+        .count();
+    
+    Ok(Json(PluginMetrics {
+        total_plugins,
+        active_plugins,
+        failed_plugins,
+        discovered_plugins,
+    }))
+}
+
 // Helper functions
 
 async fn execute_parsed_command(
@@ -689,6 +955,10 @@ pub fn create_router(state: ApiState) -> Router {
         // AI operations
         .route("/command", post(natural_language_handler))
         .route("/workflow", post(workflow_handler))
+        
+        // Plugin operations
+        .route("/plugins", post(plugin_handler))
+        .route("/plugins/metrics", get(plugin_metrics_handler))
         
         // Real-time updates
         .route("/events", get(sse_handler))
@@ -758,7 +1028,18 @@ pub async fn sse_handler(
                 yield Ok(Event::default().event("cost").data(data));
             }
 
-            // Send heartbeat
+            // Get plugin metrics
+            let plugin_manager = state.plugin_manager.read().await;
+            let registry = plugin_manager.registry.read().await;
+            let plugins = registry.list_plugins();
+            let total_plugins = plugins.len();
+            let active_plugins = plugins.iter()
+                .filter(|p| matches!(p.state, crate::plugins::types::PluginState::Active))
+                .count();
+            drop(registry);
+            drop(plugin_manager);
+
+            // Send plugin metrics as part of heartbeat
             let heartbeat = SseEvent::Heartbeat {
                 timestamp: chrono::Utc::now().to_rfc3339(),
                 uptime_seconds: std::time::SystemTime::now()
@@ -769,6 +1050,19 @@ pub async fn sse_handler(
             
             if let Ok(data) = serde_json::to_string(&heartbeat) {
                 yield Ok(Event::default().event("heartbeat").data(data));
+            }
+            
+            // Send periodic plugin status
+            let plugin_status = SseEvent::Plugin {
+                action: "status".to_string(),
+                plugin_id: "system".to_string(),
+                plugin_name: "Plugin System".to_string(),
+                total_plugins,
+                active_plugins,
+            };
+            
+            if let Ok(data) = serde_json::to_string(&plugin_status) {
+                yield Ok(Event::default().event("plugin").data(data));
             }
         }
     };
@@ -803,6 +1097,14 @@ pub async fn start_server(config: Config) -> Result<()> {
     let security = Arc::new(SecurityMiddleware::new(Default::default()));
     let cost_tracker = Arc::new(RwLock::new(CostTracker::new(config.budget.daily_limit)));
     
+    // Initialize plugin system
+    let plugin_manager = crate::init_plugin_system().await
+        .map_err(|e| {
+            tracing::warn!("Failed to initialize plugin system: {}", e);
+            e
+        })?;
+    let plugin_manager = Arc::new(RwLock::new(plugin_manager));
+    
     let state = ApiState {
         browser_pool,
         llm_service,
@@ -811,6 +1113,7 @@ pub async fn start_server(config: Config) -> Result<()> {
         config: Arc::new(config),
         cost_tracker,
         sessions: Arc::new(RwLock::new(HashMap::new())),
+        plugin_manager,
     };
     
     let app = create_router(state);

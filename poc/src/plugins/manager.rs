@@ -16,7 +16,7 @@ use super::{
 /// Core plugin manager for the RainbowBrowserAI system
 pub struct PluginManager {
     // Core components
-    registry: Arc<RwLock<PluginRegistry>>,
+    pub registry: Arc<RwLock<PluginRegistry>>,
     loaded_plugins: Arc<RwLock<HashMap<PluginId, LoadedPlugin>>>,
     sandbox_manager: Arc<SandboxManager>,
     event_bus: Arc<dyn EventBus>,
@@ -68,6 +68,12 @@ impl PluginManager {
 
         self.load_plugin_by_id(&plugin_id).await?;
         Ok(plugin_id)
+    }
+
+    /// Load a plugin by its string ID
+    pub async fn load_plugin_by_string_id(&self, plugin_id: &str) -> Result<()> {
+        let plugin_id = PluginId(plugin_id.to_string());
+        self.load_plugin_by_id(&plugin_id).await
     }
 
     /// Load a plugin by its ID
@@ -155,6 +161,12 @@ impl PluginManager {
 
         info!("Successfully loaded plugin: {}", plugin_id);
         Ok(())
+    }
+
+    /// Unload a plugin by string ID
+    pub async fn unload_plugin_by_string_id(&self, plugin_id: &str) -> Result<()> {
+        let plugin_id = PluginId(plugin_id.to_string());
+        self.unload_plugin(&plugin_id).await
     }
 
     /// Unload a plugin
@@ -259,6 +271,19 @@ impl PluginManager {
             
             info
         }).collect()
+    }
+
+    /// Configure a plugin by string ID with JSON value
+    pub async fn configure_plugin_by_string_id(&self, plugin_id: &str, config: serde_json::Value) -> Result<()> {
+        let plugin_id = PluginId(plugin_id.to_string());
+        let plugin_config = PluginConfig {
+            plugin_id: plugin_id.0.clone(),
+            enabled: true,
+            settings: config,
+            permissions: Vec::new(),
+            resource_limits: ResourceLimits::default(),
+        };
+        self.configure_plugin(&plugin_id, plugin_config).await
     }
 
     /// Configure a plugin

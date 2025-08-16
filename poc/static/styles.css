@@ -482,6 +482,244 @@ body {
     margin-top: 1rem;
 }
 
+/* Plugins Manager */
+.plugins-manager {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+}
+
+.plugins-toolbar {
+    display: flex;
+    gap: 1rem;
+}
+
+.plugins-metrics {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+}
+
+.plugins-list h3 {
+    color: var(--text-primary);
+    margin-bottom: 1rem;
+    border-bottom: 2px solid var(--primary-color);
+    padding-bottom: 0.5rem;
+}
+
+.plugins-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1rem;
+}
+
+.plugin-card {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 1.5rem;
+    transition: all 0.3s ease;
+    position: relative;
+}
+
+.plugin-card:hover {
+    border-color: var(--primary-color);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 123, 255, 0.1);
+}
+
+.plugin-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 1rem;
+}
+
+.plugin-info h4 {
+    color: var(--text-primary);
+    margin: 0 0 0.25rem 0;
+    font-size: 1.1rem;
+}
+
+.plugin-info .version {
+    color: var(--text-muted);
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+.plugin-status {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.plugin-status.discovered {
+    background: rgba(66, 153, 225, 0.1);
+    color: var(--info-color);
+}
+
+.plugin-status.active {
+    background: rgba(72, 187, 120, 0.1);
+    color: var(--success-color);
+}
+
+.plugin-status.loaded {
+    background: rgba(246, 173, 85, 0.1);
+    color: var(--warning-color);
+}
+
+.plugin-status.error {
+    background: rgba(245, 101, 101, 0.1);
+    color: var(--danger-color);
+}
+
+.plugin-status.loading {
+    background: rgba(102, 126, 234, 0.1);
+    color: var(--primary-color);
+    animation: pulse 1.5s infinite;
+}
+
+.plugin-description {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    line-height: 1.4;
+    margin-bottom: 1rem;
+    min-height: 2.8rem;
+}
+
+.plugin-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.plugin-meta .meta-item {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.plugin-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.plugin-actions .btn {
+    flex: 1;
+    min-width: auto;
+    padding: 0.5rem 1rem;
+    font-size: 0.75rem;
+}
+
+.plugin-type {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    background: var(--bg-tertiary);
+    color: var(--text-muted);
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.625rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.plugin-dependencies {
+    margin-top: 0.5rem;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.plugin-dependencies .dep-tag {
+    display: inline-block;
+    background: var(--bg-tertiary);
+    padding: 0.125rem 0.5rem;
+    border-radius: 12px;
+    margin-right: 0.25rem;
+    margin-bottom: 0.25rem;
+}
+
+/* Plugin Configuration Modal */
+.plugin-config-modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1000;
+    justify-content: center;
+    align-items: center;
+}
+
+.plugin-config-content {
+    background: var(--bg-primary);
+    border-radius: 8px;
+    padding: 2rem;
+    max-width: 500px;
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+.plugin-config-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.plugin-config-close {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 0;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: all 0.2s ease;
+}
+
+.plugin-config-close:hover {
+    background: rgba(245, 101, 101, 0.1);
+    color: var(--danger-color);
+}
+
+.config-form .form-group {
+    margin-bottom: 1rem;
+}
+
+.config-form label {
+    display: block;
+    margin-bottom: 0.5rem;
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.config-form textarea {
+    min-height: 150px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.875rem;
+}
+
 /* Settings Panel */
 .settings-panel {
     background: var(--bg-primary);

@@ -52,6 +52,10 @@
                         <i class="fas fa-chart-line"></i>
                         <span>Metrics</span>
                     </a>
+                    <a href="#" class="nav-item" data-tab="plugins">
+                        <i class="fas fa-plug"></i>
+                        <span>Plugins</span>
+                    </a>
                     <a href="#" class="nav-item" data-tab="settings">
                         <i class="fas fa-cog"></i>
                         <span>Settings</span>
@@ -264,6 +268,69 @@ steps:
                     </div>
                 </div>
 
+                <!-- Plugins Tab -->
+                <div class="tab-content" id="plugins-tab">
+                    <div class="content-header">
+                        <h2><i class="fas fa-plug"></i> Plugin Management</h2>
+                    </div>
+                    <div class="plugins-manager">
+                        <div class="plugins-toolbar">
+                            <button class="btn btn-primary" id="discover-plugins">
+                                <i class="fas fa-search"></i> Discover Plugins
+                            </button>
+                            <button class="btn btn-secondary" id="refresh-plugins">
+                                <i class="fas fa-sync"></i> Refresh
+                            </button>
+                        </div>
+                        
+                        <div class="plugins-metrics">
+                            <div class="metric-card">
+                                <div class="metric-icon">
+                                    <i class="fas fa-cubes"></i>
+                                </div>
+                                <div class="metric-content">
+                                    <h3>Total Plugins</h3>
+                                    <p class="metric-value" id="total-plugins">0</p>
+                                    <p class="metric-label">Discovered</p>
+                                </div>
+                            </div>
+                            <div class="metric-card">
+                                <div class="metric-icon">
+                                    <i class="fas fa-power-off"></i>
+                                </div>
+                                <div class="metric-content">
+                                    <h3>Active Plugins</h3>
+                                    <p class="metric-value" id="active-plugins">0</p>
+                                    <p class="metric-label">Running</p>
+                                </div>
+                            </div>
+                            <div class="metric-card">
+                                <div class="metric-icon">
+                                    <i class="fas fa-exclamation-triangle"></i>
+                                </div>
+                                <div class="metric-content">
+                                    <h3>Failed Plugins</h3>
+                                    <p class="metric-value" id="failed-plugins">0</p>
+                                    <p class="metric-label">Errors</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="plugins-list">
+                            <h3>Available Plugins</h3>
+                            <div class="plugins-grid" id="plugins-grid">
+                                <div class="empty-state">
+                                    <i class="fas fa-puzzle-piece"></i>
+                                    <p>No plugins discovered yet</p>
+                                    <button class="btn btn-primary" onclick="discoverPlugins()">
+                                        <i class="fas fa-search"></i> Discover Plugins
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Settings Tab -->
                 <div class="tab-content" id="settings-tab">
                     <div class="content-header">
@@ -328,6 +395,32 @@ steps:
 
     <!-- Notification Container -->
     <div id="notifications" class="notifications"></div>
+
+    <!-- Plugin Configuration Modal -->
+    <div id="plugin-config-modal" class="plugin-config-modal">
+        <div class="plugin-config-content">
+            <div class="plugin-config-header">
+                <h3 id="config-plugin-name">Configure Plugin</h3>
+                <button class="plugin-config-close" onclick="closePluginConfig()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <form class="config-form" id="plugin-config-form">
+                <div class="form-group">
+                    <label for="plugin-settings">Plugin Settings (JSON)</label>
+                    <textarea id="plugin-settings" placeholder='{"setting1": "value1", "setting2": "value2"}'></textarea>
+                </div>
+                <div class="form-group">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Save Configuration
+                    </button>
+                    <button type="button" class="btn btn-secondary" onclick="closePluginConfig()">
+                        <i class="fas fa-times"></i> Cancel
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
 
     <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>

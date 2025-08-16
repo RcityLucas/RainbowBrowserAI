@@ -85,12 +85,26 @@ coverage/
 # Dependency directories
 node_modules/
 
-# Environment variables
+# Environment variables - CRITICAL: Never commit .env files!
 .env
+.env.*
+!.env.example
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
+
+# Binary files and compiled plugins
+*.so
+*.dll
+*.dylib
+*.a
+*.lib
+
+# Plugin compiled artifacts
+poc/plugins/**/*.so
+poc/plugins/**/*.dll
+poc/plugins/**/*.dylib
 
 # Configuration files with sensitive data
 config.json
