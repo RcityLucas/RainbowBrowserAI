@@ -9,7 +9,7 @@ use sysinfo::{System, SystemExt, ProcessExt, Pid};
 use super::types::{Permission, ResourceLimits, PluginId, HealthStatus};
 
 /// Plugin sandbox for security and resource management
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PluginSandbox {
     plugin_id: PluginId,
     permissions: Vec<Permission>,
@@ -161,7 +161,7 @@ impl PluginSandbox {
 }
 
 /// Resource monitoring for plugins
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ResourceMonitor {
     plugin_id: PluginId,
     start_time: Instant,
@@ -231,7 +231,7 @@ impl ResourceMonitor {
 }
 
 /// Rate limiter for plugin operations
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct RateLimiter {
     requests: Vec<Instant>,
     max_requests_per_minute: u32,

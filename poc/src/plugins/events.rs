@@ -7,7 +7,7 @@ use uuid::Uuid;
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 
-use crate::WorkflowResult;
+use crate::{WorkflowResult};
 use super::types::{PluginId, ErrorSeverity};
 
 /// Plugin event types

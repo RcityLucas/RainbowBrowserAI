@@ -1,8 +1,13 @@
 use async_trait::async_trait;
 use anyhow::Result;
-use crate::{SimpleBrowser, WorkflowAction, WorkflowContext};
+use crate::{SimpleBrowser, WorkflowStep, ActionType};
 use super::types::*;
 use std::time::Duration;
+use std::collections::HashMap;
+
+// Type aliases for plugin compatibility
+pub type WorkflowAction = WorkflowStep;
+pub type WorkflowContext = HashMap<String, serde_json::Value>;
 
 /// Base trait for all plugins
 #[async_trait]
