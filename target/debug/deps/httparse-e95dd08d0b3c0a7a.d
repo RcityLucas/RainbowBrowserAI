@@ -1,0 +1,12 @@
+/mnt/d/github/RainbowBrowserAI/target/debug/deps/libhttparse-e95dd08d0b3c0a7a.rmeta: /home/fire/.cargo/registry/src/index.crates.io-6f17d22bba15001f/httparse-1.10.1/src/lib.rs /home/fire/.cargo/registry/src/index.crates.io-6f17d22bba15001f/httparse-1.10.1/src/iter.rs /home/fire/.cargo/registry/src/index.crates.io-6f17d22bba15001f/httparse-1.10.1/src/macros.rs /home/fire/.cargo/registry/src/index.crates.io-6f17d22bba15001f/httparse-1.10.1/src/simd/mod.rs /home/fire/.cargo/registry/src/index.crates.io-6f17d22bba15001f/httparse-1.10.1/src/simd/swar.rs /home/fire/.cargo/registry/src/index.crates.io-6f17d22bba15001f/httparse-1.10.1/src/simd/sse42.rs /home/fire/.cargo/registry/src/index.crates.io-6f17d22bba15001f/httparse-1.10.1/src/simd/avx2.rs /home/fire/.cargo/registry/src/index.crates.io-6f17d22bba15001f/httparse-1.10.1/src/simd/runtime.rs
+
+/mnt/d/github/RainbowBrowserAI/target/debug/deps/httparse-e95dd08d0b3c0a7a.d: /home/fire/.cargo/registry/src/index.crates.io-6f17d22bba15001f/httparse-1.10.1/src/lib.rs /home/fire/.cargo/registry/src/index.crates.io-6f17d22bba15001f/httparse-1.10.1/src/iter.rs /home/fire/.cargo/registry/src/index.crates.io-6f17d22bba15001f/httparse-1.10.1/src/macros.rs /home/fire/.cargo/registry/src/index.crates.io-6f17d22bba15001f/httparse-1.10.1/src/simd/mod.rs /home/fire/.cargo/registry/src/index.crates.io-6f17d22bba15001f/httparse-1.10.1/src/simd/swar.rs /home/fire/.cargo/registry/src/index.crates.io-6f17d22bba15001f/httparse-1.10.1/src/simd/sse42.rs /home/fire/.cargo/registry/src/index.crates.io-6f17d22bba15001f/httparse-1.10.1/src/simd/avx2.rs /home/fire/.cargo/registry/src/index.crates.io-6f17d22bba15001f/httparse-1.10.1/src/simd/runtime.rs
+
+/home/fire/.cargo/registry/src/index.crates.io-6f17d22bba15001f/httparse-1.10.1/src/lib.rs:
+/home/fire/.cargo/registry/src/index.crates.io-6f17d22bba15001f/httparse-1.10.1/src/iter.rs:
+/home/fire/.cargo/registry/src/index.crates.io-6f17d22bba15001f/httparse-1.10.1/src/macros.rs:
+/home/fire/.cargo/registry/src/index.crates.io-6f17d22bba15001f/httparse-1.10.1/src/simd/mod.rs:
+/home/fire/.cargo/registry/src/index.crates.io-6f17d22bba15001f/httparse-1.10.1/src/simd/swar.rs:
+/home/fire/.cargo/registry/src/index.crates.io-6f17d22bba15001f/httparse-1.10.1/src/simd/sse42.rs:
+/home/fire/.cargo/registry/src/index.crates.io-6f17d22bba15001f/httparse-1.10.1/src/simd/avx2.rs:
+/home/fire/.cargo/registry/src/index.crates.io-6f17d22bba15001f/httparse-1.10.1/src/simd/runtime.rs:

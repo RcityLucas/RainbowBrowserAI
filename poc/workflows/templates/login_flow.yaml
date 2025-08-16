@@ -1,0 +1,97 @@
+name: "Generic Login Workflow"
+description: "Automated login flow with configurable credentials"
+version: "1.0"
+
+inputs:
+  - name: site_url
+    input_type: string
+    required: true
+    description: "The base URL of the website"
+  - name: username
+    input_type: string
+    required: true
+    description: "Username or email for login"
+  - name: password
+    input_type: string
+    required: true
+    description: "Password for login"
+  - name: username_selector
+    input_type: string
+    required: false
+    default: "input[type='email'], input[type='text'][name*='user'], input[name*='email']"
+    description: "CSS selector for username field"
+  - name: password_selector
+    input_type: string
+    required: false
+    default: "input[type='password']"
+    description: "CSS selector for password field"
+  - name: submit_selector
+    input_type: string
+    required: false
+    default: "button[type='submit'], input[type='submit']"
+    description: "CSS selector for submit button"
+
+steps:
+  - name: "Navigate to login page"
+    action:
+      type: navigate
+      url: "{{site_url}}/login"
+      screenshot: false
+    on_error: fallback
+      steps:
+        - name: "Try alternative login URL"
+          action:
+            type: navigate
+            url: "{{site_url}}/signin"
+            screenshot: false
+
+  - name: "Wait for login form"
+    action:
+      type: wait
+      wait_for: element
+      selector: "{{username_selector}}"
+    timeout: 10
+
+  - name: "Fill username"
+    action:
+      type: fill
+      selector: "{{username_selector}}"
+      value: "{{username}}"
+
+  - name: "Fill password"
+    action:
+      type: fill
+      selector: "{{password_selector}}"
+      value: "{{password}}"
+
+  - name: "Submit login form"
+    action:
+      type: click
+      selector: "{{submit_selector}}"
+      wait_after: 3
+
+  - name: "Check for login success"
+    action:
+      type: conditional
+      if:
+        check: element_exists
+        selector: "a[href*='logout'], button[aria-label*='logout'], .user-menu, .avatar"
+      then:
+        - name: "Login successful"
+          action:
+            type: script
+            code: "console.log('Login successful!');"
+          store_as: "login_result"
+      else:
+        - name: "Check for error message"
+          action:
+            type: extract
+            selector: ".error, .alert, [role='alert']"
+          store_as: "error_message"
+
+  - name: "Take post-login screenshot"
+    action:
+      type: navigate
+      url: "{{site_url}}"
+      screenshot: true
+    store_as: "post_login_screenshot"

@@ -38,6 +38,8 @@ RainbowBrowserAI v8.0 采用六大生命器官架构，实现AI在数字世界�
 
 ## 🚀 快速开始
 
+> **📦 Proof of Concept Available**: Check out the [PoC implementation](poc/) with REST API and Web Dashboard. See [Quick Start Guide](poc/QUICKSTART.md) for getting started in 5 minutes!
+
 ### 方式一：独立可执行文件 (推荐)
 
 无需安装任何依赖，直接下载运行：

@@ -6,6 +6,7 @@ pub mod llm_integration;
 pub mod smart_executor;
 pub mod tools;
 pub mod browser_driver;
+pub mod command;
 
 use std::sync::Arc;
 use tokio::sync::RwLock;

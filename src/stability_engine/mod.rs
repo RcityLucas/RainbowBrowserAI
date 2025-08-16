@@ -309,3 +309,16 @@ pub struct StabilityReport {
     pub recovery_attempts: usize,
     pub circuit_breakers_open: usize,
 }
+
+impl Default for StabilityReport {
+    fn default() -> Self {
+        Self {
+            timestamp: std::time::SystemTime::now(),
+            overall_health: true,
+            component_health: HashMap::new(),
+            total_errors: 0,
+            recovery_attempts: 0,
+            circuit_breakers_open: 0,
+        }
+    }
+}

@@ -66,6 +66,30 @@ pub struct Session {
     pub metadata: HashMap<String, String>,
 }
 
+impl Default for Session {
+    fn default() -> Self {
+        Self {
+            id: Uuid::new_v4(),
+            config: SessionConfig::new("https://www.google.com"),
+            state: SessionState::Created,
+            created_at: Instant::now(),
+            metadata: HashMap::new(),
+        }
+    }
+}
+
+impl Session {
+    pub fn new(config: SessionConfig) -> Self {
+        Self {
+            id: Uuid::new_v4(),
+            config,
+            state: SessionState::Created,
+            created_at: Instant::now(),
+            metadata: HashMap::new(),
+        }
+    }
+}
+
 /// 会话池 - 8.0优化：减少创建开销
 struct SessionPool {
     available: Vec<Session>,
@@ -246,6 +270,17 @@ pub struct HealthStatus {
     pub memory_usage: f32,
     pub active_sessions: usize,
     pub status: SystemStatus,
+}
+
+impl Default for HealthStatus {
+    fn default() -> Self {
+        Self {
+            cpu_usage: 0.0,
+            memory_usage: 0.0,
+            active_sessions: 0,
+            status: SystemStatus::Healthy,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

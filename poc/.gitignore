@@ -1,0 +1,6 @@
+/target
+/.env
+/screenshots/*.png
+/cost_tracker.json
+.DS_Store
+*.log

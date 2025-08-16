@@ -13,12 +13,14 @@ pub mod standard;
 pub mod deep;
 pub mod adaptive;
 pub mod dom_analyzer;
+pub mod strategy;
 
 use lightning::LightningPerception;
 use quick::QuickPerception;
 use standard::StandardPerception;
 use deep::DeepPerception;
 use adaptive::AdaptiveScheduler;
+use strategy::PerceptionStrategyFactory;
 
 /// 感知模式
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -31,11 +33,8 @@ pub enum PerceptionMode {
 
 /// 分层感知系统 - 四层感知架构
 pub struct LayeredPerception {
-    // 四层感知器
-    lightning: Arc<LightningPerception>,
-    quick: Arc<QuickPerception>,
-    standard: Arc<StandardPerception>,
-    deep: Arc<DeepPerception>,
+    // Strategy factory for perception modes
+    strategy_factory: Arc<PerceptionStrategyFactory>,
     
     // 自适应调度器
     scheduler: Arc<AdaptiveScheduler>,
@@ -172,10 +171,7 @@ impl LayeredPerception {
     /// 创建分层感知系统
     pub async fn new() -> Result<Self> {
         Ok(Self {
-            lightning: Arc::new(LightningPerception::new().await?),
-            quick: Arc::new(QuickPerception::new().await?),
-            standard: Arc::new(StandardPerception::new().await?),
-            deep: Arc::new(DeepPerception::new().await?),
+            strategy_factory: Arc::new(PerceptionStrategyFactory::new().await?),
             scheduler: Arc::new(AdaptiveScheduler::new().await?),
             cache: Arc::new(RwLock::new(PerceptionCache {
                 entries: HashMap::new(),
@@ -195,35 +191,16 @@ impl LayeredPerception {
         
         let start = Instant::now();
         
-        // 根据模式执行不同层级的感知
-        let data = match mode {
-            PerceptionMode::Lightning => {
-                let result = self.lightning.perceive(url).await?;
-                PerceptionData::Lightning(result)
-            }
-            PerceptionMode::Quick => {
-                let result = self.quick.perceive(url).await?;
-                PerceptionData::Quick(result)
-            }
-            PerceptionMode::Standard => {
-                let result = self.standard.perceive(url).await?;
-                PerceptionData::Standard(result)
-            }
-            PerceptionMode::Deep => {
-                let result = self.deep.perceive(url).await?;
-                PerceptionData::Deep(result)
-            }
-        };
+        // Use strategy pattern instead of hard-coded enum dispatch
+        let strategy = self.strategy_factory.get_strategy(mode)
+            .ok_or_else(|| anyhow::anyhow!("No strategy found for mode: {:?}", mode))?;
+        
+        let data = strategy.perceive(url).await?;
         
         let duration_ms = start.elapsed().as_millis() as u64;
         
         // 验证时间约束
-        let max_duration = match mode {
-            PerceptionMode::Lightning => 50,
-            PerceptionMode::Quick => 200,
-            PerceptionMode::Standard => 500,
-            PerceptionMode::Deep => 1000,
-        };
+        let max_duration = strategy.max_duration_ms();
         
         if duration_ms > max_duration {
             log::warn!("{:?}模式感知超时: {}ms > {}ms", mode, duration_ms, max_duration);

@@ -1,0 +1,81 @@
+# RainbowBrowserAI Configuration File
+# This file can be overridden by environment variables
+
+browser:
+  driver_url: "http://localhost:9515"
+  default_width: 1920
+  default_height: 1080
+  headless: false
+  screenshot_dir: "screenshots"
+  enable_cdp: false
+  browser_args:
+    - "--disable-gpu"
+    - "--no-sandbox"
+    - "--disable-dev-shm-usage"
+  navigation_timeout: 30
+  script_timeout: 10
+
+llm:
+  api_key: null  # Set via OPENAI_API_KEY env var
+  model: "gpt-4"
+  temperature: 0.7
+  max_tokens: 2000
+  timeout: 30
+  max_retries: 3
+  base_url: null
+
+workflow:
+  templates_dir: "workflows/templates"
+  max_steps: 100
+  max_loop_iterations: 100
+  max_parallel: 10
+  default_timeout: 30
+  dry_run: false
+
+pool:
+  max_size: 3
+  idle_timeout: 300  # 5 minutes
+  max_lifetime: 3600  # 1 hour
+  max_usage: 100
+  enabled: true
+
+cache:
+  enabled: true
+  llm_ttl: 3600  # 1 hour
+  llm_max_size: 1000
+  workflow_ttl: 86400  # 24 hours
+  workflow_max_size: 100
+  cache_dir: "cache"
+  persistent: false
+
+budget:
+  daily_limit: 5.0
+  warning_threshold: 0.8  # Warn at 80% usage
+  block_when_exceeded: true
+  cost_per_token: 0.00003  # Estimated cost per token
+  cost_per_browser_op: 0.001  # Estimated cost per browser operation
+
+logging:
+  level: "info"  # trace, debug, info, warn, error
+  format: "pretty"  # json, pretty
+  file: null  # Optional log file path
+  console: true
+  structured: false
+
+metrics:
+  enabled: true
+  port: 9091
+  format: "prometheus"  # prometheus, json
+  export_interval: 60  # Export every minute
+  histogram_buckets:
+    - 0.005
+    - 0.01
+    - 0.025
+    - 0.05
+    - 0.1
+    - 0.25
+    - 0.5
+    - 1.0
+    - 2.5
+    - 5.0
+    - 10.0

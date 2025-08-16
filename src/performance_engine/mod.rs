@@ -294,3 +294,16 @@ pub struct PerformanceReport {
     pub total_requests: usize,
     pub optimization_suggestions: Vec<String>,
 }
+
+impl Default for PerformanceReport {
+    fn default() -> Self {
+        Self {
+            timestamp: std::time::SystemTime::now(),
+            avg_cpu_usage: 0.0,
+            avg_memory_usage: 0.0,
+            avg_response_time_ms: 0.0,
+            total_requests: 0,
+            optimization_suggestions: Vec::new(),
+        }
+    }
+}

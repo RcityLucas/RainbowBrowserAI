@@ -1,0 +1,73 @@
+name: "Google Search Workflow"
+description: "Search Google and extract results"
+version: "1.0"
+inputs:
+  - name: query
+    input_type: string
+    required: true
+    description: "The search query"
+  - name: screenshot
+    input_type: boolean
+    required: false
+    default: true
+    description: "Take screenshot of results"
+
+variables:
+  google_url: "https://www.google.com"
+
+steps:
+  - name: "Navigate to Google"
+    action:
+      type: navigate
+      url: "{{google_url}}"
+      screenshot: false
+
+  - name: "Wait for search box"
+    action:
+      type: wait
+      wait_for: element
+      selector: "input[name='q']"
+    timeout: 10
+
+  - name: "Enter search query"
+    action:
+      type: fill
+      selector: "input[name='q']"
+      value: "{{query}}"
+
+  - name: "Submit search"
+    action:
+      type: click
+      selector: "input[name='btnK'], input[name='btnI']"
+      wait_after: 2
+    on_error: continue
+
+  - name: "Wait for results"
+    action:
+      type: wait
+      wait_for: element
+      selector: "#search, #res"
+    timeout: 10
+
+  - name: "Take screenshot if requested"
+    action:
+      type: navigate
+      url: "{{google_url}}/search?q={{query}}"
+      screenshot: true
+    condition:
+      check: variable_equals
+      var: "screenshot"
+      value: true
+
+  - name: "Extract search results"
+    action:
+      type: extract
+      selector: "h3"
+    store_as: "search_titles"
+
+  - name: "Verify results found"
+    action:
+      type: assert
+      assert: element_exists
+      selector: "#search"
+    on_error: continue

@@ -1,0 +1,52 @@
+name: "Multi-Site Health Check"
+description: "Test multiple websites for availability and performance"
+version: "1.0"
+parallel: false
+
+variables:
+  sites:
+    - url: "https://www.google.com"
+      name: "Google"
+      expected_text: "Google"
+    - url: "https://www.github.com"
+      name: "GitHub"
+      expected_text: "GitHub"
+    - url: "https://www.stackoverflow.com"
+      name: "Stack Overflow"
+      expected_text: "Stack Overflow"
+
+steps:
+  - name: "Test each site"
+    action:
+      type: loop
+      over: "sites"
+      do:
+        - name: "Navigate to site"
+          action:
+            type: navigate
+            url: "{{_loop_item.url}}"
+            screenshot: false
+          retry:
+            max_attempts: 3
+            delay_seconds: 2
+            exponential_backoff: true
+
+        - name: "Wait for page load"
+          action:
+            type: wait
+            wait_for: time
+            seconds: 2
+
+        - name: "Verify site content"
+          action:
+            type: assert
+            assert: text_contains
+            text: "{{_loop_item.expected_text}}"
+          on_error: continue
+
+        - name: "Take screenshot"
+          action:
+            type: navigate
+            url: "{{_loop_item.url}}"
+            screenshot: true
+          store_as: "{{_loop_item.name}}_screenshot"

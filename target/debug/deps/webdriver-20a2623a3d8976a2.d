@@ -1,0 +1,13 @@
+/mnt/d/github/RainbowBrowserAI/target/debug/deps/libwebdriver-20a2623a3d8976a2.rmeta: /home/fire/.cargo/registry/src/index.crates.io-6f17d22bba15001f/webdriver-0.46.0/src/lib.rs /home/fire/.cargo/registry/src/index.crates.io-6f17d22bba15001f/webdriver-0.46.0/src/macros.rs /home/fire/.cargo/registry/src/index.crates.io-6f17d22bba15001f/webdriver-0.46.0/src/actions.rs /home/fire/.cargo/registry/src/index.crates.io-6f17d22bba15001f/webdriver-0.46.0/src/capabilities.rs /home/fire/.cargo/registry/src/index.crates.io-6f17d22bba15001f/webdriver-0.46.0/src/command.rs /home/fire/.cargo/registry/src/index.crates.io-6f17d22bba15001f/webdriver-0.46.0/src/common.rs /home/fire/.cargo/registry/src/index.crates.io-6f17d22bba15001f/webdriver-0.46.0/src/error.rs /home/fire/.cargo/registry/src/index.crates.io-6f17d22bba15001f/webdriver-0.46.0/src/httpapi.rs /home/fire/.cargo/registry/src/index.crates.io-6f17d22bba15001f/webdriver-0.46.0/src/response.rs
+
+/mnt/d/github/RainbowBrowserAI/target/debug/deps/webdriver-20a2623a3d8976a2.d: /home/fire/.cargo/registry/src/index.crates.io-6f17d22bba15001f/webdriver-0.46.0/src/lib.rs /home/fire/.cargo/registry/src/index.crates.io-6f17d22bba15001f/webdriver-0.46.0/src/macros.rs /home/fire/.cargo/registry/src/index.crates.io-6f17d22bba15001f/webdriver-0.46.0/src/actions.rs /home/fire/.cargo/registry/src/index.crates.io-6f17d22bba15001f/webdriver-0.46.0/src/capabilities.rs /home/fire/.cargo/registry/src/index.crates.io-6f17d22bba15001f/webdriver-0.46.0/src/command.rs /home/fire/.cargo/registry/src/index.crates.io-6f17d22bba15001f/webdriver-0.46.0/src/common.rs /home/fire/.cargo/registry/src/index.crates.io-6f17d22bba15001f/webdriver-0.46.0/src/error.rs /home/fire/.cargo/registry/src/index.crates.io-6f17d22bba15001f/webdriver-0.46.0/src/httpapi.rs /home/fire/.cargo/registry/src/index.crates.io-6f17d22bba15001f/webdriver-0.46.0/src/response.rs
+
+/home/fire/.cargo/registry/src/index.crates.io-6f17d22bba15001f/webdriver-0.46.0/src/lib.rs:
+/home/fire/.cargo/registry/src/index.crates.io-6f17d22bba15001f/webdriver-0.46.0/src/macros.rs:
+/home/fire/.cargo/registry/src/index.crates.io-6f17d22bba15001f/webdriver-0.46.0/src/actions.rs:
+/home/fire/.cargo/registry/src/index.crates.io-6f17d22bba15001f/webdriver-0.46.0/src/capabilities.rs:
+/home/fire/.cargo/registry/src/index.crates.io-6f17d22bba15001f/webdriver-0.46.0/src/command.rs:
+/home/fire/.cargo/registry/src/index.crates.io-6f17d22bba15001f/webdriver-0.46.0/src/common.rs:
+/home/fire/.cargo/registry/src/index.crates.io-6f17d22bba15001f/webdriver-0.46.0/src/error.rs:
+/home/fire/.cargo/registry/src/index.crates.io-6f17d22bba15001f/webdriver-0.46.0/src/httpapi.rs:
+/home/fire/.cargo/registry/src/index.crates.io-6f17d22bba15001f/webdriver-0.46.0/src/response.rs:

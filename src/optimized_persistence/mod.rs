@@ -243,6 +243,17 @@ pub struct MemoryStatistics {
     pub compression_ratio: f32,
 }
 
+impl Default for MemoryStatistics {
+    fn default() -> Self {
+        Self {
+            total_memories: 0,
+            memories_by_type: std::collections::HashMap::new(),
+            storage_size_mb: 0,
+            compression_ratio: 1.0,
+        }
+    }
+}
+
 impl DataCompressor {
     fn compress(&self, data: &MemoryData) -> Result<MemoryData> {
         // TODO: 实际压缩实现

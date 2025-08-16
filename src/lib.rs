@@ -4,10 +4,26 @@
 // Core modules
 pub mod error;
 pub mod types;
+pub mod traits;
+pub mod factory;
+pub mod orchestrator;
+pub mod events;
+pub mod trait_impls;
+pub mod features;
+pub mod simplified_traits;
+pub mod user_api;
 
-// 独立浏览器模块
+// Feature-based module loading
+pub use features::Features;
+
+// Conditional standalone browser module
 #[cfg(feature = "standalone")]
 pub mod standalone_browser;
+
+// Initialize features on library load
+pub fn init() {
+    features::initialize_features();
+}
 
 // Core layers
 pub mod base;
@@ -24,6 +40,8 @@ pub mod stability_engine;
 
 use anyhow::Result;
 use std::sync::Arc;
+use crate::factory::EngineFactory;
+use crate::events::EventPublisher;
 
 // 重新导出核心类型
 pub use unified_kernel::{UnifiedKernel, Session, SessionConfig};
@@ -33,32 +51,62 @@ pub use optimized_persistence::{OptimizedPersistence, MemoryData, DataType};
 pub use performance_engine::{PerformanceEngine, PerformanceReport};
 pub use stability_engine::{StabilityEngine, StabilityReport};
 
-/// 彩虹城浏览器 8.0 - 主结构
+/// 彩虹城浏览器 8.0 - 主结构 (Refactored with DIP)
 pub struct RainbowBrowserV8 {
-    // 六大生命器官
-    pub unified_kernel: Arc<UnifiedKernel>,
-    pub layered_perception: Arc<LayeredPerception>,
-    pub intelligent_action: Arc<IntelligentAction>,
-    pub optimized_persistence: Arc<OptimizedPersistence>,
-    pub performance_engine: Arc<PerformanceEngine>,
-    pub stability_engine: Arc<StabilityEngine>,
+    // Using trait objects for dependency inversion
+    pub unified_kernel: Arc<dyn traits::KernelEngine>,
+    pub layered_perception: Arc<dyn traits::PerceptionEngine>,
+    pub intelligent_action: Arc<dyn traits::ActionEngine>,
+    pub optimized_persistence: Arc<dyn traits::PersistenceEngine>,
+    pub performance_engine: Arc<dyn traits::PerformanceMonitor>,
+    pub stability_engine: Arc<dyn traits::StabilityMonitor>,
+    
+    // Event bus for decoupled communication
+    pub event_bus: Arc<events::EventBus>,
+    
+    // Workflow orchestrator to avoid God Object pattern
+    pub orchestrator: Arc<orchestrator::WorkflowOrchestrator>,
 }
 
 impl RainbowBrowserV8 {
-    /// 创建AI生命体
+    /// 创建AI生命体 (Using Factory Pattern)
     pub async fn new() -> Result<Self> {
         log::info!("🌈 彩虹城浏览器 8.0 - AI生命体觉醒");
         
-        // 初始化六大引擎
-        let unified_kernel = Arc::new(UnifiedKernel::new().await?);
-        let layered_perception = Arc::new(LayeredPerception::new().await?);
-        let intelligent_action = Arc::new(IntelligentAction::new().await?);
-        let optimized_persistence = Arc::new(OptimizedPersistence::new().await?);
-        let performance_engine = Arc::new(PerformanceEngine::new().await?);
-        let stability_engine = Arc::new(StabilityEngine::new().await?);
+        // Use factory pattern for engine creation
+        let factory = factory::DefaultEngineFactory;
+        let config = factory::EngineConfigBuilder::new()
+            .with_caching(true)
+            .with_auto_recovery(true)
+            .build();
         
-        // 启动自动恢复
-        stability_engine.enable_auto_recovery().await?;
+        // Create engines using factory
+        let unified_kernel = factory.create_kernel(&config).await?;
+        let layered_perception = factory.create_perception(&config).await?;
+        let intelligent_action = factory.create_action(&config).await?;
+        let optimized_persistence = factory.create_persistence(&config).await?;
+        let performance_engine = factory.create_performance(&config).await?;
+        let stability_engine = factory.create_stability(&config).await?;
+        
+        // Create event bus for decoupled communication
+        let event_bus = events::EventSystemBuilder::new()
+            .with_max_history(1000)
+            .add_logging("system".to_string())
+            .add_metrics("performance".to_string())
+            .build()
+            .await;
+        
+        // Build workflow orchestrator
+        let orchestrator = Arc::new(
+            orchestrator::WorkflowBuilder::new()
+                .with_session_management(unified_kernel.clone())
+                .with_monitoring(performance_engine.clone(), stability_engine.clone())
+                .with_perception(layered_perception.clone())
+                .with_action_execution(intelligent_action.clone())
+                .with_memory_storage(optimized_persistence.clone())
+                .with_cleanup(unified_kernel.clone())
+                .build()
+        );
         
         Ok(Self {
             unified_kernel,
@@ -67,60 +115,38 @@ impl RainbowBrowserV8 {
             optimized_persistence,
             performance_engine,
             stability_engine,
+            event_bus,
+            orchestrator,
         })
     }
     
-    /// 处理用户请求 - 完整的生命活动
+    /// 处理用户请求 - Delegated to Workflow Orchestrator
     pub async fn process_request(&self, user_request: &str) -> Result<String> {
-        // 1. 创建会话（生命周期开始）
-        let config = SessionConfig::new("https://www.google.com")
-            .with_perception_mode(PerceptionMode::Standard);
-        let session = self.unified_kernel.create_session(config).await?;
+        // Publish event for request start (using strongly-typed event)
+        self.event_bus.publish(events::Event::new(
+            events::EventType::RequestStarted,
+            "RainbowBrowserV8".to_string(),
+        ).with_data(serde_json::json!({ "request": user_request }))).await;
         
-        // 2. 开始性能监控
-        self.performance_engine.start_monitoring(&session).await?;
+        // Delegate to orchestrator (no more God Object!)
+        let result = self.orchestrator.execute_with_recovery(user_request).await;
         
-        // 3. 健康检查
-        self.stability_engine.health_check(&session).await?;
-        
-        // 4. 感知环境
-        let perception = self.layered_perception.perceive(
-            &session.config.url,
-            session.config.perception_mode,
-        ).await?;
-        
-        // 5. 智能执行任务
-        let action_results = self.intelligent_action.execute_smart_task(
-            session.id,
-            user_request,
-        ).await?;
-        
-        // 6. 存储记忆
-        let memory = MemoryData {
-            id: uuid::Uuid::new_v4(),
-            session_id: session.id,
-            timestamp: std::time::SystemTime::now(),
-            data_type: DataType::Experience,
-            content: serde_json::json!({
-                "request": user_request,
-                "perception": perception,
-                "actions": action_results,
-            }),
-            metadata: std::collections::HashMap::new(),
+        // Publish event for request completion (using strongly-typed event)
+        let event_type = if result.is_ok() {
+            events::EventType::RequestCompleted
+        } else {
+            events::EventType::RequestFailed
         };
-        self.optimized_persistence.store(memory).await?;
         
-        // 7. 生成响应
-        let response = format!(
-            "✨ 任务完成！\n执行了 {} 个操作\n感知模式: {:?}",
-            action_results.len(),
-            session.config.perception_mode
-        );
+        self.event_bus.publish(events::Event::new(
+            event_type,
+            "RainbowBrowserV8".to_string(),
+        ).with_data(serde_json::json!({ 
+            "request": user_request,
+            "success": result.is_ok() 
+        }))).await;
         
-        // 8. 销毁会话（生命周期结束）
-        self.unified_kernel.destroy_session(&session.id).await?;
-        
-        Ok(response)
+        result
     }
     
     /// 获取系统状态

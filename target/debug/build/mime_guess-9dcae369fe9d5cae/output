@@ -1,0 +1,1 @@
+cargo:rustc-env=MIME_TYPES_GENERATED_PATH=/mnt/d/github/RainbowBrowserAI/target/debug/build/mime_guess-9dcae369fe9d5cae/out/mime_types_generated.rs
