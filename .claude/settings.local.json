@@ -64,7 +64,10 @@
       "Bash(git commit:*)",
       "Bash(sudo apt:*)",
       "Bash(sudo apt install:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(pkill:*)",
+      "Bash(lsof:*)",
+      "Bash(git rm:*)"
     ],
     "deny": []
   }

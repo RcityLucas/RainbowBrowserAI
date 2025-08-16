@@ -6,6 +6,8 @@ class RainbowDashboard {
         this.autoRefresh = true;
         this.refreshInterval = null;
         this.costChart = null;
+        this.eventSource = null;
+        this.realTimeEnabled = true;
         
         this.init();
     }
@@ -14,8 +16,8 @@ class RainbowDashboard {
         this.setupEventListeners();
         this.loadSettings();
         this.checkConnection();
-        this.startAutoRefresh();
         this.initializeCostChart();
+        this.startRealTimeUpdates();
     }
 
     setupEventListeners() {
@@ -87,6 +89,10 @@ class RainbowDashboard {
         document.getElementById('auto-refresh')?.addEventListener('change', (e) => {
             this.toggleAutoRefresh(e.target.checked);
         });
+
+        document.getElementById('real-time-updates')?.addEventListener('change', (e) => {
+            this.toggleRealTimeUpdates(e.target.checked);
+        });
     }
 
     // Tab Management
@@ -134,7 +140,7 @@ class RainbowDashboard {
         } catch (error) {
             // Check for specific error types
             if (error.message.includes('OpenAI API key not configured')) {
-                this.showNotification('OpenAI API key not configured. Please check settings.', 'warning');
+                this.showNotification('OpenAI API key not configured. Please check settings or enable mock mode.', 'warning');
             } else if (error.message.includes('Invalid OpenAI API key')) {
                 this.showNotification('Invalid OpenAI API key. Please update in settings.', 'error');
             } else {
@@ -213,7 +219,13 @@ class RainbowDashboard {
             });
 
             resultContainer.textContent = JSON.stringify(response, null, 2);
-            this.showNotification('Command executed successfully', 'success');
+            
+            // Check if this is a mock response
+            if (response.action === 'mock') {
+                this.showNotification('Mock mode: Command simulated successfully', 'info');
+            } else {
+                this.showNotification('Command executed successfully', 'success');
+            }
             
             // Clear input
             input.value = '';
@@ -527,6 +539,10 @@ class RainbowDashboard {
         const autoRefresh = localStorage.getItem('autoRefresh') !== 'false';
         document.getElementById('auto-refresh').checked = autoRefresh;
         this.autoRefresh = autoRefresh;
+
+        const realTimeEnabled = localStorage.getItem('realTimeEnabled') !== 'false';
+        document.getElementById('real-time-updates').checked = realTimeEnabled;
+        this.realTimeEnabled = realTimeEnabled;
     }
 
     saveSettings() {
@@ -592,6 +608,98 @@ class RainbowDashboard {
         if (this.refreshInterval) {
             clearInterval(this.refreshInterval);
             this.refreshInterval = null;
+        }
+    }
+
+    // Real-time Updates via Server-Sent Events
+    startRealTimeUpdates() {
+        if (!this.realTimeEnabled || this.eventSource) {
+            return;
+        }
+
+        try {
+            this.eventSource = new EventSource(`${this.apiUrl}/events`);
+
+            this.eventSource.addEventListener('metrics', (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    this.updateMetricsUI(data);
+                } catch (error) {
+                    console.error('Error parsing metrics event:', error);
+                }
+            });
+
+            this.eventSource.addEventListener('cost', (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    this.updateBudgetUI(data);
+                } catch (error) {
+                    console.error('Error parsing cost event:', error);
+                }
+            });
+
+            this.eventSource.addEventListener('heartbeat', (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    this.updateLastUpdateTime(data.timestamp);
+                } catch (error) {
+                    console.error('Error parsing heartbeat event:', error);
+                }
+            });
+
+            this.eventSource.onerror = (error) => {
+                console.warn('SSE connection error, falling back to polling:', error);
+                this.stopRealTimeUpdates();
+                this.startAutoRefresh();
+            };
+
+            this.eventSource.onopen = () => {
+                console.log('Real-time updates connected');
+                this.stopAutoRefresh(); // Stop polling when SSE is active
+            };
+
+        } catch (error) {
+            console.error('Failed to start real-time updates:', error);
+            this.startAutoRefresh(); // Fallback to polling
+        }
+    }
+
+    stopRealTimeUpdates() {
+        if (this.eventSource) {
+            this.eventSource.close();
+            this.eventSource = null;
+        }
+    }
+
+    updateMetricsUI(data) {
+        // Update metrics tab if it's visible
+        document.getElementById('metric-operations').textContent = data.operations_total;
+        document.getElementById('metric-success').textContent = `${data.success_rate.toFixed(1)}%`;
+        document.getElementById('metric-response').textContent = `${data.avg_response_time_ms.toFixed(0)}ms`;
+        document.getElementById('metric-browsers').textContent = data.active_browsers;
+    }
+
+    updateBudgetUI(data) {
+        // Update budget display in header
+        document.getElementById('budget').textContent = 
+            `Budget: $${data.spent_today.toFixed(2)} / $${data.daily_budget.toFixed(2)}`;
+    }
+
+    updateLastUpdateTime(timestamp) {
+        document.getElementById('last-update').textContent = 
+            `Last update: ${new Date(timestamp).toLocaleTimeString()}`;
+    }
+
+    toggleRealTimeUpdates(enabled) {
+        this.realTimeEnabled = enabled;
+        localStorage.setItem('realTimeEnabled', enabled.toString());
+        
+        if (enabled) {
+            this.stopAutoRefresh();
+            this.startRealTimeUpdates();
+        } else {
+            this.stopRealTimeUpdates();
+            this.startAutoRefresh();
         }
     }
 

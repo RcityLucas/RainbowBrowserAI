@@ -1,7 +1,7 @@
 use axum::{
     extract::{State, Json},
     http::StatusCode,
-    response::{IntoResponse, Response},
+    response::{IntoResponse, Response, Sse, sse::Event},
     routing::{get, post},
     Router,
 };
@@ -16,6 +16,9 @@ use tracing::info;
 use uuid::Uuid;
 use std::collections::HashMap;
 use anyhow::Result;
+use futures::stream::Stream;
+use tokio::time::{interval, Duration};
+use std::convert::Infallible;
 
 use crate::{
     SimpleBrowser, BrowserPool, LLMService, WorkflowEngine, Workflow,
@@ -41,6 +44,43 @@ pub struct BrowserSession {
     pub browser: Arc<SimpleBrowser>,
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub last_used: chrono::DateTime<chrono::Utc>,
+}
+
+/// SSE event types for real-time updates
+#[derive(Debug, Serialize, Clone)]
+#[serde(tag = "type")]
+pub enum SseEvent {
+    #[serde(rename = "metrics")]
+    Metrics {
+        operations_total: u64,
+        success_rate: f64,
+        avg_response_time_ms: f64,
+        active_browsers: u32,
+        memory_usage_mb: f64,
+    },
+    #[serde(rename = "cost")]
+    Cost {
+        daily_budget: f64,
+        spent_today: f64,
+        remaining: f64,
+        last_operation_cost: f64,
+    },
+    #[serde(rename = "session")]
+    Session {
+        action: String,
+        session_id: String,
+        active_sessions: u32,
+    },
+    #[serde(rename = "status")]
+    Status {
+        message: String,
+        level: String, // info, warning, error, success
+    },
+    #[serde(rename = "heartbeat")]
+    Heartbeat {
+        timestamp: String,
+        uptime_seconds: u64,
+    },
 }
 
 /// API error response
@@ -300,9 +340,25 @@ pub async fn natural_language_handler(
     
     // Check if API key is configured
     if state.llm_service.api_key.is_empty() {
+        // Check if mock mode is enabled
+        if std::env::var("RAINBOW_MOCK_MODE").unwrap_or_default() == "true" {
+            // Return mock response for testing
+            return Ok(Json(NaturalLanguageResponse {
+                success: true,
+                action: "mock".to_string(),
+                confidence: 0.95,
+                result: Some(serde_json::json!({
+                    "message": "Mock mode: Command processed successfully",
+                    "command": req.command,
+                    "note": "Set OPENAI_API_KEY to use real AI processing"
+                })),
+                explanation: "This is a mock response because no OpenAI API key is configured.".to_string(),
+            }));
+        }
+        
         return Err(ApiError {
             error: "OpenAI API key not configured".to_string(),
-            details: Some("Please set the OPENAI_API_KEY environment variable or configure it in the settings".to_string()),
+            details: Some("Please set the OPENAI_API_KEY environment variable or configure it in the settings. You can also enable mock mode with RAINBOW_MOCK_MODE=true for testing.".to_string()),
             code: 503,
         });
     }
@@ -634,6 +690,9 @@ pub fn create_router(state: ApiState) -> Router {
         .route("/command", post(natural_language_handler))
         .route("/workflow", post(workflow_handler))
         
+        // Real-time updates
+        .route("/events", get(sse_handler))
+        
         // Serve static files and dashboard at root
         .nest_service("/", static_files)
         
@@ -644,6 +703,82 @@ pub fn create_router(state: ApiState) -> Router {
                 .layer(CorsLayer::permissive())
         )
         .with_state(state)
+}
+
+/// SSE endpoint for real-time updates
+pub async fn sse_handler(
+    State(state): State<ApiState>,
+) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
+    let stream = async_stream::stream! {
+        let mut interval = interval(Duration::from_secs(2));
+        
+        loop {
+            interval.tick().await;
+            
+            // Get current metrics
+            let metrics = state.metrics.get_metrics().await;
+            let summary = state.metrics.get_summary().await;
+            
+            // Get cost information
+            let cost_tracker = state.cost_tracker.read().await;
+            let daily_budget = cost_tracker.daily_budget;
+            let spent_today = cost_tracker.get_daily_total();
+            let last_operation_cost = cost_tracker.operations.last()
+                .map(|op| op.cost)
+                .unwrap_or(0.0);
+            drop(cost_tracker);
+            
+            // Get session count
+            let sessions = state.sessions.read().await;
+            let active_sessions = sessions.len() as u32;
+            drop(sessions);
+
+            // Create and send metrics event
+            let metrics_event = SseEvent::Metrics {
+                operations_total: metrics.operations_total,
+                success_rate: metrics.success_rate(),
+                avg_response_time_ms: summary.avg_response_time_ms,
+                active_browsers: metrics.active_browsers as u32,
+                memory_usage_mb: metrics.memory_usage_mb,
+            };
+            
+            if let Ok(data) = serde_json::to_string(&metrics_event) {
+                yield Ok(Event::default().event("metrics").data(data));
+            }
+
+            // Create and send cost event
+            let cost_event = SseEvent::Cost {
+                daily_budget,
+                spent_today,
+                remaining: daily_budget - spent_today,
+                last_operation_cost,
+            };
+            
+            if let Ok(data) = serde_json::to_string(&cost_event) {
+                yield Ok(Event::default().event("cost").data(data));
+            }
+
+            // Send heartbeat
+            let heartbeat = SseEvent::Heartbeat {
+                timestamp: chrono::Utc::now().to_rfc3339(),
+                uptime_seconds: std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs(),
+            };
+            
+            if let Ok(data) = serde_json::to_string(&heartbeat) {
+                yield Ok(Event::default().event("heartbeat").data(data));
+            }
+        }
+    };
+
+    Sse::new(stream)
+        .keep_alive(
+            axum::response::sse::KeepAlive::new()
+                .interval(Duration::from_secs(15))
+                .text("keep-alive"),
+        )
 }
 
 /// Start the API server

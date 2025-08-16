@@ -1,3 +1,0 @@
-cargo:rustc-link-lib=static=ring-core
-cargo:rustc-link-lib=static=ring-test
-cargo:rustc-link-search=native=/mnt/d/github/RainbowBrowserAI/target/debug/build/ring-eeacad620e93fdd7/out

@@ -46,6 +46,13 @@ if [ -z "$OPENAI_API_KEY" ]; then
         echo "✓ OpenAI API key configured"
     else
         echo "⚠️  Skipping OpenAI API key (natural language commands will not work)"
+        echo ""
+        read -p "Enable mock mode for testing without API key? (y/n): " enable_mock
+        if [ "$enable_mock" = "y" ] || [ "$enable_mock" = "Y" ]; then
+            echo "export RAINBOW_MOCK_MODE=true" >> .env
+            export RAINBOW_MOCK_MODE=true
+            echo "✓ Mock mode enabled (for testing only)"
+        fi
     fi
 else
     echo "✓ OPENAI_API_KEY already set"
