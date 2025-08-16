@@ -45,6 +45,20 @@ pub enum PluginState {
     Error(String),
 }
 
+impl std::fmt::Display for PluginState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PluginState::Discovered => write!(f, "Discovered"),
+            PluginState::Loading => write!(f, "Loading"),
+            PluginState::Loaded => write!(f, "Loaded"),
+            PluginState::Active => write!(f, "Active"),
+            PluginState::Suspended => write!(f, "Suspended"),
+            PluginState::Unloading => write!(f, "Unloading"),
+            PluginState::Error(err) => write!(f, "Error: {}", err),
+        }
+    }
+}
+
 /// Plugin permission types
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Permission {

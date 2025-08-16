@@ -38,3 +38,7 @@ tempfile = "3.8"
 [[bench]]
 name = "performance"
 harness = false
+
+[[bin]]
+name = "test_plugin_system"
+path = "test_plugin_system.rs"

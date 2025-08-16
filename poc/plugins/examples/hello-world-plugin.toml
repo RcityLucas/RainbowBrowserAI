@@ -1,0 +1,23 @@
+[plugin]
+name = "hello-world"
+version = "1.0.0"
+description = "Simple hello world action plugin"
+author = "RainbowBrowserAI Team"
+license = "MIT"
+type = "action"
+
+[plugin.dependencies]
+runtime_version = ">=0.1.0"
+system_requirements = []
+
+[plugin.capabilities]
+actions = ["say_hello", "greet_user"]
+permissions = []
+
+[plugin.configuration]
+required_fields = []
+optional_fields = ["greeting_message", "target_language"]
+
+[plugin.resources]
+max_memory_mb = 50
+max_cpu_percent = 5

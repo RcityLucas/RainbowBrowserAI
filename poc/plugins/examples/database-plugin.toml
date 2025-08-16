@@ -1,0 +1,23 @@
+[plugin]
+name = "database-actions"
+version = "1.2.0"
+description = "Database operations for workflows"
+author = "RainbowBrowserAI Team"
+license = "MIT"
+type = "action"
+
+[plugin.dependencies]
+runtime_version = ">=0.1.0"
+system_requirements = ["network"]
+
+[plugin.capabilities]
+actions = ["db_query", "db_insert", "db_update", "db_delete", "db_transaction"]
+permissions = ["network"]
+
+[plugin.configuration]
+required_fields = ["connection_string"]
+optional_fields = ["timeout", "pool_size", "ssl_mode"]
+
+[plugin.resources]
+max_memory_mb = 200
+max_cpu_percent = 15

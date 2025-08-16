@@ -150,7 +150,7 @@ pub struct WorkflowEngine {
     execution_log: Vec<ExecutionEntry>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExecutionEntry {
     pub timestamp: DateTime<Utc>,
     pub step_name: String,
@@ -161,7 +161,7 @@ pub struct ExecutionEntry {
     pub data: Option<serde_json::Value>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkflowResult {
     pub success: bool,
     pub duration_ms: u64,
