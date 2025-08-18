@@ -1,142 +1,54 @@
-# 🌈 RainbowBrowserAI - Proof of Concept
+# 🌈 RainbowBrowserAI
 
-A pragmatic, production-ready browser automation tool with AI capabilities.
+Browser automation with AI-powered natural language commands.
 
 ## Features
 
-✅ **Core Capabilities**
-- Natural language command processing via OpenAI GPT-4
-- Browser automation with screenshot capture
-- YAML/JSON workflow engine
-- Session management
-- Cost tracking and budget control
-
-✅ **REST API & Web Dashboard**
-- Full-featured REST API with 9 endpoints
-- Interactive web dashboard with 6 tabs
-- Real-time metrics and cost visualization
-- Dark mode support
-- Settings persistence
-
-✅ **Production Features**
-- Browser connection pooling
-- Multi-layer caching
-- Security middleware
-- Rate limiting
-- Comprehensive error handling
+- 🤖 **Mock Mode**: Works without API keys
+- 🌐 **Web Interface**: User-friendly dashboard  
+- 📸 **Screenshots**: Automatic capture
+- 🔄 **Browser Control**: Navigate, click, extract data
+- 💸 **Cost Tracking**: Built-in budget management
+- 🔌 **Plugin System**: Extensible architecture
 
 ## Quick Start
 
-See [QUICKSTART.md](QUICKSTART.md) for detailed setup instructions.
+1. **Install ChromeDriver**: Run `download_direct.ps1`
+2. **Start Application**: Run `start.bat`  
+3. **Open Browser**: Go to http://localhost:3000
+4. **Test Commands**: Try `navigate to github.com`
 
-```bash
-# 1. Set up environment
-./setup_env.sh
+## Commands
 
-# 2. Start ChromeDriver
-chromedriver --port=9515 &
+### Basic Commands
+- `navigate to github.com`
+- `go to google and take screenshot`
+- `open stackoverflow`
 
-# 3. Start the server
-cargo run --release -- serve
+### Advanced Commands  
+- `test google.com,github.com,stackoverflow.com with screenshots`
+- `navigate to github.com with 1920x1080 and take screenshot`
+- `extract data from news.ycombinator.com`
+- `monitor mysite.com for changes`
 
-# 4. Open dashboard
-# Navigate to http://localhost:3000/
-```
+**See [EXAMPLES.md](EXAMPLES.md) for more complex examples and API usage.**
 
-## Project Structure
+## Files
 
-```
-poc/
-├── src/
-│   ├── api.rs              # REST API implementation
-│   ├── browser.rs          # WebDriver control
-│   ├── llm_service.rs      # OpenAI integration
-│   ├── workflow.rs         # Workflow engine
-│   ├── browser_pool.rs     # Connection pooling
-│   ├── cache.rs            # Caching layer
-│   ├── metrics.rs          # Performance metrics
-│   ├── security.rs         # Security middleware
-│   └── main.rs             # CLI application
-├── static/
-│   ├── index.html          # Dashboard UI
-│   ├── styles.css          # Dashboard styling
-│   └── app.js              # Dashboard logic
-├── examples/
-│   └── workflows/          # Sample workflows
-├── tests/                  # Test suite
-└── docs/                   # Documentation
-```
+- **start.bat** - Start the application
+- **download_direct.ps1** - Download ChromeDriver
+- **FIX_CHROMEDRIVER.bat** - Fix version issues
 
-## API Endpoints
+## API
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/` | GET | Web dashboard |
-| `/health` | GET | Health check |
-| `/metrics` | GET | Performance metrics |
-| `/cost` | GET | Cost report |
-| `/command` | POST | Natural language command |
-| `/navigate` | POST | Navigate to URL |
-| `/screenshot` | POST | Take screenshot |
-| `/workflow` | POST | Execute workflow |
-| `/session` | POST | Manage sessions |
+Full REST API available at:
+- `POST /command` - Execute commands
+- `GET /health` - System status
+- `GET /metrics` - Performance data
+- `POST /extract` - Data extraction
 
-## Dashboard Features
+See [API_DOCUMENTATION.md](API_DOCUMENTATION.md) for details.
 
-- **Command Tab**: Execute natural language commands
-- **Browse Tab**: Direct browser control
-- **Workflow Tab**: Build and run workflows
-- **Sessions Tab**: Manage browser sessions
-- **Metrics Tab**: View performance and costs
-- **Settings Tab**: Configure API keys
+---
 
-## Configuration
-
-Environment variables (see `.env.example`):
-- `OPENAI_API_KEY`: OpenAI API key for natural language
-- `RAINBOW_DAILY_BUDGET`: Daily spending limit
-- `CHROMEDRIVER_PORT`: ChromeDriver port
-- `RAINBOW_API_PORT`: API server port
-
-## Development
-
-```bash
-# Run tests
-cargo test
-
-# Run with logging
-RUST_LOG=rainbow_poc=debug cargo run
-
-# Build release version
-cargo build --release
-
-# Run benchmarks
-cargo bench
-```
-
-## Documentation
-
-- [Quick Start Guide](QUICKSTART.md)
-- [Development Progress](../DEVELOPMENT_PROGRESS.md)
-- [API Documentation](../docs/API.md)
-- [Troubleshooting](../docs/TROUBLESHOOTING.md)
-
-## Performance
-
-- Navigation: <3s average
-- Screenshot: <5s full page
-- API response: <200ms
-- Memory usage: 100-200MB
-- Concurrent browsers: 100+
-
-## Security
-
-- Input validation and sanitization
-- Rate limiting (100 req/min)
-- URL validation (no local files)
-- API key protection
-- CORS support
-
-## License
-
-MIT - See [LICENSE](../LICENSE) for details
+**Note**: This is a Proof of Concept. For production use, consider security implications.

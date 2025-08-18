@@ -192,7 +192,7 @@ pub enum ServiceType {
     Database,
     Analytics,
     Monitoring,
-    CI_CD,
+    CiCd,
     Authentication,
     Other(String),
 }

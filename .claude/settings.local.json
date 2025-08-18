@@ -68,7 +68,13 @@
       "Bash(pkill:*)",
       "Bash(lsof:*)",
       "Bash(git rm:*)",
-      "Bash(git pull:*)"
+      "Bash(git pull:*)",
+      "Bash(tree:*)",
+      "Bash(./test_api_connection.sh:*)",
+      "Bash(RAINBOW_MOCK_MODE=true python3 debug_test.py)",
+      "Bash(RAINBOW_MOCK_MODE=true cargo run --bin rainbow-poc)",
+      "Bash(RAINBOW_MOCK_MODE=true cargo run --bin rainbow-poc -- serve)",
+      "Bash(RAINBOW_MOCK_MODE=true ./target/debug/rainbow-poc serve --port 3001)"
     ],
     "deny": []
   }

@@ -10,6 +10,8 @@ pub mod metrics;
 pub mod security;
 pub mod api;
 pub mod plugins;
+pub mod extractor;
+pub mod chromedriver_manager;
 
 pub use browser::{SimpleBrowser, ScreenshotOptions};
 pub use cost_tracker::CostTracker;
@@ -23,3 +25,4 @@ pub use metrics::{MetricsCollector, Metrics, MetricsSummary};
 pub use security::{SecurityConfig, SecurityMiddleware, RateLimiter, InputValidator};
 pub use api::{create_router, start_server, ApiState};
 pub use plugins::{PluginManager, init_plugin_system};
+pub use extractor::{DataExtractor, ExtractedData};

@@ -12,7 +12,7 @@ use tower::ServiceBuilder;
 use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
 use tower_http::services::ServeDir;
-use tracing::info;
+use tracing::{info, warn, error};
 use uuid::Uuid;
 use std::collections::HashMap;
 use anyhow::Result;
@@ -383,24 +383,126 @@ pub async fn natural_language_handler(
             code: 429,
         })?;
     
+    // Check if mock mode is enabled first
+    if std::env::var("RAINBOW_MOCK_MODE").unwrap_or_default() == "true" {
+        // Use mock LLM to parse command, then execute it
+        info!("Mock mode enabled - parsing command without API");
+        
+        // Parse command using mock mode
+        let mut cost_tracker = state.cost_tracker.write().await;
+        let parsed = match state.llm_service.parse_natural_command(&req.command, &mut cost_tracker).await {
+            Ok(parsed) => parsed,
+            Err(e) => {
+                return Ok(Json(NaturalLanguageResponse {
+                    success: false,
+                    action: "error".to_string(),
+                    confidence: 0.0,
+                    result: Some(serde_json::json!({
+                        "error": "Failed to parse command in mock mode",
+                        "details": e.to_string()
+                    })),
+                    explanation: "Mock parser failed to understand the command".to_string(),
+                }));
+            }
+        };
+        drop(cost_tracker);
+        
+        // Execute the parsed command
+        let result = match parsed.action.as_str() {
+            "navigate" => {
+                if let Some(url) = &parsed.url {
+                    // Try to navigate to the URL
+                    match SimpleBrowser::new().await {
+                        Ok(browser) => {
+                            match browser.navigate_to(url).await {
+                                Ok(_) => {
+                                    // Take screenshot if requested
+                                    if parsed.screenshot {
+                                        let filename = format!("mock_{}.png", Uuid::new_v4());
+                                        let _ = browser.take_screenshot(&filename).await;
+                                        serde_json::json!({
+                                            "success": true,
+                                            "action": "navigate",
+                                            "url": url,
+                                            "screenshot": parsed.screenshot,
+                                            "screenshot_path": format!("screenshots/{}", filename)
+                                        })
+                                    } else {
+                                        serde_json::json!({
+                                            "success": true,
+                                            "action": "navigate",
+                                            "url": url
+                                        })
+                                    }
+                                },
+                                Err(e) => serde_json::json!({
+                                    "success": false,
+                                    "error": format!("Navigation failed: {}", e)
+                                })
+                            }
+                        },
+                        Err(e) => serde_json::json!({
+                            "success": false,
+                            "error": format!("Failed to start browser: {}", e),
+                            "hint": "Make sure ChromeDriver is running on port 9515"
+                        })
+                    }
+                } else {
+                    serde_json::json!({
+                        "success": false,
+                        "error": "No URL found in command"
+                    })
+                }
+            },
+            "test" => {
+                // In mock mode, we still execute batch testing for demonstration
+                info!("Mock mode: Executing test command with {} URLs", parsed.urls.len());
+                match execute_parsed_command(state.clone(), &parsed, req.session_id.clone()).await {
+                    Ok(result) => {
+                        info!("Mock mode: Test execution successful");
+                        result
+                    },
+                    Err(e) => {
+                        error!("Mock mode: Test execution failed: {}", e);
+                        serde_json::json!({
+                            "success": false,
+                            "action": "test",
+                            "error": format!("Test execution failed: {}", e)
+                        })
+                    }
+                }
+            },
+            "report" => {
+                let cost_tracker = state.cost_tracker.read().await;
+                serde_json::json!({
+                    "success": true,
+                    "action": "report",
+                    "daily_budget": cost_tracker.daily_budget,
+                    "spent_today": cost_tracker.get_daily_total(),
+                    "operations": cost_tracker.operations.len()
+                })
+            },
+            _ => {
+                serde_json::json!({
+                    "success": false,
+                    "action": parsed.action,
+                    "error": "Unknown action"
+                })
+            }
+        };
+        
+        return Ok(Json(NaturalLanguageResponse {
+            success: result["success"].as_bool().unwrap_or(false),
+            action: parsed.action.clone(),
+            confidence: parsed.confidence,
+            result: Some(result),
+            explanation: format!("Mock mode: Parsed '{}' as {} action (confidence: {:.0}%)", 
+                                req.command, parsed.action, parsed.confidence * 100.0),
+        }));
+    }
+
     // Check if API key is configured
     if state.llm_service.api_key.is_empty() {
-        // Check if mock mode is enabled
-        if std::env::var("RAINBOW_MOCK_MODE").unwrap_or_default() == "true" {
-            // Return mock response for testing
-            return Ok(Json(NaturalLanguageResponse {
-                success: true,
-                action: "mock".to_string(),
-                confidence: 0.95,
-                result: Some(serde_json::json!({
-                    "message": "Mock mode: Command processed successfully",
-                    "command": req.command,
-                    "note": "Set OPENAI_API_KEY to use real AI processing"
-                })),
-                explanation: "This is a mock response because no OpenAI API key is configured.".to_string(),
-            }));
-        }
-        
         return Err(ApiError {
             error: "OpenAI API key not configured".to_string(),
             details: Some("Please set the OPENAI_API_KEY environment variable or configure it in the settings. You can also enable mock mode with RAINBOW_MOCK_MODE=true for testing.".to_string()),
@@ -410,29 +512,52 @@ pub async fn natural_language_handler(
     
     // Parse command
     let mut cost_tracker = state.cost_tracker.write().await;
-    let parsed = state.llm_service.parse_natural_command(&req.command, &mut cost_tracker).await
-        .map_err(|e| {
+    let parsed = match state.llm_service.parse_natural_command(&req.command, &mut cost_tracker).await {
+        Ok(parsed) => parsed,
+        Err(e) => {
             let error_msg = e.to_string();
-            if error_msg.contains("401") {
-                ApiError {
+            // Check for various quota-related error patterns
+            if error_msg.contains("insufficient_quota") || 
+               error_msg.contains("quota") || 
+               error_msg.contains("exceeded your current quota") ||
+               error_msg.contains("billing") ||
+               error_msg.contains("credit balance is too low") ||
+               error_msg.contains("Plans & Billing") ||
+               error_msg.contains("LLM API error 429") {
+                // Auto-fallback to mock mode when quota exceeded
+                tracing::warn!("OpenAI quota exceeded, automatically switching to mock mode. Error: {}", error_msg);
+                return Ok(Json(NaturalLanguageResponse {
+                    success: true,
+                    action: "mock".to_string(),
+                    confidence: 0.90,
+                    result: Some(serde_json::json!({
+                        "message": "Auto-switched to mock mode due to OpenAI quota limitation",
+                        "command": req.command,
+                        "note": "Set RAINBOW_MOCK_MODE=true or add billing to your OpenAI account to continue using AI features"
+                    })),
+                    explanation: "Automatically switched to mock mode because OpenAI quota was exceeded. The system continues to work normally in simulation mode.".to_string(),
+                }));
+            } else if error_msg.contains("401") {
+                return Err(ApiError {
                     error: "Invalid OpenAI API key".to_string(),
                     details: Some("The provided API key is invalid or expired. Please check your configuration.".to_string()),
                     code: 401,
-                }
+                });
             } else if error_msg.contains("429") {
-                ApiError {
+                return Err(ApiError {
                     error: "OpenAI rate limit exceeded".to_string(),
                     details: Some("Too many requests to OpenAI. Please try again later.".to_string()),
                     code: 429,
-                }
+                });
             } else {
-                ApiError {
+                return Err(ApiError {
                     error: "Failed to process natural language command".to_string(),
-                    details: Some(error_msg),
+                    details: Some(format!("LLM API Error: {}. Consider enabling mock mode with RAINBOW_MOCK_MODE=true", error_msg)),
                     code: 500,
-                }
+                });
             }
-        })?;
+        }
+    };
     
     // Generate explanation
     let explanation = state.llm_service.explain_command(&parsed).await;
@@ -721,7 +846,7 @@ pub async fn plugin_handler(
         
         "discover" => {
             drop(plugin_manager); // Release read lock
-            let mut plugin_manager = state.plugin_manager.write().await;
+            let plugin_manager = state.plugin_manager.write().await;
             
             let plugins_dir = std::path::Path::new("plugins");
             let discovered = if plugins_dir.exists() {
@@ -917,20 +1042,105 @@ async fn execute_parsed_command(
         }
         "test" => {
             let mut results = Vec::new();
-            for url in &command.urls {
-                let req = NavigateRequest {
-                    url: url.clone(),
-                    screenshot: Some(false),
-                    session_id: session_id.clone(),
-                };
-                let response = navigate_handler(State(state.clone()), Json(req)).await;
-                results.push(serde_json::json!({
-                    "url": url,
-                    "success": response.is_ok(),
-                    "error": response.err().map(|e| e.error),
-                }));
+            let take_screenshots = command.parameters.take_screenshot;
+            
+            info!("Testing {} websites (screenshots: {})", command.urls.len(), take_screenshots);
+            
+            for (index, url) in command.urls.iter().enumerate() {
+                let start_time = std::time::Instant::now();
+                
+                // Create new browser for each test to avoid conflicts
+                let browser_result = SimpleBrowser::new().await;
+                
+                match browser_result {
+                    Ok(browser) => {
+                        let mut test_result = serde_json::json!({
+                            "url": url,
+                            "index": index + 1,
+                            "success": false,
+                            "loading_time_ms": 0,
+                            "title": null,
+                            "screenshot_path": null,
+                            "error": null
+                        });
+                        
+                        // Navigate to URL
+                        match browser.navigate_to(url).await {
+                            Ok(_) => {
+                                let loading_time = start_time.elapsed().as_millis() as u64;
+                                test_result["loading_time_ms"] = serde_json::json!(loading_time);
+                                test_result["success"] = serde_json::Value::Bool(true);
+                                
+                                // Get page title
+                                if let Ok(title) = browser.get_title().await {
+                                    test_result["title"] = serde_json::Value::String(title);
+                                }
+                                
+                                // Take screenshot if requested
+                                if take_screenshots {
+                                    let filename = format!("test_{}_{}.png", 
+                                        url.replace(".", "_").replace("/", "_"), 
+                                        chrono::Utc::now().format("%Y%m%d_%H%M%S")
+                                    );
+                                    
+                                    match browser.take_screenshot(&filename).await {
+                                        Ok(_) => {
+                                            let screenshot_path = format!("screenshots/{}", filename);
+                                            test_result["screenshot_path"] = serde_json::Value::String(screenshot_path);
+                                            info!("Screenshot saved: {}", filename);
+                                        },
+                                        Err(e) => {
+                                            warn!("Screenshot failed for {}: {}", url, e);
+                                        }
+                                    }
+                                }
+                                
+                                info!("✅ Test {}/{}: {} loaded in {}ms", 
+                                    index + 1, command.urls.len(), url, loading_time);
+                            },
+                            Err(e) => {
+                                let loading_time = start_time.elapsed().as_millis() as u64;
+                                test_result["loading_time_ms"] = serde_json::json!(loading_time);
+                                test_result["error"] = serde_json::Value::String(format!("{}", e));
+                                
+                                error!("❌ Test {}/{}: {} failed: {}", 
+                                    index + 1, command.urls.len(), url, e);
+                            }
+                        }
+                        
+                        results.push(test_result);
+                    },
+                    Err(e) => {
+                        let test_result = serde_json::json!({
+                            "url": url,
+                            "index": index + 1,
+                            "success": false,
+                            "loading_time_ms": 0,
+                            "title": null,
+                            "screenshot_path": null,
+                            "error": format!("Failed to create browser: {}", e)
+                        });
+                        
+                        results.push(test_result);
+                        error!("❌ Test {}/{}: {} - Browser creation failed: {}", 
+                            index + 1, command.urls.len(), url, e);
+                    }
+                }
             }
-            Ok(serde_json::json!({ "results": results }))
+            
+            let successful_tests = results.iter().filter(|r| r["success"].as_bool().unwrap_or(false)).count();
+            let total_tests = results.len();
+            
+            info!("🎯 Test completed: {}/{} successful", successful_tests, total_tests);
+            
+            Ok(serde_json::json!({
+                "action": "test",
+                "total_tests": total_tests,
+                "successful_tests": successful_tests,
+                "success_rate": if total_tests > 0 { successful_tests as f64 / total_tests as f64 } else { 0.0 },
+                "screenshots_enabled": take_screenshots,
+                "results": results
+            }))
         }
         _ => Err(anyhow::anyhow!("Unsupported action: {}", command.action))
     }
@@ -1000,7 +1210,7 @@ pub async fn sse_handler(
             
             // Get session count
             let sessions = state.sessions.read().await;
-            let active_sessions = sessions.len() as u32;
+            let _active_sessions = sessions.len() as u32;
             drop(sessions);
 
             // Create and send metrics event
@@ -1085,12 +1295,44 @@ pub async fn start_server(config: Config) -> Result<()> {
     // Initialize components
     let browser_pool = Arc::new(BrowserPool::new());
     
-    // Check for API key and warn if missing
-    let api_key = config.llm.api_key.clone().unwrap_or_else(|| {
-        tracing::warn!("No OpenAI API key found. Natural language commands will not work.");
-        tracing::warn!("Set OPENAI_API_KEY environment variable or configure in settings.");
-        String::new()
-    });
+    // Get API key based on LLM provider
+    let provider = std::env::var("LLM_PROVIDER").unwrap_or_default();
+    let api_key = match provider.as_str() {
+        "chatapi" => {
+            std::env::var("CHATAPI_API_KEY").unwrap_or_else(|_| {
+                config.llm.api_key.clone().unwrap_or_else(|| {
+                    tracing::warn!("No ChatAPI key found. Set CHATAPI_API_KEY environment variable.");
+                    String::new()
+                })
+            })
+        },
+        "azure" => {
+            std::env::var("AZURE_OPENAI_KEY").unwrap_or_else(|_| {
+                tracing::warn!("No Azure OpenAI key found. Set AZURE_OPENAI_KEY environment variable.");
+                String::new()
+            })
+        },
+        "anthropic" => {
+            std::env::var("ANTHROPIC_API_KEY").unwrap_or_else(|_| {
+                tracing::warn!("No Anthropic API key found. Set ANTHROPIC_API_KEY environment variable.");
+                String::new()
+            })
+        },
+        _ => {
+            // Default to OpenAI
+            config.llm.api_key.clone().unwrap_or_else(|| {
+                std::env::var("OPENAI_API_KEY").unwrap_or_else(|_| {
+                    tracing::warn!("No OpenAI API key found. Natural language commands will not work.");
+                    tracing::warn!("Set OPENAI_API_KEY environment variable or configure in settings.");
+                    String::new()
+                })
+            })
+        }
+    };
+    
+    if !api_key.is_empty() {
+        tracing::info!("LLM API configured with provider: {}", provider);
+    }
     
     let llm_service = Arc::new(LLMService::new(api_key));
     let metrics = Arc::new(MetricsCollector::new());

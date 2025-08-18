@@ -39,6 +39,10 @@ impl SimpleBrowser {
     pub async fn new_with_config(retry_attempts: u32, timeout_duration: Duration) -> Result<Self> {
         info!("Initializing Chrome WebDriver (retries: {}, timeout: {:?})...", retry_attempts, timeout_duration);
         
+        // Ensure ChromeDriver is running
+        crate::chromedriver_manager::ensure_chromedriver().await
+            .context("Failed to ensure ChromeDriver is running")?;
+        
         // Configure Chrome capabilities with basic settings  
         let caps = ChromeCapabilities::new();
         
@@ -64,18 +68,48 @@ impl SimpleBrowser {
     async fn connect_with_retry(caps: ChromeCapabilities, max_attempts: u32) -> Result<WebDriver> {
         let mut last_error_msg = String::new();
         
+        // First check if ChromeDriver is reachable
+        info!("Checking ChromeDriver availability at http://localhost:9515...");
+        match reqwest::get("http://localhost:9515/status").await {
+            Ok(response) => {
+                if response.status().is_success() {
+                    info!("ChromeDriver is responding at port 9515");
+                } else {
+                    warn!("ChromeDriver returned status: {}", response.status());
+                }
+            }
+            Err(e) => {
+                error!("ChromeDriver is not reachable at http://localhost:9515: {}", e);
+                error!("Please ensure ChromeDriver is running:");
+                error!("  1. Download ChromeDriver from https://chromedriver.chromium.org/");
+                error!("  2. Run: chromedriver --port=9515");
+                return Err(anyhow::anyhow!(
+                    "ChromeDriver is not running on port 9515. Please start it with: chromedriver --port=9515"
+                ));
+            }
+        }
+        
         for attempt in 1..=max_attempts {
+            info!("Attempting to connect to ChromeDriver (attempt {}/{})", attempt, max_attempts);
             match timeout(
                 Duration::from_secs(10),
                 WebDriver::new("http://localhost:9515", caps.clone())
             ).await {
                 Ok(Ok(driver)) => {
-                    info!("ChromeDriver connected on attempt {}", attempt);
+                    info!("✅ ChromeDriver connected successfully on attempt {}", attempt);
                     return Ok(driver);
                 }
                 Ok(Err(e)) => {
                     warn!("ChromeDriver connection attempt {} failed: {}", attempt, e);
                     last_error_msg = format!("{}", e);
+                    
+                    // Check for specific error types
+                    let error_str = format!("{}", e);
+                    if error_str.contains("version") {
+                        error!("Version mismatch detected. Please ensure ChromeDriver version matches your Chrome browser version.");
+                        error!("Check Chrome version at: chrome://version");
+                        error!("Download matching ChromeDriver from: https://chromedriver.chromium.org/downloads");
+                    }
                 }
                 Err(_) => {
                     warn!("ChromeDriver connection attempt {} timed out", attempt);
@@ -88,6 +122,13 @@ impl SimpleBrowser {
                 tokio::time::sleep(Duration::from_secs(2)).await;
             }
         }
+        
+        error!("Failed to connect after {} attempts", max_attempts);
+        error!("Last error: {}", last_error_msg);
+        error!("Troubleshooting:");
+        error!("  1. Run: tasklist | findstr chromedriver");
+        error!("  2. Run: netstat -an | findstr 9515");
+        error!("  3. Try: chromedriver --port=9515 --verbose");
         
         Err(anyhow::anyhow!("All connection attempts failed: {}", last_error_msg))
     }
@@ -395,6 +436,11 @@ impl SimpleBrowser {
     }
 
     /// Get all text content from the page
+    /// Get a reference to the underlying WebDriver
+    pub fn driver(&self) -> &WebDriver {
+        &self.driver
+    }
+    
     pub async fn get_page_text(&self) -> Result<String> {
         self.driver.find(thirtyfour::By::Tag("body")).await
             .context("Failed to find body element")?

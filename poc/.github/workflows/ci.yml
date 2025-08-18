@@ -1,4 +1,4 @@
-name: CI
+name: CI/CD Pipeline
 
 on:
   push:
@@ -15,15 +15,29 @@ jobs:
     name: Check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Cache dependencies
+        uses: actions/cache@v3
         with:
-          profile: minimal
-          toolchain: stable
-          override: true
-      - uses: actions-rs/cargo@v1
-        with:
-          command: check
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+      - name: Set up environment
+        run: |
+          echo "RAINBOW_MOCK_MODE=true" >> $GITHUB_ENV
+          echo "LLM_PROVIDER=openai" >> $GITHUB_ENV
+          echo "OPENAI_API_KEY=sk-test-key-for-ci" >> $GITHUB_ENV
+          echo "RAINBOW_DAILY_BUDGET=10.0" >> $GITHUB_ENV
+          echo "CHROMEDRIVER_PORT=9515" >> $GITHUB_ENV
+          echo "RAINBOW_API_PORT=3001" >> $GITHUB_ENV
+          echo "LOG_LEVEL=info" >> $GITHUB_ENV
+          echo "RUST_LOG=info" >> $GITHUB_ENV
+      - run: cargo check
 
   test:
     name: Test Suite
@@ -36,20 +50,37 @@ jobs:
           - 7900:7900
         options: --shm-size=2gb
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Cache dependencies
+        uses: actions/cache@v3
         with:
-          profile: minimal
-          toolchain: stable
-          override: true
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+      - name: Install Chrome dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y chromium-browser chromium-chromedriver
+      - name: Set up environment
+        run: |
+          echo "RAINBOW_MOCK_MODE=true" >> $GITHUB_ENV
+          echo "LLM_PROVIDER=openai" >> $GITHUB_ENV
+          echo "OPENAI_API_KEY=sk-test-key-for-ci" >> $GITHUB_ENV
+          echo "RAINBOW_DAILY_BUDGET=10.0" >> $GITHUB_ENV
+          echo "CHROMEDRIVER_PORT=9515" >> $GITHUB_ENV
+          echo "RAINBOW_API_PORT=3001" >> $GITHUB_ENV
+          echo "LOG_LEVEL=info" >> $GITHUB_ENV
+          echo "RUST_LOG=info" >> $GITHUB_ENV
+          echo "CHROME_DRIVER_URL=http://localhost:4444" >> $GITHUB_ENV
+          echo "CI=true" >> $GITHUB_ENV
+          mkdir -p screenshots
       - name: Run tests
-        uses: actions-rs/cargo@v1
-        env:
-          CHROME_DRIVER_URL: http://localhost:4444
-          CI: true
-        with:
-          command: test
-          args: --all-features
+        run: cargo test --all-features --verbose
 
   fmt:
     name: Rustfmt
@@ -181,3 +212,62 @@ jobs:
         with:
           name: rainbow-poc-${{ matrix.os }}
           path: target/release/rainbow-poc*
+
+  integration-test:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: [check, test]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Cache dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+      - name: Install Chrome
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y chromium-browser chromium-chromedriver
+      - name: Set up environment
+        run: |
+          echo "RAINBOW_MOCK_MODE=true" >> $GITHUB_ENV
+          echo "LLM_PROVIDER=openai" >> $GITHUB_ENV
+          echo "OPENAI_API_KEY=sk-test-key-for-ci" >> $GITHUB_ENV
+          echo "RAINBOW_DAILY_BUDGET=10.0" >> $GITHUB_ENV
+          echo "CHROMEDRIVER_PORT=9515" >> $GITHUB_ENV
+          echo "RAINBOW_API_PORT=3002" >> $GITHUB_ENV
+          mkdir -p screenshots
+      - name: Build
+        run: cargo build --release
+      - name: Start server in background
+        run: |
+          cargo run --release -- serve --port 3002 &
+          echo $! > server.pid
+          sleep 15  # Wait for server to start
+      - name: Test health endpoint
+        run: |
+          curl -f http://localhost:3002/health
+      - name: Test navigation API
+        run: |
+          curl -f -X POST http://localhost:3002/api/navigate \
+            -H "Content-Type: application/json" \
+            -d '{"url": "http://example.com", "take_screenshot": false}'
+      - name: Test natural language API
+        run: |
+          curl -f -X POST http://localhost:3002/api/natural \
+            -H "Content-Type: application/json" \
+            -d '{"command": "navigate to example.com"}'
+      - name: Test metrics endpoint
+        run: |
+          curl -f http://localhost:3002/metrics
+      - name: Stop server
+        run: |
+          if [ -f server.pid ]; then
+            kill $(cat server.pid) || true
+          fi

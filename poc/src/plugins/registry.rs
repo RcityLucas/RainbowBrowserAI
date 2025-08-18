@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use tokio::fs;
-use tracing::{info, warn, error};
+use tracing::{info, warn};
 
 use super::types::{PluginId, PluginManifest, PluginInfo, PluginState};
 

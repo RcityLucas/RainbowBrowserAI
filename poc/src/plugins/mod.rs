@@ -16,7 +16,7 @@ use std::path::Path;
 
 /// Initialize the plugin system
 pub async fn init_plugin_system() -> Result<PluginManager> {
-    let mut manager = PluginManager::new().await?;
+    let manager = PluginManager::new().await?;
     
     // Discover plugins in the plugins directory
     let plugins_dir = Path::new("plugins");

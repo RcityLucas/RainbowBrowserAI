@@ -21,6 +21,14 @@ struct OpenAIRequest {
     temperature: f32,
 }
 
+#[derive(Debug, Serialize)]
+struct AnthropicRequest {
+    model: String,
+    max_tokens: u32,
+    messages: Vec<Message>,
+    temperature: f32,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Message {
     pub role: String,
@@ -43,6 +51,29 @@ struct Usage {
     prompt_tokens: u32,
     completion_tokens: u32,
     total_tokens: u32,
+}
+
+#[derive(Debug, Deserialize)]
+struct AnthropicResponse {
+    content: Vec<AnthropicContent>,
+    usage: AnthropicUsage,
+}
+
+#[derive(Debug, Deserialize)]
+struct AnthropicContent {
+    text: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct AnthropicUsage {
+    input_tokens: u32,
+    output_tokens: u32,
+}
+
+#[derive(Debug)]
+struct UnifiedUsage {
+    input_tokens: u32,
+    output_tokens: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -74,11 +105,32 @@ pub struct CommandParams {
 
 impl LLMService {
     pub fn new(api_key: String) -> Self {
+        // Check environment for API provider configuration
+        let provider = std::env::var("LLM_PROVIDER").unwrap_or_default();
+        let (base_url, model) = match provider.as_str() {
+            "chatapi" => (
+                std::env::var("CHATAPI_BASE_URL").unwrap_or_else(|_| "https://api.chatanywhere.tech/v1/chat/completions".to_string()),
+                std::env::var("CHATAPI_MODEL").unwrap_or_else(|_| "gpt-3.5-turbo".to_string())
+            ),
+            "azure" => (
+                std::env::var("AZURE_OPENAI_ENDPOINT").unwrap_or_else(|_| "https://your-resource.openai.azure.com/openai/deployments/your-deployment/chat/completions?api-version=2023-07-01-preview".to_string()),
+                std::env::var("AZURE_OPENAI_MODEL").unwrap_or_else(|_| "gpt-35-turbo".to_string())
+            ),
+            "anthropic" => (
+                "https://api.anthropic.com/v1/messages".to_string(),
+                std::env::var("ANTHROPIC_MODEL").unwrap_or_else(|_| "claude-3-sonnet-20240229".to_string())
+            ),
+            _ => (
+                "https://api.openai.com/v1/chat/completions".to_string(),
+                "gpt-3.5-turbo".to_string()
+            )
+        };
+
         Self {
             client: Client::new(),
             api_key,
-            model: "gpt-3.5-turbo".to_string(),
-            base_url: "https://api.openai.com/v1/chat/completions".to_string(),
+            model,
+            base_url,
         }
     }
 
@@ -94,6 +146,16 @@ impl LLMService {
     ) -> Result<ParsedCommand> {
         info!("Parsing natural language command: {}", user_input);
         
+        // Check if mock mode is enabled
+        let mock_mode = std::env::var("RAINBOW_MOCK_MODE")
+            .unwrap_or_else(|_| "false".to_string())
+            .to_lowercase() == "true";
+        
+        if mock_mode {
+            info!("🎭 Using mock mode for LLM parsing");
+            return self.parse_command_mock(user_input, cost_tracker);
+        }
+        
         let prompt = self.create_parsing_prompt(user_input);
         let start_time = Instant::now();
         
@@ -104,15 +166,15 @@ impl LLMService {
         }
 
         // Make the API call
-        let response = self.call_openai_api(&prompt).await
-            .context("Failed to call OpenAI API")?;
+        let (response_text, usage_info) = self.call_llm_api(&prompt).await
+            .context("Failed to call LLM API")?;
 
         // Parse the response
-        let parsed_command = self.parse_llm_response(&response.choices[0].message.content)
+        let parsed_command = self.parse_llm_response(&response_text)
             .context("Failed to parse LLM response")?;
 
         // Calculate actual cost and record operation
-        let actual_cost = self.calculate_cost(&response.usage);
+        let actual_cost = self.calculate_cost_from_usage(&usage_info);
         let duration = start_time.elapsed();
         
         cost_tracker.record_operation(
@@ -162,7 +224,16 @@ JSON:"#,
         )
     }
 
-    async fn call_openai_api(&self, prompt: &str) -> Result<OpenAIResponse> {
+    async fn call_llm_api(&self, prompt: &str) -> Result<(String, UnifiedUsage)> {
+        let provider = std::env::var("LLM_PROVIDER").unwrap_or_default();
+        
+        match provider.as_str() {
+            "anthropic" => self.call_anthropic_api(prompt).await,
+            _ => self.call_openai_api(prompt).await,
+        }
+    }
+
+    async fn call_openai_api(&self, prompt: &str) -> Result<(String, UnifiedUsage)> {
         let request = OpenAIRequest {
             model: self.model.clone(),
             messages: vec![Message {
@@ -173,21 +244,46 @@ JSON:"#,
             temperature: 0.1, // Low temperature for consistent parsing
         };
 
-        let response = self
+        // Build request with appropriate headers for different providers
+        let provider = std::env::var("LLM_PROVIDER").unwrap_or_default();
+        let mut request_builder = self
             .client
             .post(&self.base_url)
-            .header("Authorization", format!("Bearer {}", self.api_key))
-            .header("Content-Type", "application/json")
+            .header("Content-Type", "application/json");
+
+        // Add provider-specific headers
+        request_builder = match provider.as_str() {
+            "chatapi" => {
+                // ChatAPI typically uses OpenAI-compatible format
+                request_builder.header("Authorization", format!("Bearer {}", self.api_key))
+            },
+            "azure" => {
+                // Azure OpenAI uses api-key header
+                request_builder.header("api-key", &self.api_key)
+            },
+            "anthropic" => {
+                // Anthropic uses different headers
+                request_builder
+                    .header("x-api-key", &self.api_key)
+                    .header("anthropic-version", "2023-06-01")
+            },
+            _ => {
+                // Default OpenAI format
+                request_builder.header("Authorization", format!("Bearer {}", self.api_key))
+            }
+        };
+
+        let response = request_builder
             .json(&request)
             .send()
             .await
-            .context("Failed to send request to OpenAI")?;
+            .context("Failed to send request to LLM API")?;
 
         if !response.status().is_success() {
             let status = response.status();
             let error_text = response.text().await.unwrap_or_default();
             return Err(anyhow::anyhow!(
-                "OpenAI API error {}: {}",
+                "LLM API error {}: {}",
                 status,
                 error_text
             ));
@@ -196,9 +292,63 @@ JSON:"#,
         let api_response: OpenAIResponse = response
             .json()
             .await
-            .context("Failed to parse OpenAI response")?;
+            .context("Failed to parse LLM API response")?;
 
-        Ok(api_response)
+        let unified_usage = UnifiedUsage {
+            input_tokens: api_response.usage.prompt_tokens,
+            output_tokens: api_response.usage.completion_tokens,
+        };
+
+        Ok((api_response.choices[0].message.content.clone(), unified_usage))
+    }
+
+    async fn call_anthropic_api(&self, prompt: &str) -> Result<(String, UnifiedUsage)> {
+        let request = AnthropicRequest {
+            model: self.model.clone(),
+            max_tokens: 500,
+            messages: vec![Message {
+                role: "user".to_string(),
+                content: prompt.to_string(),
+            }],
+            temperature: 0.1,
+        };
+
+        let response = self
+            .client
+            .post(&self.base_url)
+            .header("Content-Type", "application/json")
+            .header("x-api-key", &self.api_key)
+            .header("anthropic-version", "2023-06-01")
+            .json(&request)
+            .send()
+            .await
+            .context("Failed to send request to Anthropic API")?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response.text().await.unwrap_or_default();
+            return Err(anyhow::anyhow!(
+                "Anthropic API error {}: {}",
+                status,
+                error_text
+            ));
+        }
+
+        let api_response: AnthropicResponse = response
+            .json()
+            .await
+            .context("Failed to parse Anthropic API response")?;
+
+        let unified_usage = UnifiedUsage {
+            input_tokens: api_response.usage.input_tokens,
+            output_tokens: api_response.usage.output_tokens,
+        };
+
+        let response_text = api_response.content.get(0)
+            .map(|c| c.text.clone())
+            .unwrap_or_default();
+
+        Ok((response_text, unified_usage))
     }
 
     fn parse_llm_response(&self, response_text: &str) -> Result<ParsedCommand> {
@@ -316,13 +466,147 @@ JSON:"#,
         cleaned
     }
 
-    fn calculate_cost(&self, usage: &Usage) -> f64 {
-        // GPT-3.5-turbo pricing: $0.0005 input, $0.0015 output per 1K tokens
-        let input_cost = (usage.prompt_tokens as f64 / 1000.0) * 0.0005;
-        let output_cost = (usage.completion_tokens as f64 / 1000.0) * 0.0015;
-        input_cost + output_cost
+    fn calculate_cost_from_usage(&self, usage: &UnifiedUsage) -> f64 {
+        let provider = std::env::var("LLM_PROVIDER").unwrap_or_default();
+        
+        match provider.as_str() {
+            "anthropic" => {
+                // Claude 3 Haiku pricing: $0.00025 input, $0.00125 output per 1K tokens
+                let input_cost = (usage.input_tokens as f64 / 1000.0) * 0.00025;
+                let output_cost = (usage.output_tokens as f64 / 1000.0) * 0.00125;
+                input_cost + output_cost
+            },
+            _ => {
+                // GPT-3.5-turbo pricing: $0.0005 input, $0.0015 output per 1K tokens
+                let input_cost = (usage.input_tokens as f64 / 1000.0) * 0.0005;
+                let output_cost = (usage.output_tokens as f64 / 1000.0) * 0.0015;
+                input_cost + output_cost
+            }
+        }
     }
 
+    fn calculate_cost(&self, usage: &Usage) -> f64 {
+        // Legacy method for backwards compatibility
+        let unified = UnifiedUsage {
+            input_tokens: usage.prompt_tokens,
+            output_tokens: usage.completion_tokens,
+        };
+        self.calculate_cost_from_usage(&unified)
+    }
+
+    fn parse_command_mock(&self, user_input: &str, cost_tracker: &mut CostTracker) -> Result<ParsedCommand> {
+        use regex::Regex;
+        use std::time::Duration;
+        use std::thread;
+        
+        // Simulate processing time
+        thread::sleep(Duration::from_millis(300));
+        
+        let input_lower = user_input.to_lowercase();
+        let mut command = ParsedCommand::default();
+        
+        // Detect action type with enhanced patterns
+        if input_lower.contains("test") && (input_lower.contains("sites") || input_lower.contains("websites") || input_lower.contains(",") || input_lower.contains("these")) {
+            command.action = "test".to_string();
+            command.confidence = 0.9;
+            
+            // Extract URLs from comma-separated list or common sites
+            let url_regex = Regex::new(r"([a-zA-Z0-9][a-zA-Z0-9-]*\.)+[a-zA-Z]{2,}").unwrap();
+            for cap in url_regex.captures_iter(&input_lower) {
+                command.urls.push(cap[0].to_string());
+            }
+            
+            // Enhanced common site detection
+            if command.urls.is_empty() {
+                let sites = [
+                    ("google", "google.com"), ("github", "github.com"), 
+                    ("stackoverflow", "stackoverflow.com"), ("reddit", "reddit.com"),
+                    ("youtube", "youtube.com"), ("twitter", "twitter.com"),
+                    ("facebook", "facebook.com"), ("linkedin", "linkedin.com")
+                ];
+                
+                for (name, url) in &sites {
+                    if input_lower.contains(name) {
+                        command.urls.push(url.to_string());
+                    }
+                }
+            }
+        } else if input_lower.contains("extract") || input_lower.contains("scrape") || input_lower.contains("data") {
+            command.action = "extract".to_string();
+            command.confidence = 0.85;
+            
+            // Extract URL for data extraction
+            let url_regex = Regex::new(r"([a-zA-Z0-9][a-zA-Z0-9-]*\.)+[a-zA-Z]{2,}").unwrap();
+            if let Some(cap) = url_regex.captures(&input_lower) {
+                command.url = Some(cap[0].to_string());
+            }
+        } else if input_lower.contains("monitor") || input_lower.contains("watch") || input_lower.contains("check") {
+            command.action = "monitor".to_string();
+            command.confidence = 0.8;
+            
+            // Extract URL to monitor
+            let url_regex = Regex::new(r"([a-zA-Z0-9][a-zA-Z0-9-]*\.)+[a-zA-Z]{2,}").unwrap();
+            if let Some(cap) = url_regex.captures(&input_lower) {
+                command.url = Some(cap[0].to_string());
+            }
+        } else if input_lower.contains("navigate") || input_lower.contains("go to") || input_lower.contains("open") || input_lower.contains("visit") || input_lower.contains("browse") {
+            command.action = "navigate".to_string();
+            command.confidence = 0.95;
+            
+            // Extract URL
+            let url_regex = Regex::new(r"([a-zA-Z0-9][a-zA-Z0-9-]*\.)+[a-zA-Z]{2,}|[a-zA-Z0-9]+").unwrap();
+            if let Some(cap) = url_regex.captures(&input_lower) {
+                let mut url = cap[0].to_string();
+                // Add .com if it's just a word
+                if !url.contains('.') {
+                    url.push_str(".com");
+                }
+                command.url = Some(url);
+            }
+        } else if input_lower.contains("report") || input_lower.contains("cost") || input_lower.contains("usage") {
+            command.action = "report".to_string();
+            command.confidence = 0.95;
+        } else {
+            command.action = "unknown".to_string();
+            command.confidence = 0.3;
+        }
+        
+        // Detect screenshot request
+        if input_lower.contains("screenshot") || input_lower.contains("capture") || input_lower.contains("snap") {
+            command.screenshot = true;
+            command.confidence = command.confidence.min(0.9);
+        }
+        
+        // Detect viewport settings
+        if let Some(cap) = Regex::new(r"(\d{3,4})\s*x\s*(\d{3,4})").unwrap().captures(&input_lower) {
+            command.viewport_width = cap[1].parse().ok();
+            command.viewport_height = cap[2].parse().ok();
+        }
+        
+        // Set parameters based on parsed fields
+        command.parameters = CommandParams {
+            take_screenshot: command.screenshot,
+            screenshot_filename: command.filename.clone(),
+            viewport_width: command.viewport_width,
+            viewport_height: command.viewport_height,
+            retries: command.retries,
+            timeout_seconds: command.timeout,
+            show_report: false,
+        };
+        
+        // Record mock operation (no cost)
+        cost_tracker.record_operation(
+            "llm_parse_mock".to_string(),
+            format!("Mock parse: {}", user_input),
+            0.0,
+            true,
+        )?;
+        
+        info!("Mock parsing result: action={}, confidence={:.2}", command.action, command.confidence);
+        
+        Ok(command)
+    }
+    
     pub async fn explain_command(&self, command: &ParsedCommand) -> String {
         match command.action.as_str() {
             "navigate" => {

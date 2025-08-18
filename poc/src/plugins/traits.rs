@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use anyhow::Result;
-use crate::{SimpleBrowser, WorkflowStep, ActionType};
+use crate::{SimpleBrowser, WorkflowStep};
 use super::types::*;
 use std::time::Duration;
 use std::collections::HashMap;

@@ -1,0 +1,50 @@
+{
+  "conversation_id": "conv_20250818_022029",
+  "created_at": "2025-08-18T02:20:29.812896113Z",
+  "last_updated": "2025-08-18T02:20:34.194076538Z",
+  "command_history": [
+    {
+      "timestamp": "2025-08-18T02:20:34.193679936Z",
+      "user_input": "navigate to google and take a screenshot",
+      "parsed_command": {
+        "action": "navigate",
+        "url": "navigate.com",
+        "urls": [],
+        "screenshot": true,
+        "filename": null,
+        "viewport_width": 1920,
+        "viewport_height": 1080,
+        "viewport_only": false,
+        "retries": 3,
+        "timeout": 30,
+        "confidence": 0.9,
+        "parameters": {
+          "take_screenshot": true,
+          "screenshot_filename": null,
+          "viewport_width": null,
+          "viewport_height": null,
+          "retries": null,
+          "timeout_seconds": null,
+          "show_report": false
+        }
+      },
+      "execution_result": {
+        "success": false,
+        "duration_ms": 4352,
+        "error_message": "Failed to connect to ChromeDriver after retries",
+        "output_summary": "Failed to navigate to navigate.com"
+      },
+      "cost": 0.00008
+    }
+  ],
+  "preferences": {
+    "default_screenshot": false,
+    "preferred_viewport": [
+      1920,
+      1080
+    ],
+    "favorite_sites": [],
+    "default_retries": 3,
+    "default_timeout": 30
+  }
+}

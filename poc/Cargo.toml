@@ -29,6 +29,8 @@ async-stream = "0.3"
 async-trait = "0.1"
 toml = "0.8"
 sysinfo = "0.29"
+dotenv = "0.15"
+regex = "1.10"
 
 [dev-dependencies]
 tokio-test = "0.4"
@@ -39,6 +41,5 @@ tempfile = "3.8"
 name = "performance"
 harness = false
 
-[[bin]]
-name = "test_plugin_system"
-path = "test_plugin_system.rs"
+# Test binaries moved to tests/manual/
+# Run manual tests with: cargo run --bin rainbow-poc

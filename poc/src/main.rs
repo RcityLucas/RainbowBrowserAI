@@ -1,5 +1,5 @@
 use clap::{Parser, Subcommand};
-use rainbow_poc::{SimpleBrowser, CostTracker, Config, ScreenshotOptions, LLMService, ConversationContext, HistoryEntry, ExecutionResult, Workflow, WorkflowEngine, start_server};
+use rainbow_poc::{SimpleBrowser, CostTracker, Config, ScreenshotOptions, LLMService, ConversationContext, HistoryEntry, ExecutionResult, Workflow, WorkflowEngine, start_server, DataExtractor};
 use anyhow::{Result, Context};
 use tracing::{info, error, warn};
 use chrono::Utc;
@@ -95,10 +95,36 @@ enum Commands {
         #[arg(long)]
         docs: bool,
     },
+    
+    /// Extract data from a webpage
+    Extract {
+        /// URL to extract data from
+        url: String,
+        
+        /// Output format (json, csv, or text)
+        #[arg(short, long, default_value = "json")]
+        format: String,
+        
+        /// CSS selector for specific extraction
+        #[arg(short, long)]
+        selector: Option<String>,
+        
+        /// Output file (if not specified, prints to stdout)
+        #[arg(short, long)]
+        output: Option<String>,
+    },
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    // Load environment variables from .env file
+    if let Err(e) = dotenv::dotenv() {
+        // .env file is optional, so only warn if it exists but can't be read
+        if !e.to_string().contains("not found") {
+            eprintln!("Warning: Could not load .env file: {}", e);
+        }
+    }
+
     // Initialize tracing
     tracing_subscriber::fmt().init();
 
@@ -145,6 +171,9 @@ async fn main() -> Result<()> {
         }
         Commands::Workflow { file, inputs, dry_run } => {
             execute_workflow(&file, inputs, dry_run, &mut cost_tracker).await
+        }
+        Commands::Extract { url, format, selector, output } => {
+            execute_extraction(&url, &format, selector, output, &mut cost_tracker).await
         }
         Commands::Serve { port, docs } => {
             // Update config with the specified port
@@ -763,4 +792,146 @@ async fn execute_workflow(
     } else {
         Err(anyhow::anyhow!("Workflow failed with {} errors", result.steps_failed))
     }
+}
+
+async fn execute_extraction(
+    url: &str,
+    format: &str,
+    selector: Option<String>,
+    output: Option<String>,
+    cost_tracker: &mut CostTracker,
+) -> Result<()> {
+    // Check budget
+    let estimated_cost = cost_tracker.estimate_browser_operation_cost();
+    if !cost_tracker.can_afford(estimated_cost) {
+        error!("❌ Daily budget exceeded! Cannot proceed.");
+        println!("\n{}", cost_tracker.generate_daily_report());
+        return Ok(());
+    }
+
+    info!("📊 Starting data extraction from: {}", url);
+    println!("📊 Extracting data from: {}", url);
+    
+    // Start browser
+    let browser = SimpleBrowser::new_with_config(3, Duration::from_secs(30))
+        .await
+        .context("Failed to initialize browser")?;
+    
+    // Navigate to URL
+    browser.navigate_to(url)
+        .await
+        .context("Failed to navigate to URL")?;
+    
+    // Wait for page to load
+    tokio::time::sleep(Duration::from_secs(2)).await;
+    
+    // Create extractor
+    let extractor = DataExtractor::new(browser.driver());
+    
+    // Extract data based on selector or all data
+    let extracted_content = if let Some(sel) = selector {
+        info!("Extracting using selector: {}", sel);
+        println!("🔍 Using selector: {}", sel);
+        
+        match format.to_lowercase().as_str() {
+            "json" => {
+                let results = extractor.extract_by_selector(&sel)
+                    .await
+                    .context("Failed to extract with selector")?;
+                serde_json::to_string_pretty(&results)?
+            }
+            "csv" | "text" => {
+                let results = extractor.extract_by_selector(&sel)
+                    .await
+                    .context("Failed to extract with selector")?;
+                results.join("\n")
+            }
+            _ => {
+                println!("⚠️  Unknown format '{}', using JSON", format);
+                let results = extractor.extract_by_selector(&sel)
+                    .await
+                    .context("Failed to extract with selector")?;
+                serde_json::to_string_pretty(&results)?
+            }
+        }
+    } else {
+        // Extract all data
+        info!("Extracting all data from page");
+        println!("📋 Extracting all data...");
+        
+        match format.to_lowercase().as_str() {
+            "json" => {
+                extractor.extract_as_json()
+                    .await
+                    .context("Failed to extract as JSON")?
+            }
+            "csv" => {
+                extractor.extract_links_as_csv()
+                    .await
+                    .context("Failed to extract as CSV")?
+            }
+            "text" => {
+                let data = extractor.extract_all()
+                    .await
+                    .context("Failed to extract data")?;
+                
+                // Format as readable text
+                let mut text = String::new();
+                text.push_str(&format!("Title: {}\n", data.title.unwrap_or_default()));
+                text.push_str(&format!("URL: {}\n", data.url));
+                
+                if let Some(desc) = data.meta_description {
+                    text.push_str(&format!("Description: {}\n", desc));
+                }
+                
+                text.push_str("\n=== Headings ===\n");
+                for heading in &data.headings {
+                    text.push_str(&format!("- {}\n", heading));
+                }
+                
+                text.push_str("\n=== Content ===\n");
+                for para in &data.text_content {
+                    text.push_str(&format!("{}\n\n", para));
+                }
+                
+                text.push_str(&format!("\n=== Links ({}) ===\n", data.links.len()));
+                for link in &data.links {
+                    text.push_str(&format!("- {} -> {}\n", link.text, link.href));
+                }
+                
+                text
+            }
+            _ => {
+                println!("⚠️  Unknown format '{}', using JSON", format);
+                extractor.extract_as_json()
+                    .await
+                    .context("Failed to extract as JSON")?
+            }
+        }
+    };
+    
+    // Output results
+    if let Some(output_file) = output {
+        std::fs::write(&output_file, &extracted_content)
+            .context("Failed to write output file")?;
+        println!("✅ Data extracted and saved to: {}", output_file);
+        info!("Extraction saved to: {}", output_file);
+    } else {
+        // Print to stdout
+        println!("\n{}", extracted_content);
+    }
+    
+    // Record operation
+    cost_tracker.record_operation(
+        "extract".to_string(),
+        format!("Extract data from {}", url),
+        estimated_cost,
+        true,
+    )?;
+    
+    // Close browser
+    browser.close().await?;
+    
+    println!("\n✅ Extraction completed successfully!");
+    Ok(())
 }

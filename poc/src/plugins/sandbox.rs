@@ -1,10 +1,10 @@
 use anyhow::Result;
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
-use sysinfo::{System, SystemExt, ProcessExt, Pid};
+use sysinfo::{System, SystemExt};
 
 use super::types::{Permission, ResourceLimits, PluginId, HealthStatus};
 
