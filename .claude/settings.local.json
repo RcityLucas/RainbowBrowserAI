@@ -74,7 +74,14 @@
       "Bash(RAINBOW_MOCK_MODE=true python3 debug_test.py)",
       "Bash(RAINBOW_MOCK_MODE=true cargo run --bin rainbow-poc)",
       "Bash(RAINBOW_MOCK_MODE=true cargo run --bin rainbow-poc -- serve)",
-      "Bash(RAINBOW_MOCK_MODE=true ./target/debug/rainbow-poc serve --port 3001)"
+      "Bash(RAINBOW_MOCK_MODE=true ./target/debug/rainbow-poc serve --port 3001)",
+      "Bash(pip install:*)",
+      "Bash(playwright install:*)",
+      "Bash(RAINBOW_MOCK_MODE=true cargo run -- serve --port 3001)",
+      "Bash(RAINBOW_MOCK_MODE=true cargo run -- serve --port 3002)",
+      "Bash(./test_fix)",
+      "Bash(RAINBOW_MOCK_MODE=true cargo run --release -- serve --port 3000)",
+      "Bash(RAINBOW_MOCK_MODE=true cargo run -- serve --port 3000)"
     ],
     "deny": []
   }

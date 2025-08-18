@@ -553,15 +553,67 @@ JSON:"#,
             command.action = "navigate".to_string();
             command.confidence = 0.95;
             
-            // Extract URL
-            let url_regex = Regex::new(r"([a-zA-Z0-9][a-zA-Z0-9-]*\.)+[a-zA-Z]{2,}|[a-zA-Z0-9]+").unwrap();
-            if let Some(cap) = url_regex.captures(&input_lower) {
-                let mut url = cap[0].to_string();
-                // Add .com if it's just a word
-                if !url.contains('.') {
-                    url.push_str(".com");
+            // First try to extract a complete URL with domain extension
+            let complete_url_regex = Regex::new(r"([a-zA-Z0-9][a-zA-Z0-9-]*\.)+[a-zA-Z]{2,}").unwrap();
+            if let Some(cap) = complete_url_regex.captures(&input_lower) {
+                command.url = Some(cap[0].to_string());
+            } else {
+                // If no complete URL, look for known websites or domain names
+                // Skip common command words when looking for domain names
+                let filtered_input = input_lower
+                    .replace("navigate to", "")
+                    .replace("go to", "")
+                    .replace("open", "")
+                    .replace("visit", "")
+                    .replace("browse to", "")
+                    .replace(" and ", " ")
+                    .replace(" take ", " ")
+                    .replace(" screenshot", "")
+                    .replace(" the ", " ")
+                    .replace(" a ", " ")
+                    .replace(" to ", " ");
+                
+                // Now look for domain-like words in the filtered input
+                info!("Filtered input for URL extraction: '{}'", filtered_input.trim());
+                
+                // Look for common website names first
+                let known_sites = [
+                    ("stackoverflow", "stackoverflow.com"),
+                    ("google", "google.com"),
+                    ("github", "github.com"),
+                    ("youtube", "youtube.com"),
+                    ("reddit", "reddit.com"),
+                    ("twitter", "twitter.com"),
+                    ("facebook", "facebook.com"),
+                    ("amazon", "amazon.com"),
+                    ("wikipedia", "wikipedia.org"),
+                    ("linkedin", "linkedin.com"),
+                ];
+                
+                let mut found_url = None;
+                for (name, full_url) in &known_sites {
+                    if filtered_input.contains(name) {
+                        found_url = Some(full_url.to_string());
+                        info!("Found known site: {} -> {}", name, full_url);
+                        break;
+                    }
                 }
-                command.url = Some(url);
+                
+                // If no known site found, try generic domain extraction
+                if found_url.is_none() {
+                    let domain_regex = Regex::new(r"\b([a-zA-Z][a-zA-Z0-9]{2,})\b").unwrap();
+                    if let Some(cap) = domain_regex.captures(&filtered_input) {
+                        let mut url = cap[1].to_string();
+                        info!("Extracted domain word: '{}'", url);
+                        // Add .com if it's just a word
+                        if !url.contains('.') {
+                            url.push_str(".com");
+                        }
+                        found_url = Some(url);
+                    }
+                }
+                
+                command.url = found_url;
             }
         } else if input_lower.contains("report") || input_lower.contains("cost") || input_lower.contains("usage") {
             command.action = "report".to_string();
