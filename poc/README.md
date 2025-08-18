@@ -33,6 +33,10 @@ Browser automation with AI-powered natural language commands.
 
 **See [EXAMPLES.md](EXAMPLES.md) for more complex examples and API usage.**
 
+## Known Issues & Fixes
+
+- **URL Parsing Issue**: If "go to stackoverflow" navigates to go.com instead of stackoverflow.com, see [URL_PARSING_FIX.md](URL_PARSING_FIX.md) for the solution.
+
 ## Files
 
 - **start.bat** - Start the application

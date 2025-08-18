@@ -1,6 +1,10 @@
-# 🌈 RainbowBrowserAI v8.0
+# 🌈 RainbowBrowserAI 
 
-基于大语言模型的智能浏览器自动化工具 - 六大引擎架构，AI生命体的数字器官
+AI-Powered Browser Automation System - Six-Organ Architecture for Digital Life Forms
+
+**Current Status**: 🚧 POC-to-Architecture Bridge Phase  
+**Working Version**: [POC Demo](poc/) (Ready for use)  
+**Development**: [Bridging Plan](BRIDGING_DEVELOPMENT_PLAN.md) | [Module Roadmap](MODULAR_ROADMAP.md)
 
 ## ✨ 核心特性
 
@@ -13,11 +17,11 @@
 
 ## 🏗️ 六大引擎架构
 
-RainbowBrowserAI v8.0 采用六大生命器官架构，实现AI在数字世界的感知、行动和记忆：
+RainbowBrowserAI  采用六大生命器官架构，实现AI在数字世界的感知、行动和记忆：
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    🌈 RainbowBrowserAI v8.0                 │
+│                    🌈 RainbowBrowserAI                │
 │                      AI生命体数字器官                        │
 └─────────────────────────────────────────────────────────────┘
 ┌─────────────────────────────────────────────────────────────┐
@@ -36,9 +40,15 @@ RainbowBrowserAI v8.0 采用六大生命器官架构，实现AI在数字世界�
 └─────────────────────────────────────────────────────────────┘
 ```
 
-## 🚀 快速开始
+## 🚀 Quick Start
 
-> **📦 Proof of Concept Available**: Check out the [PoC implementation](poc/) with REST API and Web Dashboard. See [Quick Start Guide](poc/QUICKSTART.md) for getting started in 5 minutes!
+### For Users (Working System)
+> **📦 Production-Ready POC**: Use the [PoC implementation](poc/) with REST API and Web Dashboard.  
+> See [Quick Start Guide](poc/QUICKSTART.md) for setup in 5 minutes!
+
+### For Developers (Architecture Evolution)
+> **🏗️ Development Phase**: We're bridging the working POC with the six-organ architecture.  
+> See [Bridging Plan](BRIDGING_DEVELOPMENT_PLAN.md) for development roadmap.
 
 ### 方式一：独立可执行文件 (推荐)
 

@@ -81,7 +81,13 @@
       "Bash(RAINBOW_MOCK_MODE=true cargo run -- serve --port 3002)",
       "Bash(./test_fix)",
       "Bash(RAINBOW_MOCK_MODE=true cargo run --release -- serve --port 3000)",
-      "Bash(RAINBOW_MOCK_MODE=true cargo run -- serve --port 3000)"
+      "Bash(RAINBOW_MOCK_MODE=true cargo run -- serve --port 3000)",
+      "Bash(timeout 60s cargo check)",
+      "Bash(timeout 120s cargo check)",
+      "Bash(timeout 30s cargo doc --no-deps --open)",
+      "Bash(timeout 60s cargo test)",
+      "Bash(timeout 30s cargo test)",
+      "Bash(timeout 120s cargo test)"
     ],
     "deny": []
   }
