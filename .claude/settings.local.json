@@ -87,7 +87,9 @@
       "Bash(timeout 30s cargo doc --no-deps --open)",
       "Bash(timeout 60s cargo test)",
       "Bash(timeout 30s cargo test)",
-      "Bash(timeout 120s cargo test)"
+      "Bash(timeout 120s cargo test)",
+      "Bash(timeout:*)",
+      "Bash(RAINBOW_MOCK_MODE=true timeout 10s cargo run -- ask \"give me a travel plan\")"
     ],
     "deny": []
   }
