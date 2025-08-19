@@ -6,8 +6,8 @@ use std::time::Instant;
 use crate::CostTracker;
 
 // Import enhanced task understanding module
-mod llm_service_enhanced;
-use llm_service_enhanced::{TaskUnderstanding, MockTaskUnderstanding, enhance_parsed_command};
+pub mod llm_service_enhanced;
+use llm_service_enhanced::{TaskUnderstanding, MockTaskUnderstanding};
 
 #[derive(Debug, Clone)]
 pub struct LLMService {
@@ -624,45 +624,40 @@ JSON:"#,
             command.confidence = 0.95;
         } else {
             // Try enhanced task understanding for complex commands
+            info!("Trying enhanced understanding for: '{}'", input_lower);
             let task_understanding = MockTaskUnderstanding;
-            if let Ok(task_type) = task_understanding.classify_intent(&input_lower) {
-                use llm_service_enhanced::TaskType;
-                match task_type {
-                    TaskType::Planning => {
-                        info!("Detected planning task: creating task plan");
-                        command.action = "planning".to_string();
-                        command.confidence = 0.85;
-                        
-                        // Create a travel plan workflow
-                        if let Ok(task_plan) = task_understanding.create_task_plan(&input_lower) {
-                            info!("Created task plan with {} steps", task_plan.steps.len());
-                            // For now, navigate to first step URL as a demonstration
-                            if let Some(first_step) = task_plan.steps.first() {
-                                if let Some(url) = first_step.parameters.get("url") {
-                                    command.url = url.as_str().map(|s| s.to_string());
-                                    command.action = "navigate".to_string();
-                                    // Store the full plan in parameters for later use
-                                    command.parameters.show_report = true;
-                                }
-                            }
+            match task_understanding.classify_intent(&input_lower) {
+                Ok(task_type) => {
+                    info!("Enhanced understanding classified as: {:?}", task_type);
+                    use llm_service_enhanced::TaskType;
+                    match task_type {
+                        TaskType::Planning => {
+                            info!("Detected planning task: will use TaskExecutor");
+                            command.action = "planning".to_string();
+                            command.confidence = 0.85;
+                            
+                            // Set parameters to indicate this is a planning task
+                            command.parameters.show_report = true;
+                        },
+                        TaskType::Search => {
+                            command.action = "search".to_string();
+                            command.confidence = 0.8;
+                        },
+                        TaskType::Analysis => {
+                            command.action = "analyze".to_string();
+                            command.confidence = 0.8;
+                        },
+                        _ => {
+                            command.action = "unknown".to_string();
+                            command.confidence = 0.3;
                         }
-                    },
-                    TaskType::Search => {
-                        command.action = "search".to_string();
-                        command.confidence = 0.8;
-                    },
-                    TaskType::Analysis => {
-                        command.action = "analyze".to_string();
-                        command.confidence = 0.8;
-                    },
-                    _ => {
-                        command.action = "unknown".to_string();
-                        command.confidence = 0.3;
                     }
                 }
-            } else {
-                command.action = "unknown".to_string();
-                command.confidence = 0.3;
+                Err(e) => {
+                    info!("Enhanced understanding failed with error: {}", e);
+                    command.action = "unknown".to_string();
+                    command.confidence = 0.3;
+                }
             }
         }
         

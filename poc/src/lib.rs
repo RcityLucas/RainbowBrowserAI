@@ -12,11 +12,13 @@ pub mod api;
 pub mod plugins;
 pub mod extractor;
 pub mod chromedriver_manager;
+pub mod task_executor;
 
 pub use browser::{SimpleBrowser, ScreenshotOptions};
 pub use cost_tracker::CostTracker;
 pub use config::{Config, ApiConfig};
 pub use llm_service::{LLMService, ParsedCommand, CommandParams};
+pub use llm_service::llm_service_enhanced::{TaskPlan, ActionStep, TaskType, TaskUnderstanding, MockTaskUnderstanding};
 pub use context::{ConversationContext, HistoryEntry, ExecutionResult};
 pub use workflow::{Workflow, WorkflowEngine, WorkflowResult, WorkflowStep, ActionType};
 pub use browser_pool::{BrowserPool, PooledBrowserHandle};
@@ -26,3 +28,4 @@ pub use security::{SecurityConfig, SecurityMiddleware, RateLimiter, InputValidat
 pub use api::{create_router, start_server, ApiState};
 pub use plugins::{PluginManager, init_plugin_system};
 pub use extractor::{DataExtractor, ExtractedData};
+pub use task_executor::{TaskExecutor, TaskExecutionResult, ExecutionProgress, AggregatedResults};

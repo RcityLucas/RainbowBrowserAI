@@ -1,5 +1,5 @@
 use clap::{Parser, Subcommand};
-use rainbow_poc::{SimpleBrowser, CostTracker, Config, ScreenshotOptions, LLMService, ConversationContext, HistoryEntry, ExecutionResult, Workflow, WorkflowEngine, start_server, DataExtractor};
+use rainbow_poc::{SimpleBrowser, CostTracker, Config, ScreenshotOptions, LLMService, ConversationContext, HistoryEntry, ExecutionResult, Workflow, WorkflowEngine, start_server, DataExtractor, TaskExecutor, TaskUnderstanding, MockTaskUnderstanding};
 use anyhow::{Result, Context};
 use tracing::{info, error, warn};
 use chrono::Utc;
@@ -585,6 +585,55 @@ async fn execute_natural_language_command(
                     duration_ms: start_time.elapsed().as_millis() as u64,
                     error_message: Some("No URLs specified for testing".to_string()),
                     output_summary: "Test command without URLs".to_string(),
+                }
+            }
+        }
+        "planning" => {
+            // Use enhanced LLM service to get the task plan
+            let task_understanding = MockTaskUnderstanding;
+            match task_understanding.create_task_plan(user_command) {
+                Ok(task_plan) => {
+                    info!("Created task plan with {} steps", task_plan.steps.len());
+                    
+                    // Create TaskExecutor and execute the plan
+                    let mut task_executor = TaskExecutor::new(cost_tracker.clone());
+                    
+                    match task_executor.execute_task_plan(&task_plan).await {
+                        Ok(result) => {
+                            // Update cost tracker from executor
+                            // Note: In a production system, we'd need better state management here
+                            
+                            // Display results to user
+                            task_executor.display_results(&result);
+                            
+                            ExecutionResult {
+                                success: result.success,
+                                duration_ms: result.total_duration_ms,
+                                error_message: if result.success { None } else { Some("Task execution had failures".to_string()) },
+                                output_summary: result.aggregated_results.summary,
+                            }
+                        }
+                        Err(e) => {
+                            error!("Task execution failed: {}", e);
+                            println!("❌ Task execution failed: {}", e);
+                            ExecutionResult {
+                                success: false,
+                                duration_ms: start_time.elapsed().as_millis() as u64,
+                                error_message: Some(e.to_string()),
+                                output_summary: "Task execution failed".to_string(),
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    error!("Failed to create task plan: {}", e);
+                    println!("❌ Failed to create task plan: {}", e);
+                    ExecutionResult {
+                        success: false,
+                        duration_ms: start_time.elapsed().as_millis() as u64,
+                        error_message: Some(e.to_string()),
+                        output_summary: "Task planning failed".to_string(),
+                    }
                 }
             }
         }

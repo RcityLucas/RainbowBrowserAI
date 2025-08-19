@@ -89,7 +89,13 @@
       "Bash(timeout 30s cargo test)",
       "Bash(timeout 120s cargo test)",
       "Bash(timeout:*)",
-      "Bash(RAINBOW_MOCK_MODE=true timeout 10s cargo run -- ask \"give me a travel plan\")"
+      "Bash(RAINBOW_MOCK_MODE=true timeout 10s cargo run -- ask \"give me a travel plan\")",
+      "Bash(RAINBOW_MOCK_MODE=true timeout 30s cargo run -- ask \"give me a travel plan\")",
+      "Bash(RAINBOW_MOCK_MODE=true timeout 60s cargo run -- ask \"give me a travel plan\")",
+      "Bash(RAINBOW_MOCK_MODE=true timeout 60s cargo run --release -- ask \"give me a travel plan\")",
+      "Bash(RAINBOW_MOCK_MODE=true timeout 10s cargo run -- ask \"plan a trip\")",
+      "Bash(RAINBOW_MOCK_MODE=true cargo run -- ask \"give me a travel plan\")",
+      "Bash(export RAINBOW_MOCK_MODE=true)"
     ],
     "deny": []
   }
