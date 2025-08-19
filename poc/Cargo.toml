@@ -31,6 +31,9 @@ toml = "0.8"
 sysinfo = "0.29"
 dotenv = "0.15"
 regex = "1.10"
+# Memory and caching dependencies (using simple file-based storage)
+bincode = "1.3"
+lru = "0.12"
 
 [dev-dependencies]
 tokio-test = "0.4"

@@ -13,6 +13,13 @@ pub mod plugins;
 pub mod extractor;
 pub mod chromedriver_manager;
 pub mod task_executor;
+// pub mod intelligence; // Disabled due to compilation complexity - using simplified version instead
+pub mod organic_perception_simple;
+pub mod organic_perception_enhanced;
+pub mod simple_memory;
+pub mod contextual_awareness;
+pub mod contextual_perception;
+pub mod creative_engine;
 
 pub use browser::{SimpleBrowser, ScreenshotOptions};
 pub use cost_tracker::CostTracker;
@@ -29,3 +36,10 @@ pub use api::{create_router, start_server, ApiState};
 pub use plugins::{PluginManager, init_plugin_system};
 pub use extractor::{DataExtractor, ExtractedData};
 pub use task_executor::{TaskExecutor, TaskExecutionResult, ExecutionProgress, AggregatedResults};
+// pub use intelligence::{OrganicPerception, IntentUnderstanding, Context, PerceptionMode, IntelligenceStats};
+pub use organic_perception_simple::{SimpleOrganicPerception, IntelligenceMode, IntelligenceStats as SimpleIntelligenceStats};
+pub use organic_perception_enhanced::{EnhancedOrganicPerception, EnhancedIntelligenceStats, create_enhanced_perception};
+pub use simple_memory::{SimpleMemory, SimpleMemoryConfig, InteractionRecord, LearnedPattern, SimpleMemoryStats, create_simple_memory};
+pub use contextual_awareness::{ContextualAwareness, ContextSnapshot, ContextualRecommendations, TemporalContext, EnvironmentalContext, UserContext, SystemContext, create_contextual_awareness, create_contextual_awareness_with_memory};
+pub use contextual_perception::{ContextualPerception, ContextualTaskUnderstanding, ContextualTaskPlan, ContextualIntelligenceStats, ContextualIntelligenceMode, ExecutionPriority, create_contextual_perception};
+pub use creative_engine::{CreativeEngine, CreativeSolution, CreativeTaskPlan, CreativeStrategy, ThinkingMode, ProblemType, ComplexityLevel, CreativeEngineStats, SolutionFeedback, create_creative_engine, create_creative_engine_with_memory};

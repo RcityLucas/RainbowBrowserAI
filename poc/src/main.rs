@@ -1,5 +1,5 @@
 use clap::{Parser, Subcommand};
-use rainbow_poc::{SimpleBrowser, CostTracker, Config, ScreenshotOptions, LLMService, ConversationContext, HistoryEntry, ExecutionResult, Workflow, WorkflowEngine, start_server, DataExtractor, TaskExecutor, TaskUnderstanding, MockTaskUnderstanding};
+use rainbow_poc::{SimpleBrowser, CostTracker, Config, ScreenshotOptions, LLMService, ConversationContext, HistoryEntry, ExecutionResult, Workflow, WorkflowEngine, start_server, DataExtractor, TaskExecutor};
 use anyhow::{Result, Context};
 use tracing::{info, error, warn};
 use chrono::Utc;
@@ -589,8 +589,12 @@ async fn execute_natural_language_command(
             }
         }
         "planning" => {
-            // Use enhanced LLM service to get the task plan
-            let task_understanding = MockTaskUnderstanding;
+            // Use simplified organic intelligence to get the task plan  
+            use rainbow_poc::{SimpleOrganicPerception, TaskUnderstanding};
+            
+            let task_understanding = SimpleOrganicPerception::from_env();
+            info!("🧠 Using simplified organic intelligence for task planning");
+            
             match task_understanding.create_task_plan(user_command) {
                 Ok(task_plan) => {
                     info!("Created task plan with {} steps", task_plan.steps.len());

@@ -95,7 +95,14 @@
       "Bash(RAINBOW_MOCK_MODE=true timeout 60s cargo run --release -- ask \"give me a travel plan\")",
       "Bash(RAINBOW_MOCK_MODE=true timeout 10s cargo run -- ask \"plan a trip\")",
       "Bash(RAINBOW_MOCK_MODE=true cargo run -- ask \"give me a travel plan\")",
-      "Bash(export RAINBOW_MOCK_MODE=true)"
+      "Bash(export RAINBOW_MOCK_MODE=true)",
+      "Bash(sed:*)",
+      "Bash(RAINBOW_MOCK_MODE=true timeout 120s cargo build)",
+      "Bash(RAINBOW_MOCK_MODE=true timeout 30s ./target/debug/rainbow-poc ask \"give me a travel plan\")",
+      "Bash(RAINBOW_MOCK_MODE=true timeout 60s ./target/debug/rainbow-poc ask \"give me a travel plan\")",
+      "Bash(RAINBOW_MOCK_MODE=true ENABLE_ADAPTIVE_MEMORY=true cargo build)",
+      "Bash(RAINBOW_MOCK_MODE=true ENABLE_ADAPTIVE_MEMORY=true ./target/debug/rainbow-poc ask \"give me a travel plan\")",
+      "Bash(RAINBOW_MOCK_MODE=true cargo build)"
     ],
     "deny": []
   }

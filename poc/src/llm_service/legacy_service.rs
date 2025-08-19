@@ -6,8 +6,7 @@ use std::time::Instant;
 use crate::CostTracker;
 
 // Import enhanced task understanding module
-pub mod llm_service_enhanced;
-use llm_service_enhanced::{TaskUnderstanding, MockTaskUnderstanding};
+use crate::llm_service::llm_service_enhanced::{TaskUnderstanding, MockTaskUnderstanding};
 
 #[derive(Debug, Clone)]
 pub struct LLMService {
@@ -629,7 +628,7 @@ JSON:"#,
             match task_understanding.classify_intent(&input_lower) {
                 Ok(task_type) => {
                     info!("Enhanced understanding classified as: {:?}", task_type);
-                    use llm_service_enhanced::TaskType;
+                    use crate::llm_service::llm_service_enhanced::TaskType;
                     match task_type {
                         TaskType::Planning => {
                             info!("Detected planning task: will use TaskExecutor");
