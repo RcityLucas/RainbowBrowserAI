@@ -3,6 +3,7 @@ use thirtyfour::{WebDriver, ChromeCapabilities};
 use tracing::{info, error, warn};
 use std::time::Duration;
 use tokio::time::timeout;
+use serde::{Serialize, Deserialize};
 
 pub struct SimpleBrowser {
     driver: WebDriver,
@@ -472,4 +473,20 @@ impl SimpleBrowser {
         
         Ok(json_value.clone())
     }
+}
+
+/// Browser actions that can be performed
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum BrowserAction {
+    Navigate { url: String },
+    Click { selector: String },
+    InputText { selector: String, text: String },
+    GetText { selector: String },
+    Screenshot { selector: Option<String> },
+    WaitForElement { selector: String, timeout_ms: u64 },
+    ExecuteScript { script: String },
+    ScrollTo { x: i32, y: i32 },
+    GoBack,
+    GoForward,
+    Refresh,
 }
