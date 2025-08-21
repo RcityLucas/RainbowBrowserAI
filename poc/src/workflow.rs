@@ -572,9 +572,9 @@ impl WorkflowEngine {
         let expanded_code = self.expand_template(code)?;
         
         info!("📜 Executing script");
-        let result = browser.execute_script(&expanded_code).await?;
+        let result = browser.execute_script(&expanded_code, vec![]).await?;
         
-        Ok(result)
+        Ok(result.json())
     }
 
     async fn execute_parallel_steps(&mut self, steps: &[WorkflowStep]) -> Result<Vec<ExecutionEntry>> {

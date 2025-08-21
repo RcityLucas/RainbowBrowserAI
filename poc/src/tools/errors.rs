@@ -41,6 +41,10 @@ pub enum ToolError {
     #[error("JavaScript error: {0}")]
     JavaScriptError(String),
     
+    /// Execution failed
+    #[error("Execution failed: {0}")]
+    ExecutionFailed(String),
+    
     /// Screenshot failed
     #[error("Screenshot failed: {0}")]
     ScreenshotFailed(String),
@@ -86,11 +90,9 @@ impl From<tokio::time::error::Elapsed> for ToolError {
     }
 }
 
-impl From<ToolError> for anyhow::Error {
-    fn from(err: ToolError) -> Self {
-        anyhow::Error::from(err)
-    }
-}
+// Removed: anyhow already implements From<E> for Error where E: std::error::Error
+// The ToolError already implements std::error::Error via thiserror, so this is redundant
+// and causes a conflict with anyhow's blanket implementation
 
 /// Result type for tool operations
 pub type ToolResult<T> = Result<T, ToolError>;

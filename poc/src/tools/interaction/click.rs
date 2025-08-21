@@ -9,7 +9,9 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use crate::browser::Browser;
-use crate::tools::{Tool, ToolError, Result};
+use crate::tools::{Tool, Result};
+use crate::tools::errors::ToolError;
+use crate::tools::security::InputSanitizer;
 
 /// Parameters for the click tool
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -245,27 +247,29 @@ impl Click {
             if let Ok(element) = self.browser.find_element(selector).await {
                 // Check visibility
                 if options.visible {
+                    // Sanitize selector to prevent injection
+                    let safe_selector = InputSanitizer::sanitize_selector(selector)
+                        .map_err(|e| ToolError::InvalidInput(e.to_string()))?;
+                    
                     let visible = self.browser.execute_script(
-                        &format!(
-                            r#"
-                            (() => {{
-                                const el = document.querySelector('{}');
-                                if (!el) return false;
-                                const rect = el.getBoundingClientRect();
-                                const style = window.getComputedStyle(el);
-                                return rect.width > 0 && 
-                                       rect.height > 0 && 
-                                       style.display !== 'none' &&
-                                       style.visibility !== 'hidden' &&
-                                       style.opacity !== '0';
-                            }})()
-                            "#,
-                            selector
-                        ),
-                        vec![]
+                        r#"
+                        (() => {
+                            const selector = arguments[0];
+                            const el = document.querySelector(selector);
+                            if (!el) return false;
+                            const rect = el.getBoundingClientRect();
+                            const style = window.getComputedStyle(el);
+                            return rect.width > 0 && 
+                                   rect.height > 0 && 
+                                   style.display !== 'none' &&
+                                   style.visibility !== 'hidden' &&
+                                   style.opacity !== '0';
+                        })()
+                        "#,
+                        vec![json!(safe_selector)]
                     ).await?;
                     
-                    if !visible.as_bool().unwrap_or(false) {
+                    if !visible.json().as_bool().unwrap_or(false) {
                         if start.elapsed() > timeout {
                             return Err(ToolError::Timeout(
                                 format!("Element {} not visible after {}ms", selector, options.timeout)
@@ -278,20 +282,22 @@ impl Click {
                 
                 // Check if enabled
                 if options.enabled {
+                    // Sanitize selector to prevent injection
+                    let safe_selector = InputSanitizer::sanitize_selector(selector)
+                        .map_err(|e| ToolError::InvalidInput(e.to_string()))?;
+                    
                     let enabled = self.browser.execute_script(
-                        &format!(
-                            r#"
-                            (() => {{
-                                const el = document.querySelector('{}');
-                                return el && !el.disabled && !el.hasAttribute('disabled');
-                            }})()
-                            "#,
-                            selector
-                        ),
-                        vec![]
+                        r#"
+                        (() => {
+                            const selector = arguments[0];
+                            const el = document.querySelector(selector);
+                            return el && !el.disabled && !el.hasAttribute('disabled');
+                        })()
+                        "#,
+                        vec![json!(safe_selector)]
                     ).await?;
                     
-                    if !enabled.as_bool().unwrap_or(false) {
+                    if !enabled.json().as_bool().unwrap_or(false) {
                         if start.elapsed() > timeout {
                             return Err(ToolError::Timeout(
                                 format!("Element {} not enabled after {}ms", selector, options.timeout)
@@ -544,16 +550,16 @@ impl Tool for Click {
     
     fn validate_input(&self, params: &Self::Input) -> Result<()> {
         if params.selector.is_empty() {
-            return Err(ToolError::InvalidInput("Selector cannot be empty".into()));
+            return Err(ToolError::InvalidInput("Selector cannot be empty".into()).into());
         }
         
         if params.options.click_count == 0 || params.options.click_count > 3 {
-            return Err(ToolError::InvalidInput("Click count must be between 1 and 3".into()));
+            return Err(ToolError::InvalidInput("Click count must be between 1 and 3".into()).into());
         }
         
         if let Some(ref offset) = params.options.offset {
             if offset.x < 0.0 || offset.y < 0.0 {
-                return Err(ToolError::InvalidInput("Offset values must be non-negative".into()));
+                return Err(ToolError::InvalidInput("Offset values must be non-negative".into()).into());
             }
         }
         

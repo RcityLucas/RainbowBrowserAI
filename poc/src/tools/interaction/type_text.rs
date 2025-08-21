@@ -667,19 +667,19 @@ impl Tool for TypeText {
     
     fn validate_input(&self, params: &Self::Input) -> Result<()> {
         if params.selector.is_empty() {
-            return Err(ToolError::InvalidInput("Selector cannot be empty".into()));
+            return Err(ToolError::InvalidInput("Selector cannot be empty".into()).into());
         }
         
         if params.options.delay > 1000 {
-            return Err(ToolError::InvalidInput("Delay cannot exceed 1000ms".into()));
+            return Err(ToolError::InvalidInput("Delay cannot exceed 1000ms".into()).into());
         }
         
         if params.options.append && params.options.prepend {
-            return Err(ToolError::InvalidInput("Cannot both append and prepend".into()));
+            return Err(ToolError::InvalidInput("Cannot both append and prepend".into()).into());
         }
         
         if params.options.clear_first && (params.options.append || params.options.prepend) {
-            return Err(ToolError::InvalidInput("Cannot clear when appending or prepending".into()));
+            return Err(ToolError::InvalidInput("Cannot clear when appending or prepending".into()).into());
         }
         
         Ok(())

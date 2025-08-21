@@ -234,6 +234,7 @@ impl SelectOption {
                 ),
                 vec![]
             ).await?
+            .json()
             .as_u64()
             .unwrap_or(0) as usize;
             
@@ -278,7 +279,7 @@ impl SelectOption {
             vec![]
         ).await?;
         
-        serde_json::from_value(info)
+        serde_json::from_value(info.json())
             .map_err(|e| ToolError::JavaScriptError(format!("Failed to parse select info: {}", e)))
     }
     
@@ -306,7 +307,7 @@ impl SelectOption {
             vec![]
         ).await?;
         
-        serde_json::from_value(options)
+        serde_json::from_value(options.json())
             .map_err(|e| ToolError::JavaScriptError(format!("Failed to parse options: {}", e)))
     }
     
@@ -383,7 +384,7 @@ impl SelectOption {
         };
         
         self.browser.execute_script(&script, vec![]).await?
-            .value()
+            .json()
             .as_bool()
             .ok_or_else(|| ToolError::JavaScriptError("Failed to select by text".into()))
     }
@@ -468,7 +469,7 @@ impl Tool for SelectOption {
         
         // Check if element is disabled
         if select_info.disabled && !params.options.force {
-            return Err(ToolError::JavaScriptError("Select element is disabled".into()));
+            return Err(ToolError::JavaScriptError("Select element is disabled".into()).into());
         }
         
         // Scroll into view if requested
@@ -517,7 +518,7 @@ impl Tool for SelectOption {
                 if !select_info.multiple {
                     return Err(ToolError::InvalidInput(
                         "Multiple values provided but select element does not support multiple selection".into()
-                    ));
+                    ).into());
                 }
                 v
             }
@@ -632,19 +633,19 @@ impl Tool for SelectOption {
     
     fn validate_input(&self, params: &Self::Input) -> Result<()> {
         if params.selector.is_empty() {
-            return Err(ToolError::InvalidInput("Selector cannot be empty".into()));
+            return Err(ToolError::InvalidInput("Selector cannot be empty".into()).into());
         }
         
         // Validate that values are not empty
         match &params.value {
             SelectValue::Single(v) if v.is_empty() => {
-                return Err(ToolError::InvalidInput("Value cannot be empty".into()));
+                return Err(ToolError::InvalidInput("Value cannot be empty".into()).into());
             },
             SelectValue::Multiple(values) if values.is_empty() => {
-                return Err(ToolError::InvalidInput("At least one value must be provided".into()));
+                return Err(ToolError::InvalidInput("At least one value must be provided".into()).into());
             },
             SelectValue::Multiple(values) if values.iter().any(|v| v.is_empty()) => {
-                return Err(ToolError::InvalidInput("Values cannot be empty".into()));
+                return Err(ToolError::InvalidInput("Values cannot be empty".into()).into());
             },
             _ => {}
         }
@@ -654,12 +655,12 @@ impl Tool for SelectOption {
             match &params.value {
                 SelectValue::Single(v) => {
                     v.parse::<usize>()
-                        .map_err(|_| ToolError::InvalidInput(format!("Invalid index: {}", v)))?;
+                        .map_err(|_| -> anyhow::Error { ToolError::InvalidInput(format!("Invalid index: {}", v)).into() })?;
                 },
                 SelectValue::Multiple(ref values) => {
                     for v in values {
                         v.parse::<usize>()
-                            .map_err(|_| ToolError::InvalidInput(format!("Invalid index: {}", v)))?;
+                            .map_err(|_| -> anyhow::Error { ToolError::InvalidInput(format!("Invalid index: {}", v)).into() })?;
                     }
                 },
                 _ => {}
