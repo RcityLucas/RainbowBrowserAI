@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Actions Demo - Registration Form</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        
+        .form-container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+            margin: 20px 0;
+        }
+        
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .form-section {
+            margin-bottom: 25px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .form-section:last-child {
+            border-bottom: none;
+        }
+        
+        .section-title {
+            color: #666;
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 15px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .form-row {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+        
+        .form-group {
+            flex: 1;
+            margin-bottom: 15px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+            color: #555;
+        }
+        
+        input, select, textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+            box-sizing: border-box;
+            transition: border-color 0.3s;
+        }
+        
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: #007bff;
+        }
+        
+        input[type="checkbox"], input[type="radio"] {
+            width: auto;
+            margin-right: 8px;
+        }
+        
+        .checkbox-group, .radio-group {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .checkbox-item, .radio-item {
+            display: flex;
+            align-items: center;
+        }
+        
+        textarea {
+            height: 100px;
+            resize: vertical;
+        }
+        
+        .required {
+            color: red;
+        }
+        
+        .help-text {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+        
+        .submit-section {
+            text-align: center;
+            padding-top: 20px;
+        }
+        
+        .submit-btn {
+            background: #007bff;
+            color: white;
+            padding: 15px 40px;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        
+        .submit-btn:hover {
+            background: #0056b3;
+        }
+        
+        .demo-info {
+            background: #e7f3ff;
+            border: 2px solid #007bff;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .demo-info h2 {
+            color: #007bff;
+            margin-top: 0;
+        }
+        
+        .demo-commands {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 5px;
+            margin-top: 10px;
+            font-family: monospace;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="demo-info">
+        <h2>🤖 Smart Actions Demo</h2>
+        <p>This form is designed to test the RainbowBrowserAI smart_actions tool. The tool can:</p>
+        <ul>
+            <li>Automatically detect field types (name, email, phone, address, etc.)</li>
+            <li>Suggest appropriate values for each field type</li>
+            <li>Handle complex form structures with validation</li>
+            <li>Fill forms intelligently based on context and user preferences</li>
+        </ul>
+        
+        <div class="demo-commands">
+            <strong>Test Commands:</strong><br>
+            # Basic form filling with smart suggestions<br>
+            rainbow-poc smart-actions --url file://$(pwd)/examples/smart_form_demo.html --smart-suggestions<br><br>
+            
+            # Fill form with specific data<br>
+            rainbow-poc smart-actions \<br>
+            &nbsp;&nbsp;--url file://$(pwd)/examples/smart_form_demo.html \<br>
+            &nbsp;&nbsp;--form-data "firstname=John,lastname=Doe,email=john.doe@example.com" \<br>
+            &nbsp;&nbsp;--auto-submit<br><br>
+            
+            # Use custom preferences<br>
+            rainbow-poc smart-actions \<br>
+            &nbsp;&nbsp;--url file://$(pwd)/examples/smart_form_demo.html \<br>
+            &nbsp;&nbsp;--user-preferences "firstname=Jane,lastname=Smith,city=San Francisco" \<br>
+            &nbsp;&nbsp;--intelligent-detection
+        </div>
+    </div>
+
+    <div class="form-container">
+        <h1>User Registration Form</h1>
+        
+        <form id="registration-form" action="#" method="post">
+            <!-- Personal Information Section -->
+            <div class="form-section">
+                <div class="section-title">Personal Information</div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="firstname">First Name <span class="required">*</span></label>
+                        <input type="text" id="firstname" name="firstname" required 
+                               placeholder="Enter your first name" 
+                               minlength="2" maxlength="50">
+                        <div class="help-text">Your given name</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="lastname">Last Name <span class="required">*</span></label>
+                        <input type="text" id="lastname" name="lastname" required 
+                               placeholder="Enter your last name"
+                               minlength="2" maxlength="50">
+                        <div class="help-text">Your family name</div>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="email">Email Address <span class="required">*</span></label>
+                        <input type="email" id="email" name="email" required 
+                               placeholder="user@example.com"
+                               aria-describedby="email-help">
+                        <div id="email-help" class="help-text">We'll use this for account verification</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="phone">Phone Number</label>
+                        <input type="tel" id="phone" name="phone" 
+                               placeholder="+1 (555) 123-4567"
+                               pattern="[+]?[0-9\s\-\(\)]+">
+                        <div class="help-text">Optional, for account security</div>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="birthdate">Date of Birth</label>
+                        <input type="date" id="birthdate" name="birthdate">
+                        <div class="help-text">Must be 18 or older to register</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="gender">Gender</label>
+                        <select id="gender" name="gender">
+                            <option value="">Select your gender</option>
+                            <option value="male">Male</option>
+                            <option value="female">Female</option>
+                            <option value="non-binary">Non-binary</option>
+                            <option value="prefer-not-to-say">Prefer not to say</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Address Information Section -->
+            <div class="form-section">
+                <div class="section-title">Address Information</div>
+                
+                <div class="form-group">
+                    <label for="address">Street Address</label>
+                    <input type="text" id="address" name="address" 
+                           placeholder="123 Main Street"
+                           maxlength="100">
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="city">City <span class="required">*</span></label>
+                        <input type="text" id="city" name="city" required 
+                               placeholder="Enter your city"
+                               maxlength="50">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="state">State/Province</label>
+                        <select id="state" name="state">
+                            <option value="">Select your state</option>
+                            <option value="AL">Alabama</option>
+                            <option value="CA">California</option>
+                            <option value="FL">Florida</option>
+                            <option value="NY">New York</option>
+                            <option value="TX">Texas</option>
+                            <option value="WA">Washington</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="zipcode">ZIP/Postal Code</label>
+                        <input type="text" id="zipcode" name="zipcode" 
+                               placeholder="12345"
+                               pattern="[0-9]{5}(-[0-9]{4})?"
+                               maxlength="10">
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="country">Country</label>
+                    <select id="country" name="country">
+                        <option value="">Select your country</option>
+                        <option value="US" selected>United States</option>
+                        <option value="CA">Canada</option>
+                        <option value="UK">United Kingdom</option>
+                        <option value="AU">Australia</option>
+                        <option value="DE">Germany</option>
+                        <option value="FR">France</option>
+                        <option value="other">Other</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Account Information Section -->
+            <div class="form-section">
+                <div class="section-title">Account Information</div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="username">Username <span class="required">*</span></label>
+                        <input type="text" id="username" name="username" required 
+                               placeholder="Choose a username"
+                               pattern="[a-zA-Z0-9_]+"
+                               minlength="3" maxlength="20">
+                        <div class="help-text">Letters, numbers, and underscores only</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="password">Password <span class="required">*</span></label>
+                        <input type="password" id="password" name="password" required 
+                               placeholder="Create a strong password"
+                               minlength="8">
+                        <div class="help-text">At least 8 characters</div>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="password_confirm">Confirm Password <span class="required">*</span></label>
+                    <input type="password" id="password_confirm" name="password_confirm" required 
+                           placeholder="Repeat your password">
+                    <div class="help-text">Must match the password above</div>
+                </div>
+            </div>
+
+            <!-- Preferences Section -->
+            <div class="form-section">
+                <div class="section-title">Preferences</div>
+                
+                <div class="form-group">
+                    <label>Communication Preferences</label>
+                    <div class="checkbox-group">
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="newsletter" name="preferences[]" value="newsletter" checked>
+                            <label for="newsletter">Subscribe to newsletter</label>
+                        </div>
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="promotions" name="preferences[]" value="promotions">
+                            <label for="promotions">Receive promotional emails</label>
+                        </div>
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="sms_updates" name="preferences[]" value="sms">
+                            <label for="sms_updates">SMS notifications</label>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label>Account Type</label>
+                    <div class="radio-group">
+                        <div class="radio-item">
+                            <input type="radio" id="personal" name="account_type" value="personal" checked>
+                            <label for="personal">Personal Account</label>
+                        </div>
+                        <div class="radio-item">
+                            <input type="radio" id="business" name="account_type" value="business">
+                            <label for="business">Business Account</label>
+                        </div>
+                        <div class="radio-item">
+                            <input type="radio" id="organization" name="account_type" value="organization">
+                            <label for="organization">Non-Profit Organization</label>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="bio">About You</label>
+                    <textarea id="bio" name="bio" 
+                              placeholder="Tell us a bit about yourself (optional)"
+                              maxlength="500"></textarea>
+                    <div class="help-text">Maximum 500 characters</div>
+                </div>
+            </div>
+
+            <!-- Terms and Submit Section -->
+            <div class="form-section">
+                <div class="form-group">
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="terms" name="terms" value="accepted" required>
+                        <label for="terms">I agree to the <a href="#" target="_blank">Terms of Service</a> and <a href="#" target="_blank">Privacy Policy</a> <span class="required">*</span></label>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="age_confirm" name="age_confirm" value="yes" required>
+                        <label for="age_confirm">I confirm that I am 18 years of age or older <span class="required">*</span></label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="submit-section">
+                <button type="submit" class="submit-btn">Create Account</button>
+            </div>
+        </form>
+    </div>
+
+    <script>
+        // Basic form validation and feedback
+        document.getElementById('registration-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            // Check password confirmation
+            const password = document.getElementById('password').value;
+            const passwordConfirm = document.getElementById('password_confirm').value;
+            
+            if (password !== passwordConfirm) {
+                alert('Passwords do not match!');
+                return false;
+            }
+            
+            // Simulate form submission
+            alert('Form submitted successfully! (This is just a demo)');
+            
+            // Log form data for debugging
+            const formData = new FormData(this);
+            console.log('Form data submitted:');
+            for (let [key, value] of formData.entries()) {
+                console.log(key + ': ' + value);
+            }
+        });
+        
+        // Real-time password confirmation validation
+        document.getElementById('password_confirm').addEventListener('input', function() {
+            const password = document.getElementById('password').value;
+            const confirmPassword = this.value;
+            
+            if (confirmPassword && password !== confirmPassword) {
+                this.style.borderColor = '#dc3545';
+            } else {
+                this.style.borderColor = '#ddd';
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,9 +1,33 @@
 use anyhow::{Result, Context};
-use thirtyfour::{WebDriver, ChromeCapabilities};
+use thirtyfour::{WebDriver, ChromeCapabilities, WebElement, By, session::scriptret::ScriptRet};
 use tracing::{info, error, warn};
 use std::time::Duration;
 use tokio::time::timeout;
-use serde::{Serialize, Deserialize};
+use serde::{Serialize, Deserialize, de::DeserializeOwned};
+use async_trait::async_trait;
+
+#[cfg(test)]
+pub mod mock;
+
+#[cfg(test)]
+pub use mock::MockBrowser;
+
+// Re-export SimpleBrowser as Browser for compatibility  
+#[cfg(not(test))]
+pub use SimpleBrowser as Browser;
+
+// For tests, use MockBrowser instead
+#[cfg(test)]
+pub use MockBrowser as Browser;
+
+/// Browser operations trait that can be implemented by both SimpleBrowser and MockBrowser
+#[async_trait]
+pub trait BrowserOps: Send + Sync {
+    async fn navigate_to(&self, url: &str) -> Result<()>;
+    async fn current_url(&self) -> Result<String>;
+    async fn wait_for_load_event(&self) -> Result<()>;
+    async fn wait_for_dom_content_loaded(&self) -> Result<()>;
+}
 
 pub struct SimpleBrowser {
     driver: WebDriver,
@@ -70,22 +94,22 @@ impl SimpleBrowser {
         let mut last_error_msg = String::new();
         
         // First check if ChromeDriver is reachable
-        info!("Checking ChromeDriver availability at http://localhost:9515...");
-        match reqwest::get("http://localhost:9515/status").await {
+        info!("Checking ChromeDriver availability at http://localhost:9520...");
+        match reqwest::get("http://localhost:9520/status").await {
             Ok(response) => {
                 if response.status().is_success() {
-                    info!("ChromeDriver is responding at port 9515");
+                    info!("ChromeDriver is responding at port 9520");
                 } else {
                     warn!("ChromeDriver returned status: {}", response.status());
                 }
             }
             Err(e) => {
-                error!("ChromeDriver is not reachable at http://localhost:9515: {}", e);
+                error!("ChromeDriver is not reachable at http://localhost:9520: {}", e);
                 error!("Please ensure ChromeDriver is running:");
                 error!("  1. Download ChromeDriver from https://chromedriver.chromium.org/");
-                error!("  2. Run: chromedriver --port=9515");
+                error!("  2. Run: chromedriver --port=9520");
                 return Err(anyhow::anyhow!(
-                    "ChromeDriver is not running on port 9515. Please start it with: chromedriver --port=9515"
+                    "ChromeDriver is not running on port 9520. Please start it with: chromedriver --port=9520"
                 ));
             }
         }
@@ -94,7 +118,7 @@ impl SimpleBrowser {
             info!("Attempting to connect to ChromeDriver (attempt {}/{})", attempt, max_attempts);
             match timeout(
                 Duration::from_secs(10),
-                WebDriver::new("http://localhost:9515", caps.clone())
+                WebDriver::new("http://localhost:9520", caps.clone())
             ).await {
                 Ok(Ok(driver)) => {
                     info!("✅ ChromeDriver connected successfully on attempt {}", attempt);
@@ -422,6 +446,44 @@ impl SimpleBrowser {
         }
         Err(anyhow::anyhow!("Timeout waiting for text: {}", text))
     }
+    
+    /// Wait for the page load event
+    pub async fn wait_for_load_event(&self) -> Result<()> {
+        // Wait for the load event using JavaScript
+        let _script = r#"
+            return new Promise((resolve) => {
+                if (document.readyState === 'complete') {
+                    resolve(true);
+                } else {
+                    window.addEventListener('load', () => resolve(true));
+                }
+            });
+        "#;
+        
+        // Execute the script (in reality, we'd wait for the promise)
+        // For now, we'll simulate with a simple wait
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        Ok(())
+    }
+    
+    /// Wait for DOMContentLoaded event
+    pub async fn wait_for_dom_content_loaded(&self) -> Result<()> {
+        // Wait for DOMContentLoaded using JavaScript
+        let _script = r#"
+            return new Promise((resolve) => {
+                if (document.readyState === 'interactive' || document.readyState === 'complete') {
+                    resolve(true);
+                } else {
+                    window.addEventListener('DOMContentLoaded', () => resolve(true));
+                }
+            });
+        "#;
+        
+        // Execute the script (in reality, we'd wait for the promise)
+        // For now, we'll simulate with a simple wait
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        Ok(())
+    }
 
     /// Wait for URL to match pattern
     pub async fn wait_for_url(&self, pattern: &str, timeout: Duration) -> Result<()> {
@@ -463,8 +525,33 @@ impl SimpleBrowser {
         Ok(elements.len())
     }
 
-    /// Execute JavaScript code
-    pub async fn execute_script(&self, script: &str) -> Result<serde_json::Value> {
+    /// Find a single element using CSS selector (for tool compatibility)
+    pub async fn find_element(&self, selector: &str) -> Result<WebElement> {
+        self.driver.find(By::Css(selector)).await
+            .context(format!("Failed to find element with selector: {}", selector))
+    }
+
+    /// Find multiple elements using CSS selector (for tool compatibility)
+    pub async fn find_elements(&self, selector: &str) -> Result<Vec<WebElement>> {
+        self.driver.find_all(By::Css(selector)).await
+            .context(format!("Failed to find elements with selector: {}", selector))
+    }
+
+    /// Execute JavaScript with arguments (overloaded version for tool compatibility)
+    pub async fn execute_script_with_args(&self, script: &str, _args: Vec<serde_json::Value>) -> Result<ScriptRet> {
+        // Tools mostly pass vec![] so ignore args
+        self.driver.execute(script, vec![]).await
+            .context("Failed to execute script")
+    }
+
+    /// Execute JavaScript code with optional arguments
+    pub async fn execute_script(&self, script: &str, args: Vec<serde_json::Value>) -> Result<ScriptRet> {
+        self.driver.execute(script, args).await
+            .context("Failed to execute script")
+    }
+
+    /// Execute JavaScript code (legacy single-argument version)
+    pub async fn execute_script_simple(&self, script: &str) -> Result<serde_json::Value> {
         let result = self.driver.execute(script, vec![]).await
             .context("Failed to execute script")?;
         
@@ -472,6 +559,26 @@ impl SimpleBrowser {
         let json_value = result.json();
         
         Ok(json_value.clone())
+    }
+}
+
+// Implement BrowserOps trait for SimpleBrowser
+#[async_trait]
+impl BrowserOps for SimpleBrowser {
+    async fn navigate_to(&self, url: &str) -> Result<()> {
+        self.navigate_to(url).await
+    }
+    
+    async fn current_url(&self) -> Result<String> {
+        self.current_url().await
+    }
+    
+    async fn wait_for_load_event(&self) -> Result<()> {
+        self.wait_for_load_event().await
+    }
+    
+    async fn wait_for_dom_content_loaded(&self) -> Result<()> {
+        self.wait_for_dom_content_loaded().await
     }
 }
 

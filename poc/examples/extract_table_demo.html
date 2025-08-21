@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Extract Table Demo - Financial Data</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        table { border-collapse: collapse; width: 100%; margin: 20px 0; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; font-weight: bold; }
+        .currency { text-align: right; }
+        .percentage { text-align: center; }
+        .boolean { text-align: center; }
+        .highlight { background-color: #fff3cd; }
+    </style>
+</head>
+<body>
+    <h1>Financial Data Demo</h1>
+    
+    <table id="financial-table" class="data-table">
+        <caption>Q4 2024 Financial Performance</caption>
+        <thead>
+            <tr>
+                <th>Company</th>
+                <th class="currency">Revenue</th>
+                <th class="percentage">Growth Rate</th>
+                <th class="currency">Profit</th>
+                <th class="boolean">Active</th>
+                <th>Website</th>
+                <th>Logo</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>TechCorp</td>
+                <td class="currency">$1,250,000</td>
+                <td class="percentage">15.2%</td>
+                <td class="currency">$187,500</td>
+                <td class="boolean">✓</td>
+                <td><a href="https://techcorp.example.com">techcorp.example.com</a></td>
+                <td><img src="/images/techcorp-logo.png" alt="TechCorp Logo" width="32"></td>
+            </tr>
+            <tr>
+                <td>InnovateLtd</td>
+                <td class="currency">€950,000</td>
+                <td class="percentage">-2.1%</td>
+                <td class="currency">€42,750</td>
+                <td class="boolean">Yes</td>
+                <td><a href="https://innovate.example.com">innovate.example.com</a></td>
+                <td><img src="/images/innovate-logo.png" alt="InnovateLtd Logo" width="32"></td>
+            </tr>
+            <tr>
+                <td>StartupXYZ</td>
+                <td class="currency">£675,000</td>
+                <td class="percentage">28.7%</td>
+                <td class="currency">£101,250</td>
+                <td class="boolean">True</td>
+                <td><a href="https://startupxyz.example.com">startupxyz.example.com</a></td>
+                <td><img src="/images/startupxyz-logo.png" alt="StartupXYZ Logo" width="32"></td>
+            </tr>
+            <tr class="highlight">
+                <td>MegaIndustries</td>
+                <td class="currency">$2,800,000</td>
+                <td class="percentage">8.9%</td>
+                <td class="currency">$448,000</td>
+                <td class="boolean">✔</td>
+                <td><a href="https://megaindustries.example.com">megaindustries.example.com</a></td>
+                <td><img src="/images/mega-logo.png" alt="MegaIndustries Logo" width="32"></td>
+            </tr>
+            <tr>
+                <td>SmallBiz Inc</td>
+                <td class="currency">$125,000</td>
+                <td class="percentage">-5.3%</td>
+                <td class="currency">$6,250</td>
+                <td class="boolean">No</td>
+                <td><a href="https://smallbiz.example.com">smallbiz.example.com</a></td>
+                <td><img src="/images/smallbiz-logo.png" alt="SmallBiz Logo" width="32"></td>
+            </tr>
+        </tbody>
+        <tfoot>
+            <tr>
+                <td><strong>Total</strong></td>
+                <td class="currency"><strong>$5,800,000</strong></td>
+                <td class="percentage"><strong>9.1%</strong></td>
+                <td class="currency"><strong>$785,750</strong></td>
+                <td class="boolean">-</td>
+                <td colspan="2"><em>5 Companies</em></td>
+            </tr>
+        </tfoot>
+    </table>
+
+    <h2>Product Inventory</h2>
+    
+    <table id="inventory-table" class="inventory">
+        <thead>
+            <tr>
+                <th>Product Name</th>
+                <th>SKU</th>
+                <th>Price</th>
+                <th>Stock</th>
+                <th>Available</th>
+                <th>Rating</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>Wireless Headphones</td>
+                <td>WH-2024-001</td>
+                <td>$89.99</td>
+                <td>25</td>
+                <td>✓</td>
+                <td>4.5</td>
+            </tr>
+            <tr>
+                <td>Bluetooth Speaker</td>
+                <td>BS-2024-002</td>
+                <td>$129.99</td>
+                <td>12</td>
+                <td>Yes</td>
+                <td>4.2</td>
+            </tr>
+            <tr>
+                <td>Smart Watch</td>
+                <td>SW-2024-003</td>
+                <td>$299.99</td>
+                <td>0</td>
+                <td>✗</td>
+                <td>4.8</td>
+            </tr>
+            <tr>
+                <td>USB Cable</td>
+                <td>UC-2024-004</td>
+                <td>$12.99</td>
+                <td>150</td>
+                <td>True</td>
+                <td>3.9</td>
+            </tr>
+        </tbody>
+    </table>
+</body>
+</html>

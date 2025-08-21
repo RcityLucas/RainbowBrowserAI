@@ -35,6 +35,8 @@ pub mod advanced_learning;
 pub mod multi_model_orchestration;
 pub mod self_healing;
 pub mod advanced_analytics;
+pub mod tools;
+pub mod simple_tool_test;
 
 pub use browser::{SimpleBrowser, ScreenshotOptions};
 pub use cost_tracker::CostTracker;

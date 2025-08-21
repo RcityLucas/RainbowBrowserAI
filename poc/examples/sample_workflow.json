@@ -1,0 +1,201 @@
+{
+  "id": "sample-registration-workflow",
+  "name": "User Registration Workflow",
+  "description": "Complete user registration flow with form filling, validation, and conditional logic",
+  "initial_step": "navigate-to-form",
+  "timeout_ms": 300000,
+  "max_retries": 3,
+  "global_variables": {
+    "base_url": "file://$(pwd)/examples/smart_form_demo.html",
+    "user_email": "test.user@example.com",
+    "user_firstname": "John",
+    "user_lastname": "Doe"
+  },
+  "steps": [
+    {
+      "id": "navigate-to-form",
+      "name": "Navigate to Registration Form",
+      "step_type": "navigate",
+      "parameters": {
+        "url": "{{base_url}}"
+      },
+      "conditions": [],
+      "error_handling": "stop",
+      "next_steps": [
+        {
+          "condition": null,
+          "step_id": "wait-for-form",
+          "is_default": true
+        }
+      ],
+      "timeout_ms": 30000,
+      "retry_attempts": 3
+    },
+    {
+      "id": "wait-for-form",
+      "name": "Wait for Form to Load",
+      "step_type": "wait",
+      "parameters": {
+        "duration_ms": 2000
+      },
+      "conditions": [
+        {
+          "condition_type": "element_exists",
+          "target": "#registration-form",
+          "operator": "exists",
+          "value": true,
+          "required": true
+        }
+      ],
+      "error_handling": "stop",
+      "next_steps": [
+        {
+          "condition": null,
+          "step_id": "fill-personal-info",
+          "is_default": true
+        }
+      ],
+      "timeout_ms": 10000,
+      "retry_attempts": 2
+    },
+    {
+      "id": "fill-personal-info",
+      "name": "Fill Personal Information",
+      "step_type": "smart_fill",
+      "parameters": {
+        "form_selector": "#registration-form",
+        "form_data": {
+          "firstname": "{{user_firstname}}",
+          "lastname": "{{user_lastname}}",
+          "email": "{{user_email}}"
+        },
+        "intelligent_detection": true,
+        "smart_suggestions": true,
+        "validate_before_fill": true
+      },
+      "conditions": [],
+      "error_handling": "retry",
+      "next_steps": [
+        {
+          "condition": null,
+          "step_id": "validate-form-fields",
+          "is_default": true
+        }
+      ],
+      "timeout_ms": 30000,
+      "retry_attempts": 3
+    },
+    {
+      "id": "validate-form-fields",
+      "name": "Validate Form Fields",
+      "step_type": "validate",
+      "parameters": {
+        "validations": [
+          {
+            "type": "element_value",
+            "selector": "#firstname",
+            "expected": "{{user_firstname}}"
+          },
+          {
+            "type": "element_value", 
+            "selector": "#email",
+            "expected": "{{user_email}}"
+          }
+        ]
+      },
+      "conditions": [],
+      "error_handling": "stop",
+      "next_steps": [
+        {
+          "condition": null,
+          "step_id": "take-screenshot",
+          "is_default": true
+        }
+      ],
+      "timeout_ms": 5000,
+      "retry_attempts": 1
+    },
+    {
+      "id": "take-screenshot",
+      "name": "Capture Form Screenshot",
+      "step_type": "screenshot",
+      "parameters": {
+        "filename": "registration_form_filled.png",
+        "full_page": true
+      },
+      "conditions": [],
+      "error_handling": "continue",
+      "next_steps": [
+        {
+          "condition": {
+            "condition_type": "variable",
+            "target": "auto_submit",
+            "operator": "equals",
+            "value": true,
+            "required": false
+          },
+          "step_id": "submit-form",
+          "is_default": false
+        },
+        {
+          "condition": null,
+          "step_id": "workflow-complete",
+          "is_default": true
+        }
+      ],
+      "timeout_ms": 10000,
+      "retry_attempts": 2
+    },
+    {
+      "id": "submit-form",
+      "name": "Submit Registration Form",
+      "step_type": "click",
+      "parameters": {
+        "selector": "button[type='submit'], .submit-btn"
+      },
+      "conditions": [],
+      "error_handling": "stop",
+      "next_steps": [
+        {
+          "condition": null,
+          "step_id": "wait-for-submission",
+          "is_default": true
+        }
+      ],
+      "timeout_ms": 10000,
+      "retry_attempts": 3
+    },
+    {
+      "id": "wait-for-submission",
+      "name": "Wait for Form Submission",
+      "step_type": "wait",
+      "parameters": {
+        "duration_ms": 3000
+      },
+      "conditions": [],
+      "error_handling": "continue",
+      "next_steps": [
+        {
+          "condition": null,
+          "step_id": "workflow-complete",
+          "is_default": true
+        }
+      ],
+      "timeout_ms": 15000,
+      "retry_attempts": 1
+    },
+    {
+      "id": "workflow-complete",
+      "name": "Workflow Complete",
+      "step_type": "validate",
+      "parameters": {
+        "message": "Registration workflow completed successfully"
+      },
+      "conditions": [],
+      "error_handling": "ignore",
+      "next_steps": [],
+      "timeout_ms": 1000,
+      "retry_attempts": 1
+    }
+  ]
+}

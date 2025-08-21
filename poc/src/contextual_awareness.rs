@@ -36,6 +36,22 @@ pub struct ContextSnapshot {
     pub confidence_score: f32,
 }
 
+impl Default for ContextSnapshot {
+    fn default() -> Self {
+        use chrono::Utc;
+        use uuid::Uuid;
+        Self {
+            id: Uuid::new_v4(),
+            timestamp: Utc::now(),
+            temporal_context: TemporalContext::default(),
+            environmental_context: EnvironmentalContext::default(),
+            user_context: UserContext::default(),
+            system_context: SystemContext::default(),
+            confidence_score: 0.0,
+        }
+    }
+}
+
 /// Time-based contextual information
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TemporalContext {
@@ -47,8 +63,21 @@ pub struct TemporalContext {
     pub urgency_indicators: Vec<String>,
 }
 
+impl Default for TemporalContext {
+    fn default() -> Self {
+        Self {
+            time_of_day: TimeOfDay::default(),
+            day_of_week: chrono::Weekday::Mon,
+            is_business_hours: true,
+            is_weekend: false,
+            season: Season::default(),
+            urgency_indicators: Vec::new(),
+        }
+    }
+}
+
 /// Environmental context (location, device, network, etc.)
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct EnvironmentalContext {
     pub device_type: DeviceType,
     pub screen_resolution: (u32, u32),
@@ -58,7 +87,7 @@ pub struct EnvironmentalContext {
 }
 
 /// User behavior and preference context
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct UserContext {
     pub interaction_style: InteractionStyle,
     pub preferred_task_types: Vec<TaskType>,
@@ -68,7 +97,7 @@ pub struct UserContext {
 }
 
 /// System performance and capability context
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct SystemContext {
     pub available_memory: u64,
     pub cpu_usage: f32,
@@ -88,6 +117,12 @@ pub enum TimeOfDay {
     LateNight,     // 12-5 AM
 }
 
+impl Default for TimeOfDay {
+    fn default() -> Self {
+        TimeOfDay::Morning
+    }
+}
+
 /// Season categories
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum Season {
@@ -95,6 +130,12 @@ pub enum Season {
     Summer,
     Autumn,
     Winter,
+}
+
+impl Default for Season {
+    fn default() -> Self {
+        Season::Spring
+    }
 }
 
 /// Device type detection
@@ -107,6 +148,12 @@ pub enum DeviceType {
     Unknown,
 }
 
+impl Default for DeviceType {
+    fn default() -> Self {
+        DeviceType::Desktop
+    }
+}
+
 /// Network quality assessment
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum NetworkQuality {
@@ -115,6 +162,12 @@ pub enum NetworkQuality {
     Fair,       // <200ms, >1Mbps
     Poor,       // >200ms, <1Mbps
     Unknown,
+}
+
+impl Default for NetworkQuality {
+    fn default() -> Self {
+        NetworkQuality::Good
+    }
 }
 
 /// User interaction style patterns
@@ -126,6 +179,12 @@ pub enum InteractionStyle {
     PreciseAndControlled, // Wants exact control over actions
 }
 
+impl Default for InteractionStyle {
+    fn default() -> Self {
+        InteractionStyle::DirectAndFast
+    }
+}
+
 /// User expertise level in different domains
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum ExpertiseLevel {
@@ -133,6 +192,12 @@ pub enum ExpertiseLevel {
     Intermediate,
     Advanced,
     Expert,
+}
+
+impl Default for ExpertiseLevel {
+    fn default() -> Self {
+        ExpertiseLevel::Intermediate
+    }
 }
 
 /// Recent user behavior pattern

@@ -1,6 +1,77 @@
-/target
-/.env
-/screenshots/*.png
+# Rust build artifacts
+/target/
+**/*.rs.bk
+*.pdb
+
+# Environment files
+.env
+.env.local
+.env.production
+
+# Screenshots and test outputs
+/screenshots/
+*.png
+*.jpg
+
+# Cost tracking and metrics
 /cost_tracker.json
+/metrics/
+/performance_logs/
+
+# OS files
 .DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Logs
 *.log
+logs/
+*.log.*
+
+# IDE files
+.idea/
+.vscode/
+*.iml
+
+# Test coverage
+/coverage/
+*.profraw
+*.profdata
+
+# Temporary files
+/tmp/
+/temp/
+*.tmp
+
+# Python cache (for any Python test scripts)
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+
+# ChromeDriver specific
+chromedriver.log
+chromedriver_*.log
+
+# Development and test files
+/test_*.rs
+/debug_*.md
+/WEEK*.md
+/PHASE*.md
+/RUST_TOOL*.md
+
+# Backup files
+*.bak
+*.backup
+*.old
+
+# Node modules (if any frontend assets)
+node_modules/
+
+# Documentation build
+/target/doc/
+
+# Benchmark results
+/target/criterion/

@@ -602,35 +602,35 @@ impl IntelligentExecutor {
                 let script = format!("window.scrollTo({}, {});", x, y);
                 browser.browser()
                     .ok_or_else(|| anyhow::anyhow!("Browser not available"))?
-                    .execute_script(&script).await?;
+                    .execute_script(&script, vec![]).await?;
                 Ok(serde_json::json!({ "scrolled": { "x": x, "y": y } }))
             },
             BrowserAction::GoBack => {
                 let script = "window.history.back();";
                 browser.browser()
                     .ok_or_else(|| anyhow::anyhow!("Browser not available"))?
-                    .execute_script(script).await?;
+                    .execute_script(script, vec![]).await?;
                 Ok(serde_json::json!({ "action": "back" }))
             },
             BrowserAction::GoForward => {
                 let script = "window.history.forward();";
                 browser.browser()
                     .ok_or_else(|| anyhow::anyhow!("Browser not available"))?
-                    .execute_script(script).await?;
+                    .execute_script(script, vec![]).await?;
                 Ok(serde_json::json!({ "action": "forward" }))
             },
             BrowserAction::Refresh => {
                 let script = "window.location.reload();";
                 browser.browser()
                     .ok_or_else(|| anyhow::anyhow!("Browser not available"))?
-                    .execute_script(script).await?;
+                    .execute_script(script, vec![]).await?;
                 Ok(serde_json::json!({ "action": "refresh" }))
             },
             BrowserAction::ExecuteScript { script } => {
                 let result = browser.browser()
                     .ok_or_else(|| anyhow::anyhow!("Browser not available"))?
-                    .execute_script(script).await?;
-                Ok(result)
+                    .execute_script(script, vec![]).await?;
+                Ok(result.json().clone())
             },
         }
     }
@@ -731,7 +731,7 @@ impl IntelligentExecutor {
                     );
                     browser.browser()
                     .ok_or_else(|| anyhow::anyhow!("Browser not available"))?
-                    .execute_script(&script).await?;
+                    .execute_script(&script, vec![]).await?;
                     tokio::time::sleep(Duration::from_secs(1)).await;
                     
                     // Retry original command
@@ -745,7 +745,7 @@ impl IntelligentExecutor {
                         let script = format!("document.querySelector('{}').click();", selector);
                         browser.browser()
                     .ok_or_else(|| anyhow::anyhow!("Browser not available"))?
-                    .execute_script(&script).await?;
+                    .execute_script(&script, vec![]).await?;
                         
                         return Ok(ExecutionResult {
                             id: state.id,
@@ -765,7 +765,7 @@ impl IntelligentExecutor {
             FallbackStrategy::RefreshAndRetry => {
                 browser.browser()
                     .ok_or_else(|| anyhow::anyhow!("Browser not available"))?
-                    .execute_script("window.location.reload();").await?;
+                    .execute_script("window.location.reload();", vec![]).await?;
                 tokio::time::sleep(Duration::from_secs(3)).await;
                 return self.execute_single_attempt(command, parameters, browser, state).await;
             },
