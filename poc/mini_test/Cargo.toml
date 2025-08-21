@@ -1,0 +1,13 @@
+[package]
+name = "minimal_browser_test"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+thirtyfour = "0.32"
+tokio = { version = "1.0", features = ["full"] }
+serde_json = "1.0"
+
+[[bin]]
+name = "working_demo"
+path = "src/working_demo.rs"

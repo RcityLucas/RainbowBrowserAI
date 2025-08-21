@@ -7,12 +7,14 @@
 pub mod types;
 pub mod errors;
 pub mod config;
+pub mod security;  // Security module for input validation
 pub mod navigation;
 pub mod interaction;
 pub mod synchronization;
 pub mod data_extraction;
 pub mod intelligence;
 pub mod advanced_automation;  // Phase 3 - Advanced automation tools
+pub mod memory;  // V8.0 Memory tools (Phase 1)
 pub mod common;
 
 #[cfg(test)]
@@ -35,6 +37,7 @@ pub use synchronization::*;
 pub use data_extraction::*;
 // pub use intelligence::*;     // TODO: Uncomment when Phase 3 tools are implemented
 pub use advanced_automation::*;  // Phase 3 - Advanced automation tools
+pub use memory::*;  // V8.0 Memory tools
 
 // Re-export common utilities but avoid conflicts
 pub use common::{

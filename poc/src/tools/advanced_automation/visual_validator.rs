@@ -678,7 +678,7 @@ impl VisualValidator {
         
         for (i, viewport) in viewport_sizes.iter().enumerate() {
             // Set viewport size
-            self.driver.set_window_rect(thirtyfour::Rect::new(0, 0, viewport.width as i32, viewport.height as i32)).await?;
+            self.driver.set_window_rect(0, 0, viewport.width as u32, viewport.height as u32).await?;
             
             // Wait for layout to settle
             tokio::time::sleep(Duration::from_millis(500)).await;
@@ -699,7 +699,7 @@ impl VisualValidator {
             test_type: VisualTestType::ResponsiveValidation,
             passed,
             confidence: if passed { 0.85 } else { 0.65 },
-            findings,
+            findings: findings.clone(),
             screenshots,
             metrics: VisualMetrics {
                 similarity_percentage: if passed { 95.0 } else { 70.0 },
@@ -750,10 +750,10 @@ impl VisualValidator {
         
         Ok(ScreenshotInfo {
             path: file_path.to_string_lossy().to_string(),
-            screenshot_type,
+            screenshot_type: screenshot_type.clone(),
             viewport: ViewportSize {
-                width: window_size.0,
-                height: window_size.1,
+                width: window_size.0 as u32,
+                height: window_size.1 as u32,
             },
             timestamp,
             description: format!("{:?} screenshot", screenshot_type),

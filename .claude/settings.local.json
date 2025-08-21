@@ -137,7 +137,14 @@
       "Bash(RAINBOW_MOCK_MODE=true timeout 90s ./target/debug/rainbow-poc workflow test_smart_interactions.yaml)",
       "Bash(RAINBOW_MOCK_MODE=true timeout 120s ./target/debug/rainbow-poc workflow test_smart_interactions.yaml)",
       "Bash(RAINBOW_MOCK_MODE=true timeout 120s ./target/debug/rainbow-poc workflow test_click_demo.yaml)",
-      "Bash(RAINBOW_MOCK_MODE=true timeout 60s ./target/debug/rainbow-poc workflow test_scroll_demo.yaml)"
+      "Bash(RAINBOW_MOCK_MODE=true timeout 60s ./target/debug/rainbow-poc workflow test_scroll_demo.yaml)",
+      "Bash(git checkout:*)",
+      "Bash(RAINBOW_MOCK_MODE=true cargo run --bin poc-runner -- --help)",
+      "Bash(RAINBOW_MOCK_MODE=true cargo run --bin rainbow-poc -- --help)",
+      "Bash(RAINBOW_MOCK_MODE=true cargo run --bin comprehensive_tool_test)",
+      "Bash(RAINBOW_MOCK_MODE=true timeout 60s cargo build --bin comprehensive_tool_test)",
+      "Bash(RAINBOW_MOCK_MODE=true timeout 30s cargo run --bin test_tool_imports)",
+      "Bash(RAINBOW_MOCK_MODE=true timeout 30s cargo check --message-format short)"
     ],
     "deny": []
   }
