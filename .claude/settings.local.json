@@ -175,7 +175,16 @@
       "Bash(RAINBOW_MOCK_MODE=true CHROMEDRIVER_PORT=9516 cargo run --bin rainbow-poc -- serve --port 3001)",
       "Bash(RAINBOW_MOCK_MODE=true timeout 30s cargo build --message-format short)",
       "Bash(RAINBOW_MOCK_MODE=true CHROMEDRIVER_PORT=9516 ./target/debug/rainbow-poc serve --port 3001)",
-      "Bash(RAINBOW_MOCK_MODE=true timeout 20s cargo build --message-format short)"
+      "Bash(RAINBOW_MOCK_MODE=true timeout 20s cargo build --message-format short)",
+      "Bash(./cleanup_junk.sh:*)",
+      "Bash(bash:*)",
+      "Bash(RAINBOW_MOCK_MODE=true cargo check --bin rainbow-poc)",
+      "Bash(RAINBOW_MOCK_MODE=true CHROMEDRIVER_PORT=9516 ./target/release/rainbow-poc serve --port 3001)",
+      "Bash(RAINBOW_MOCK_MODE=true timeout 60s cargo run --release --bin rainbow-poc -- serve --port 3001)",
+      "Bash(export CHROMEDRIVER_PORT=9516)",
+      "Bash(./target/release/rainbow-poc serve:*)",
+      "Bash(RAINBOW_MOCK_MODE=true timeout 30s cargo build --release --bin rainbow-poc)",
+      "Bash(RAINBOW_MOCK_MODE=true cargo build --release --bin rainbow-poc)"
     ],
     "deny": []
   }

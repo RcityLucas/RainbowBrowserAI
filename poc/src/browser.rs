@@ -518,9 +518,17 @@ impl SimpleBrowser {
 
     /// Get current URL
     pub async fn current_url(&self) -> Result<String> {
-        self.driver.current_url().await
-            .map(|url| url.to_string())
-            .context("Failed to get current URL")
+        match self.driver.current_url().await {
+            Ok(url) => Ok(url.to_string()),
+            Err(e) => {
+                // If we haven't navigated anywhere yet, return a default
+                if e.to_string().contains("no such window") || e.to_string().contains("window handle") {
+                    Ok("about:blank".to_string())
+                } else {
+                    Err(e).context("Failed to get current URL")
+                }
+            }
+        }
     }
 
     /// Count elements matching a selector
@@ -564,6 +572,41 @@ impl SimpleBrowser {
         let json_value = result.json();
         
         Ok(json_value.clone())
+    }
+    /// Navigate back in browser history
+    pub async fn back(&self) -> Result<()> {
+        self.driver.back().await
+            .context("Failed to navigate back")
+    }
+
+    /// Navigate forward in browser history
+    pub async fn forward(&self) -> Result<()> {
+        self.driver.forward().await
+            .context("Failed to navigate forward")
+    }
+
+    /// Refresh the current page
+    pub async fn refresh(&self) -> Result<()> {
+        self.driver.refresh().await
+            .context("Failed to refresh page")
+    }
+
+    /// Scroll the page
+    pub async fn scroll(&self, direction: &str) -> Result<()> {
+        let script = match direction {
+            "up" | "page_up" => "window.scrollBy(0, -window.innerHeight);",
+            "down" | "page_down" => "window.scrollBy(0, window.innerHeight);",
+            "top" => "window.scrollTo(0, 0);",
+            "bottom" => "window.scrollTo(0, document.body.scrollHeight);",
+            _ => return Err(anyhow::anyhow!("Invalid scroll direction: {}", direction)),
+        };
+        
+        self.driver.execute(script, vec![]).await
+            .context(format!("Failed to scroll {}", direction))?;
+        
+        // Wait for scroll to complete
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        Ok(())
     }
 }
 

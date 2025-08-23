@@ -119,13 +119,22 @@ done
 # Build the project first (optional, speeds up startup)
 echo -e "\n${BLUE}Building the project...${NC}"
 echo -e "${YELLOW}  This may take a few minutes on first run...${NC}"
-RAINBOW_MOCK_MODE=true cargo build --bin rainbow-poc 2>&1 | while read line; do
-    if [[ $line == *"Compiling"* ]]; then
-        echo -ne "\r${YELLOW}  ⚙ Compiling... ${NC}"
-    elif [[ $line == *"Finished"* ]]; then
-        echo -e "\r${GREEN}  ✓ Build completed successfully${NC}"
-    fi
-done
+
+# Check if release binary exists and is up-to-date
+if [ -f "target/release/rainbow-poc" ] && [ "target/release/rainbow-poc" -nt "src/main.rs" ]; then
+    echo -e "${GREEN}  ✓ Using existing release build${NC}"
+    BINARY_PATH="./target/release/rainbow-poc"
+else
+    # Build in release mode for better performance
+    RAINBOW_MOCK_MODE=true cargo build --release --bin rainbow-poc 2>&1 | while read line; do
+        if [[ $line == *"Compiling"* ]]; then
+            echo -ne "\r${YELLOW}  ⚙ Compiling... ${NC}"
+        elif [[ $line == *"Finished"* ]]; then
+            echo -e "\r${GREEN}  ✓ Build completed successfully${NC}"
+        fi
+    done
+    BINARY_PATH="./target/release/rainbow-poc"
+fi
 
 # Function to cleanup on exit
 cleanup() {
@@ -162,4 +171,11 @@ echo ""
 # Run the main application
 export RAINBOW_MOCK_MODE=true
 export CHROMEDRIVER_PORT=$CHROMEDRIVER_PORT
-exec cargo run --bin rainbow-poc -- serve --port $SERVER_PORT
+
+# Use the compiled binary directly to avoid recompilation
+if [ ! -z "$BINARY_PATH" ] && [ -f "$BINARY_PATH" ]; then
+    exec $BINARY_PATH serve --port $SERVER_PORT
+else
+    # Fallback to cargo run if binary not found
+    exec cargo run --release --bin rainbow-poc -- serve --port $SERVER_PORT
+fi

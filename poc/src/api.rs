@@ -323,23 +323,8 @@ pub async fn navigate_handler(
             code: 429,
         })?;
     
-    // Get or create browser
-    let (browser, session_id) = if let Some(sid) = req.session_id {
-        // Use existing session
-        let sessions = state.sessions.read().await;
-        if let Some(session) = sessions.get(&sid) {
-            (session.browser.clone(), Some(sid))
-        } else {
-            return Err(ApiError {
-                error: "Session not found".to_string(),
-                details: None,
-                code: 404,
-            });
-        }
-    } else {
-        // Create new browser
-        (Arc::new(SimpleBrowser::new().await?), None)
-    };
+    // Get or create browser session with smart reuse
+    let (browser, actual_session_id) = get_or_create_browser_session(&state, req.session_id).await?;
     
     // Navigate
     browser.navigate_to(&safe_url.to_string()).await?;
@@ -366,7 +351,7 @@ pub async fn navigate_handler(
         success: true,
         title,
         screenshot_path,
-        session_id,
+        session_id: Some(actual_session_id),
     }))
 }
 
@@ -1025,47 +1010,69 @@ pub async fn plugin_metrics_handler(State(state): State<ApiState>) -> Result<Jso
 // Helper functions
 
 /// Smart session management: reuse existing session if available, otherwise create new one
+/// Returns (browser, session_id) tuple
 async fn get_or_create_browser_session(
     state: &ApiState,
     session_id: Option<String>,
-) -> Result<Arc<SimpleBrowser>> {
+) -> Result<(Arc<SimpleBrowser>, String)> {
     info!("🔍 DEBUG: get_or_create_browser_session called with session_id: {:?}", session_id);
     if let Some(sid) = session_id {
         // Try to use existing session
         let sessions = state.sessions.read().await;
         if let Some(session) = sessions.get(&sid) {
-            return Ok(session.browser.clone());
+            info!("✅ Using explicitly requested session: {}", sid);
+            return Ok((session.browser.clone(), sid));
         } else {
             return Err(anyhow::anyhow!("Session not found: {}", sid));
         }
     }
 
-    // No session ID provided, try to reuse any existing session
+    // No session ID provided, try to reuse any existing session with simple validation
     {
         let sessions = state.sessions.read().await;
         if let Some((session_id, session)) = sessions.iter().next() {
-            // Test if the browser session is still valid
-            match session.browser.current_url().await {
-                Ok(_) => {
-                    info!("Reusing existing session: {}", session.id);
-                    return Ok(session.browser.clone());
+            info!("Found existing session {}, attempting simple reuse...", session_id);
+            
+            // Simple check: if session is less than 5 minutes old, assume it's valid
+            let session_age = chrono::Utc::now().signed_duration_since(session.last_used);
+            if session_age.num_minutes() < 5 {
+                info!("✅ Reusing recent session {} (age: {} minutes)", session_id, session_age.num_minutes());
+                
+                // Update last_used time
+                let browser_clone = session.browser.clone();
+                let session_id_clone = session_id.clone();
+                drop(sessions); // Release read lock
+                
+                let mut sessions_write = state.sessions.write().await;
+                if let Some(session_mut) = sessions_write.get_mut(&session_id_clone) {
+                    session_mut.last_used = chrono::Utc::now();
                 }
-                Err(e) => {
-                    let error_msg = format!("{}", e);
-                    if error_msg.contains("invalid session id") || error_msg.contains("Session not found") {
-                        warn!("Existing session {} has invalid WebDriver session, will create new one", session_id);
-                        // Don't return, continue to create new session
-                    } else {
-                        // Some other error, propagate it
-                        return Err(e.into());
-                    }
-                }
+                
+                return Ok((browser_clone, session_id_clone));
+            } else {
+                info!("Session {} is too old ({} minutes), creating new one", session_id, session_age.num_minutes());
+                
+                // Clean up old session
+                let session_id_clone = session_id.clone();
+                drop(sessions); // Release read lock
+                let mut sessions_write = state.sessions.write().await;
+                sessions_write.remove(&session_id_clone);
+                info!("Cleaned up old session: {}", session_id_clone);
             }
+        } else {
+            info!("No existing sessions found, will create new one");
         }
     }
 
     // No existing valid sessions, create a new one with generated ID
     let browser = Arc::new(SimpleBrowser::new().await?);
+    
+    // Navigate to a default page so the browser is properly initialized
+    // This ensures commands like current_url() will work
+    if let Err(e) = browser.navigate_to("https://www.example.com").await {
+        warn!("Failed to navigate to initial example.com page: {}", e);
+    }
+    
     let session_id = uuid::Uuid::new_v4().to_string();
     let session = BrowserSession {
         id: session_id.clone(),
@@ -1074,28 +1081,33 @@ async fn get_or_create_browser_session(
         last_used: chrono::Utc::now(),
     };
     
-    let mut sessions = state.sessions.write().await;
-    
-    // Clear any invalid sessions first
-    let mut invalid_session_ids = Vec::new();
-    for (id, existing_session) in sessions.iter() {
-        if let Err(e) = existing_session.browser.current_url().await {
-            let error_msg = format!("{}", e);
-            if error_msg.contains("invalid session id") || error_msg.contains("Session not found") {
-                invalid_session_ids.push(id.clone());
+    // Store the new session
+    {
+        let mut sessions = state.sessions.write().await;
+        
+        // Only remove truly invalid sessions (where the browser window was closed)
+        let mut invalid_session_ids = Vec::new();
+        for (id, existing_session) in sessions.iter() {
+            // Quick check if browser is completely dead
+            if !existing_session.browser.is_alive().await {
+                // Double check with get_title
+                if existing_session.browser.get_title().await.is_err() {
+                    invalid_session_ids.push(id.clone());
+                }
             }
         }
+        
+        for id in invalid_session_ids {
+            warn!("Removing dead session: {}", id);
+            sessions.remove(&id);
+        }
+        
+        // Insert the new session
+        sessions.insert(session_id.clone(), session);
+        info!("✅ Created new browser session: {} (total sessions: {})", session_id, sessions.len());
     }
     
-    for id in invalid_session_ids {
-        warn!("Removing invalid session: {}", id);
-        sessions.remove(&id);
-    }
-    
-    sessions.insert(session_id.clone(), session);
-    info!("Created new default session: {}", session_id);
-    
-    Ok(browser)
+    Ok((browser, session_id))
 }
 
 async fn execute_parsed_command(
@@ -1110,22 +1122,7 @@ async fn execute_parsed_command(
                 .ok_or_else(|| anyhow::anyhow!("No URL specified"))?;
             
             // Get or create browser session with smart reuse
-            let browser = get_or_create_browser_session(&state, session_id.clone()).await?;
-            
-            // Get session ID for response if we need to return it
-            let created_session_id = if session_id.is_none() {
-                // If no session_id was provided, find the session we're using
-                let sessions = state.sessions.read().await;
-                sessions.iter().find_map(|(id, session)| {
-                    if Arc::ptr_eq(&session.browser, &browser) {
-                        Some(id.clone())
-                    } else {
-                        None
-                    }
-                })
-            } else {
-                None
-            };
+            let (browser, actual_session_id) = get_or_create_browser_session(&state, session_id.clone()).await?;
             
             // Navigate to URL
             match browser.navigate_to(url).await {
@@ -1135,13 +1132,9 @@ async fn execute_parsed_command(
                         "success": true,
                         "action": "navigate",
                         "url": url,
-                        "title": title
+                        "title": title,
+                        "session_id": actual_session_id
                     });
-                    
-                    // Add session ID to response if created
-                    if let Some(sid) = created_session_id {
-                        result["session_id"] = serde_json::Value::String(sid);
-                    }
                     
                     // Take screenshot if requested
                     if command.parameters.take_screenshot {
@@ -1271,7 +1264,7 @@ async fn execute_parsed_command(
         }
         "scroll" => {
             // Get or create browser session with smart reuse
-            let browser = get_or_create_browser_session(&state, session_id.clone()).await?;
+            let (browser, actual_session_id) = get_or_create_browser_session(&state, session_id.clone()).await?;
             
             let scroll_direction = command.scroll_direction.as_deref().unwrap_or("down");
             match browser.scroll(scroll_direction).await {
@@ -1280,7 +1273,8 @@ async fn execute_parsed_command(
                         "success": true,
                         "action": "scroll",
                         "direction": scroll_direction,
-                        "message": format!("Successfully scrolled {}", scroll_direction)
+                        "message": format!("Successfully scrolled {}", scroll_direction),
+                        "session_id": actual_session_id
                     }))
                 },
                 Err(e) => {
@@ -1290,7 +1284,7 @@ async fn execute_parsed_command(
         }
         "click" => {
             // Get or create browser session with smart reuse
-            let browser = get_or_create_browser_session(&state, session_id.clone()).await?;
+            let (browser, actual_session_id) = get_or_create_browser_session(&state, session_id.clone()).await?;
             
             let selector = command.element_selector.as_deref()
                 .ok_or_else(|| anyhow::anyhow!("No element selector provided for click action"))?;
@@ -1301,7 +1295,8 @@ async fn execute_parsed_command(
                         "success": true,
                         "action": "click",
                         "selector": selector,
-                        "message": format!("Successfully clicked element: {}", selector)
+                        "message": format!("Successfully clicked element: {}", selector),
+                        "session_id": actual_session_id
                     }))
                 },
                 Err(e) => {
@@ -1311,14 +1306,15 @@ async fn execute_parsed_command(
         }
         "back" => {
             // Get or create browser session with smart reuse
-            let browser = get_or_create_browser_session(&state, session_id.clone()).await?;
+            let (browser, actual_session_id) = get_or_create_browser_session(&state, session_id.clone()).await?;
             
             match browser.back().await {
                 Ok(_) => {
                     Ok(serde_json::json!({
                         "success": true,
                         "action": "back",
-                        "message": "Successfully navigated back"
+                        "message": "Successfully navigated back",
+                        "session_id": actual_session_id
                     }))
                 },
                 Err(e) => {
@@ -1328,14 +1324,15 @@ async fn execute_parsed_command(
         }
         "forward" => {
             // Get or create browser session with smart reuse
-            let browser = get_or_create_browser_session(&state, session_id.clone()).await?;
+            let (browser, actual_session_id) = get_or_create_browser_session(&state, session_id.clone()).await?;
             
             match browser.forward().await {
                 Ok(_) => {
                     Ok(serde_json::json!({
                         "success": true,
                         "action": "forward",
-                        "message": "Successfully navigated forward"
+                        "message": "Successfully navigated forward",
+                        "session_id": actual_session_id
                     }))
                 },
                 Err(e) => {
@@ -1345,14 +1342,15 @@ async fn execute_parsed_command(
         }
         "refresh" => {
             // Get or create browser session with smart reuse
-            let browser = get_or_create_browser_session(&state, session_id.clone()).await?;
+            let (browser, actual_session_id) = get_or_create_browser_session(&state, session_id.clone()).await?;
             
             match browser.refresh().await {
                 Ok(_) => {
                     Ok(serde_json::json!({
                         "success": true,
                         "action": "refresh",
-                        "message": "Successfully refreshed page"
+                        "message": "Successfully refreshed page",
+                        "session_id": actual_session_id
                     }))
                 },
                 Err(e) => {
@@ -1362,7 +1360,7 @@ async fn execute_parsed_command(
         }
         "input" => {
             // Get or create browser session with smart reuse
-            let browser = get_or_create_browser_session(&state, session_id.clone()).await?;
+            let (browser, actual_session_id) = get_or_create_browser_session(&state, session_id.clone()).await?;
             
             let selector = command.element_selector.as_deref()
                 .ok_or_else(|| anyhow::anyhow!("No element selector provided for input action"))?;
@@ -1376,7 +1374,8 @@ async fn execute_parsed_command(
                         "action": "input",
                         "selector": selector,
                         "text": text,
-                        "message": format!("Successfully entered text in field: {}", selector)
+                        "message": format!("Successfully entered text in field: {}", selector),
+                        "session_id": actual_session_id
                     }))
                 },
                 Err(e) => {
