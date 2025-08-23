@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>RainbowBrowserAI Dashboard</title>
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="/static/styles.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
@@ -127,6 +127,54 @@
                                 </label>
                             </div>
                         </div>
+                        
+                        <!-- Browser Actions -->
+                        <div class="browser-actions">
+                            <h3>Quick Actions</h3>
+                            <div class="action-buttons">
+                                <div class="action-group">
+                                    <h4>Scroll Actions</h4>
+                                    <button id="scroll-top-btn" class="btn btn-info">
+                                        <i class="fas fa-arrow-up"></i> Scroll to Top
+                                    </button>
+                                    <button id="scroll-bottom-btn" class="btn btn-info">
+                                        <i class="fas fa-arrow-down"></i> Scroll to Bottom
+                                    </button>
+                                    <button id="scroll-page-up-btn" class="btn btn-info">
+                                        <i class="fas fa-chevron-up"></i> Page Up
+                                    </button>
+                                    <button id="scroll-page-down-btn" class="btn btn-info">
+                                        <i class="fas fa-chevron-down"></i> Page Down
+                                    </button>
+                                </div>
+                                
+                                <div class="action-group">
+                                    <h4>Page Actions</h4>
+                                    <button id="refresh-page-btn" class="btn btn-warning">
+                                        <i class="fas fa-sync"></i> Refresh Page
+                                    </button>
+                                    <button id="go-back-btn" class="btn btn-warning">
+                                        <i class="fas fa-arrow-left"></i> Go Back
+                                    </button>
+                                    <button id="go-forward-btn" class="btn btn-warning">
+                                        <i class="fas fa-arrow-right"></i> Go Forward
+                                    </button>
+                                </div>
+                                
+                                <div class="action-group">
+                                    <h4>Element Actions</h4>
+                                    <input type="text" id="click-selector" placeholder="CSS selector (e.g., .button, #submit)" class="selector-input">
+                                    <button id="click-element-btn" class="btn btn-success">
+                                        <i class="fas fa-mouse-pointer"></i> Click Element
+                                    </button>
+                                    <input type="text" id="input-text" placeholder="Text to input" class="selector-input">
+                                    <button id="input-text-btn" class="btn btn-success">
+                                        <i class="fas fa-keyboard"></i> Input Text
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        
                         <div class="browser-preview">
                             <h3>Preview</h3>
                             <div id="browser-result" class="result-container">
@@ -342,7 +390,7 @@ steps:
                             <div class="settings-form">
                                 <div class="form-group">
                                     <label>API Endpoint</label>
-                                    <input type="text" id="api-endpoint" value="http://localhost:3000">
+                                    <input type="text" id="api-endpoint" value="http://localhost:3001">
                                 </div>
                                 <div class="form-group">
                                     <label>OpenAI API Key <span style="color: var(--warning-color)">*Required for natural language commands</span></label>
@@ -424,6 +472,6 @@ steps:
 
     <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="app.js"></script>
+    <script src="/static/app.js"></script>
 </body>
 </html>

@@ -1,7 +1,7 @@
 // RainbowBrowserAI Dashboard Application
 class RainbowDashboard {
     constructor() {
-        this.apiUrl = localStorage.getItem('apiUrl') || 'http://localhost:3000';
+        this.apiUrl = localStorage.getItem('apiUrl') || 'http://localhost:3001';
         this.currentSession = null;
         this.autoRefresh = true;
         this.refreshInterval = null;
@@ -101,6 +101,43 @@ class RainbowDashboard {
 
         document.getElementById('refresh-plugins')?.addEventListener('click', () => {
             this.loadPlugins();
+        });
+
+        // Browser action buttons
+        document.getElementById('scroll-top-btn')?.addEventListener('click', () => {
+            this.executeScrollAction('top');
+        });
+
+        document.getElementById('scroll-bottom-btn')?.addEventListener('click', () => {
+            this.executeScrollAction('bottom');
+        });
+
+        document.getElementById('scroll-page-up-btn')?.addEventListener('click', () => {
+            this.executeScrollAction('page_up');
+        });
+
+        document.getElementById('scroll-page-down-btn')?.addEventListener('click', () => {
+            this.executeScrollAction('page_down');
+        });
+
+        document.getElementById('refresh-page-btn')?.addEventListener('click', () => {
+            this.executePageAction('refresh');
+        });
+
+        document.getElementById('go-back-btn')?.addEventListener('click', () => {
+            this.executePageAction('back');
+        });
+
+        document.getElementById('go-forward-btn')?.addEventListener('click', () => {
+            this.executePageAction('forward');
+        });
+
+        document.getElementById('click-element-btn')?.addEventListener('click', () => {
+            this.executeElementAction('click');
+        });
+
+        document.getElementById('input-text-btn')?.addEventListener('click', () => {
+            this.executeElementAction('input');
         });
     }
 
@@ -223,7 +260,7 @@ class RainbowDashboard {
         resultContainer.textContent = 'Executing command...';
 
         try {
-            const response = await this.apiRequest('/command', {
+            const response = await this.apiRequest('/api/command', {
                 method: 'POST',
                 body: JSON.stringify({
                     command: command,
@@ -576,7 +613,7 @@ class RainbowDashboard {
 
     resetSettings() {
         localStorage.clear();
-        this.apiUrl = 'http://localhost:3000';
+        this.apiUrl = 'http://localhost:3001';
         this.loadSettings();
         this.showNotification('Settings reset to default', 'info');
     }
@@ -1000,6 +1037,99 @@ class RainbowDashboard {
             this.updatePluginMetrics(response);
         } catch (error) {
             console.error('Error loading plugin metrics:', error);
+        }
+    }
+
+    // Browser Action Functions
+    async executeScrollAction(scrollType) {
+        try {
+            const response = await this.apiRequest('/command', {
+                method: 'POST',
+                body: JSON.stringify({
+                    command: `scroll_${scrollType}`,
+                    session_id: this.currentSession
+                })
+            });
+
+            this.showNotification(`Scroll ${scrollType} executed`, response.success ? 'success' : 'warning');
+            
+            // Update browser result display
+            const resultContainer = document.getElementById('browser-result');
+            resultContainer.innerHTML = `
+                <div><strong>Action:</strong> Scroll ${scrollType}</div>
+                <div><strong>Result:</strong> ${response.success ? 'Success' : 'Failed'}</div>
+                <pre>${JSON.stringify(response, null, 2)}</pre>
+            `;
+        } catch (error) {
+            this.showNotification(`Scroll action failed: ${error.message}`, 'error');
+        }
+    }
+
+    async executePageAction(actionType) {
+        try {
+            const response = await this.apiRequest('/command', {
+                method: 'POST',
+                body: JSON.stringify({
+                    command: `page_${actionType}`,
+                    session_id: this.currentSession
+                })
+            });
+
+            this.showNotification(`Page ${actionType} executed`, response.success ? 'success' : 'warning');
+            
+            // Update browser result display
+            const resultContainer = document.getElementById('browser-result');
+            resultContainer.innerHTML = `
+                <div><strong>Action:</strong> Page ${actionType}</div>
+                <div><strong>Result:</strong> ${response.success ? 'Success' : 'Failed'}</div>
+                <pre>${JSON.stringify(response, null, 2)}</pre>
+            `;
+        } catch (error) {
+            this.showNotification(`Page action failed: ${error.message}`, 'error');
+        }
+    }
+
+    async executeElementAction(actionType) {
+        try {
+            const selector = document.getElementById('click-selector')?.value;
+            const inputText = document.getElementById('input-text')?.value;
+            
+            let command;
+            if (actionType === 'click') {
+                if (!selector) {
+                    this.showNotification('Please enter a CSS selector', 'warning');
+                    return;
+                }
+                command = `click element with selector "${selector}"`;
+            } else if (actionType === 'input') {
+                if (!selector || !inputText) {
+                    this.showNotification('Please enter both selector and text', 'warning');
+                    return;
+                }
+                command = `input "${inputText}" into element with selector "${selector}"`;
+            }
+
+            const response = await this.apiRequest('/command', {
+                method: 'POST',
+                body: JSON.stringify({
+                    command: command,
+                    session_id: this.currentSession
+                })
+            });
+
+            this.showNotification(`Element ${actionType} executed`, response.success ? 'success' : 'warning');
+            
+            // Update browser result display
+            const resultContainer = document.getElementById('browser-result');
+            resultContainer.innerHTML = `
+                <div><strong>Action:</strong> Element ${actionType}</div>
+                <div><strong>Selector:</strong> ${selector}</div>
+                ${inputText ? `<div><strong>Input Text:</strong> ${inputText}</div>` : ''}
+                <div><strong>Result:</strong> ${response.success ? 'Success' : 'Failed'}</div>
+                <pre>${JSON.stringify(response, null, 2)}</pre>
+            `;
+        } catch (error) {
+            this.showNotification(`Element action failed: ${error.message}`, 'error');
         }
     }
 }

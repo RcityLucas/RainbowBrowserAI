@@ -10,8 +10,7 @@ pub mod metrics;
 pub mod security;
 pub mod api;
 pub mod plugins;
-pub mod extractor;
-pub mod chromedriver_manager;
+// Removed: extractor and chromedriver_manager modules
 pub mod task_executor;
 // pub mod intelligence; // Disabled due to compilation complexity - using simplified version instead
 pub mod organic_perception_simple;
@@ -21,7 +20,7 @@ pub mod contextual_awareness;
 pub mod contextual_perception;
 pub mod creative_engine;
 pub mod command_registry;
-pub mod execution_engine;
+// Removed: execution_engine module
 pub mod enhanced_browser;
 pub mod smart_actions;
 pub mod intent_translator;
@@ -35,8 +34,8 @@ pub mod advanced_learning;
 pub mod multi_model_orchestration;
 pub mod self_healing;
 pub mod advanced_analytics;
-pub mod tools;
-pub mod simple_tool_test;
+// Tools module - temporarily disabled due to compilation issues - will test separately
+// pub mod tools;
 
 pub use browser::{SimpleBrowser, ScreenshotOptions};
 pub use cost_tracker::CostTracker;
@@ -51,7 +50,7 @@ pub use metrics::{MetricsCollector, Metrics, MetricsSummary};
 pub use security::{SecurityConfig, SecurityMiddleware, RateLimiter, InputValidator};
 pub use api::{create_router, start_server, ApiState};
 pub use plugins::{PluginManager, init_plugin_system};
-pub use extractor::{DataExtractor, ExtractedData};
+// Removed: extractor exports
 pub use task_executor::{TaskExecutor, TaskExecutionResult, ExecutionProgress, AggregatedResults};
 // pub use intelligence::{OrganicPerception, IntentUnderstanding, Context, PerceptionMode, IntelligenceStats};
 pub use organic_perception_simple::{SimpleOrganicPerception, IntelligenceMode, IntelligenceStats as SimpleIntelligenceStats};
@@ -61,7 +60,7 @@ pub use contextual_awareness::{ContextualAwareness, ContextSnapshot, ContextualR
 pub use contextual_perception::{ContextualPerception, ContextualTaskUnderstanding, ContextualTaskPlan, ContextualIntelligenceStats, ContextualIntelligenceMode, ExecutionPriority, create_contextual_perception};
 pub use creative_engine::{CreativeEngine, CreativeSolution, CreativeTaskPlan, CreativeStrategy, ThinkingMode, ProblemType, ComplexityLevel, CreativeEngineStats, SolutionFeedback, create_creative_engine, create_creative_engine_with_memory};
 pub use command_registry::{IntelligentCommandRegistry, CommandDefinition, CommandCategory, CommandSelection, ExecutionRecord, CommandStatistics, CommandBuilder, create_command_registry, create_advanced_registry};
-pub use execution_engine::{IntelligentExecutor, ExecutorConfig, ExecutionResult as ExecutorResult, ExecutionState, ExecutionStatus, ExecutorMetrics, ExecutionPlan, ExecutionStep, create_executor, create_advanced_executor};
+// Removed: execution_engine exports
 pub use smart_actions::{SmartActionOrchestrator, SmartActionConfig, ActionType as SmartActionType, SmartActionExecution, SmartActionResult, ActionRecommendation, RecommendationType, Priority, create_smart_action_orchestrator, create_smart_action_orchestrator_with_memory};
 pub use intent_translator::{IntentTranslator, TranslatorConfig, TranslationResult, ActionPlan, ActionPlanStep, ExecutionStrategy, TranslationExecution, TranslationStatistics, create_intent_translator, create_advanced_intent_translator, create_intent_translator_with_memory};
 pub use adaptive_pipeline::{AdaptivePipeline, PipelineConfig, PipelineResult, PipelineExecution, ExecutionPhase, PipelineMetrics, create_adaptive_pipeline, create_creative_adaptive_pipeline, create_memory_adaptive_pipeline};

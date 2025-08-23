@@ -93,6 +93,9 @@ pub struct ParsedCommand {
     pub timeout: Option<u64>,
     pub confidence: f32,
     pub parameters: CommandParams,
+    pub scroll_direction: Option<String>,
+    pub element_selector: Option<String>,
+    pub input_text: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -618,6 +621,59 @@ JSON:"#,
                 
                 command.url = found_url;
             }
+        } else if input_lower.contains("scroll") {
+            command.action = "scroll".to_string();
+            command.confidence = 0.9;
+            
+            // Detect scroll direction/type
+            if input_lower.contains("top") || input_lower.contains("up") {
+                if input_lower.contains("page") {
+                    command.scroll_direction = Some("page_up".to_string());
+                } else {
+                    command.scroll_direction = Some("top".to_string());
+                }
+            } else if input_lower.contains("bottom") || input_lower.contains("down") {
+                if input_lower.contains("page") {
+                    command.scroll_direction = Some("page_down".to_string());
+                } else {
+                    command.scroll_direction = Some("bottom".to_string());
+                }
+            } else {
+                // Default scroll direction
+                command.scroll_direction = Some("down".to_string());
+            }
+        } else if input_lower.contains("click") {
+            command.action = "click".to_string();
+            command.confidence = 0.85;
+            
+            // Extract element selector if present
+            if let Some(cap) = Regex::new(r#"(?:selector|element)\s*["']([^"']+)["']"#).unwrap().captures(&input_lower) {
+                command.element_selector = Some(cap[1].to_string());
+            } else if let Some(cap) = Regex::new(r#"["']([^"']+)["']"#).unwrap().captures(&input_lower) {
+                command.element_selector = Some(cap[1].to_string());
+            }
+        } else if input_lower.contains("input") || input_lower.contains("type") || input_lower.contains("enter") {
+            command.action = "input".to_string();
+            command.confidence = 0.85;
+            
+            // Extract text to input
+            if let Some(cap) = Regex::new(r#"(?:input|type|enter)\s*["']([^"']+)["']"#).unwrap().captures(&input_lower) {
+                command.input_text = Some(cap[1].to_string());
+            }
+            
+            // Extract element selector
+            if let Some(cap) = Regex::new(r#"(?:into|selector)\s*["']([^"']+)["']"#).unwrap().captures(&input_lower) {
+                command.element_selector = Some(cap[1].to_string());
+            }
+        } else if input_lower.contains("refresh") || input_lower.contains("reload") || input_lower == "page_refresh" {
+            command.action = "refresh".to_string();
+            command.confidence = 0.9;
+        } else if input_lower.contains("back") || input_lower.contains("previous") || input_lower == "page_back" {
+            command.action = "back".to_string();
+            command.confidence = 0.9;
+        } else if input_lower.contains("forward") || input_lower.contains("next") || input_lower == "page_forward" {
+            command.action = "forward".to_string();
+            command.confidence = 0.9;
         } else if input_lower.contains("report") || input_lower.contains("cost") || input_lower.contains("usage") {
             command.action = "report".to_string();
             command.confidence = 0.95;
@@ -746,6 +802,9 @@ impl Default for ParsedCommand {
                 timeout_seconds: None,
                 show_report: false,
             },
+            scroll_direction: None,
+            element_selector: None,
+            input_text: None,
         }
     }
 }

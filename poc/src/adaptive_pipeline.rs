@@ -18,7 +18,7 @@ use crate::smart_actions::{SmartActionOrchestrator, SmartActionResult, ActionTyp
 use crate::contextual_perception::{ContextualPerception, ContextualTaskUnderstanding};
 use crate::contextual_awareness::{ContextualAwareness, ContextSnapshot};
 use crate::command_registry::{IntelligentCommandRegistry, CommandSelection};
-use crate::execution_engine::IntelligentExecutor;
+// Removed: execution_engine reference
 use crate::enhanced_browser::EnhancedBrowserController;
 use crate::simple_memory::{SimpleMemory, InteractionRecord};
 use crate::creative_engine::CreativeEngine;
@@ -39,7 +39,7 @@ pub struct AdaptivePipeline {
     contextual_awareness: Arc<RwLock<ContextualAwareness>>,
     /// Command registry and execution
     command_registry: Arc<IntelligentCommandRegistry>,
-    execution_engine: Arc<IntelligentExecutor>,
+    // Removed: execution_engine field
     /// Browser infrastructure
     enhanced_browser: Arc<EnhancedBrowserController>,
     browser_pool: Arc<BrowserPool>,
@@ -295,7 +295,7 @@ impl AdaptivePipeline {
         contextual_perception: Arc<RwLock<ContextualPerception>>,
         contextual_awareness: Arc<RwLock<ContextualAwareness>>,
         command_registry: Arc<IntelligentCommandRegistry>,
-        execution_engine: Arc<IntelligentExecutor>,
+        // Removed: execution_engine field
         enhanced_browser: Arc<EnhancedBrowserController>,
         browser_pool: Arc<BrowserPool>,
         llm_integration: Arc<LLMIntegrationManager>,
@@ -310,7 +310,7 @@ impl AdaptivePipeline {
             contextual_perception,
             contextual_awareness,
             command_registry,
-            execution_engine,
+            // Removed: execution_engine
             enhanced_browser,
             browser_pool,
             creative_engine: None,
@@ -334,7 +334,7 @@ impl AdaptivePipeline {
         contextual_perception: Arc<RwLock<ContextualPerception>>,
         contextual_awareness: Arc<RwLock<ContextualAwareness>>,
         command_registry: Arc<IntelligentCommandRegistry>,
-        execution_engine: Arc<IntelligentExecutor>,
+        // Removed: execution_engine field
         enhanced_browser: Arc<EnhancedBrowserController>,
         browser_pool: Arc<BrowserPool>,
         llm_integration: Arc<LLMIntegrationManager>,
@@ -342,7 +342,7 @@ impl AdaptivePipeline {
     ) -> Result<Self> {
         let mut pipeline = Self::new(
             intent_translator, smart_actions, contextual_perception, contextual_awareness,
-            command_registry, execution_engine, enhanced_browser, browser_pool, llm_integration
+            command_registry, enhanced_browser, browser_pool, llm_integration
         ).await?;
         pipeline.creative_engine = Some(creative_engine);
         info!("🧠 Pipeline enhanced with creative problem-solving capabilities");
@@ -356,7 +356,7 @@ impl AdaptivePipeline {
         contextual_perception: Arc<RwLock<ContextualPerception>>,
         contextual_awareness: Arc<RwLock<ContextualAwareness>>,
         command_registry: Arc<IntelligentCommandRegistry>,
-        execution_engine: Arc<IntelligentExecutor>,
+        // Removed: execution_engine field
         enhanced_browser: Arc<EnhancedBrowserController>,
         browser_pool: Arc<BrowserPool>,
         llm_integration: Arc<LLMIntegrationManager>,
@@ -364,7 +364,7 @@ impl AdaptivePipeline {
     ) -> Result<Self> {
         let mut pipeline = Self::new(
             intent_translator, smart_actions, contextual_perception, contextual_awareness,
-            command_registry, execution_engine, enhanced_browser, browser_pool, llm_integration
+            command_registry, enhanced_browser, browser_pool, llm_integration
         ).await?;
         pipeline.memory_system = Some(memory_system);
         pipeline.load_historical_adaptations().await?;
@@ -906,14 +906,14 @@ pub async fn create_adaptive_pipeline(
     contextual_perception: Arc<RwLock<ContextualPerception>>,
     contextual_awareness: Arc<RwLock<ContextualAwareness>>,
     command_registry: Arc<IntelligentCommandRegistry>,
-    execution_engine: Arc<IntelligentExecutor>,
+    // Removed: execution_engine field
     enhanced_browser: Arc<EnhancedBrowserController>,
     browser_pool: Arc<BrowserPool>,
     llm_integration: Arc<LLMIntegrationManager>,
 ) -> Result<AdaptivePipeline> {
     AdaptivePipeline::new(
         intent_translator, smart_actions, contextual_perception, contextual_awareness,
-        command_registry, execution_engine, enhanced_browser, browser_pool, llm_integration
+        command_registry, enhanced_browser, browser_pool, llm_integration
     ).await
 }
 
@@ -924,7 +924,7 @@ pub async fn create_creative_adaptive_pipeline(
     contextual_perception: Arc<RwLock<ContextualPerception>>,
     contextual_awareness: Arc<RwLock<ContextualAwareness>>,
     command_registry: Arc<IntelligentCommandRegistry>,
-    execution_engine: Arc<IntelligentExecutor>,
+    // Removed: execution_engine field
     enhanced_browser: Arc<EnhancedBrowserController>,
     browser_pool: Arc<BrowserPool>,
     creative_engine: Arc<RwLock<CreativeEngine>>,
@@ -932,7 +932,7 @@ pub async fn create_creative_adaptive_pipeline(
 ) -> Result<AdaptivePipeline> {
     let mut pipeline = AdaptivePipeline::new(
         intent_translator, smart_actions, contextual_perception, contextual_awareness,
-        command_registry, execution_engine, enhanced_browser, browser_pool, llm_integration
+        command_registry, enhanced_browser, browser_pool, llm_integration
     ).await?;
     pipeline.creative_engine = Some(creative_engine);
     Ok(pipeline)
@@ -945,7 +945,7 @@ pub async fn create_memory_adaptive_pipeline(
     contextual_perception: Arc<RwLock<ContextualPerception>>,
     contextual_awareness: Arc<RwLock<ContextualAwareness>>,
     command_registry: Arc<IntelligentCommandRegistry>,
-    execution_engine: Arc<IntelligentExecutor>,
+    // Removed: execution_engine field
     enhanced_browser: Arc<EnhancedBrowserController>,
     browser_pool: Arc<BrowserPool>,
     memory_system: Arc<SimpleMemory>,
@@ -953,7 +953,7 @@ pub async fn create_memory_adaptive_pipeline(
 ) -> Result<AdaptivePipeline> {
     let mut pipeline = AdaptivePipeline::new(
         intent_translator, smart_actions, contextual_perception, contextual_awareness,
-        command_registry, execution_engine, enhanced_browser, browser_pool, llm_integration
+        command_registry, enhanced_browser, browser_pool, llm_integration
     ).await?;
     pipeline.memory_system = Some(memory_system);
     Ok(pipeline)

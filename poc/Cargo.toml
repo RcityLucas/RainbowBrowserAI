@@ -60,3 +60,11 @@ path = "src/bin/test_wait_for_condition.rs"
 
 # Test binaries for synchronization tools
 # Run manual tests with: cargo run --bin rainbow-poc
+
+[[bin]]
+name = "tools_test_demo"
+path = "src/bin/tools_test_demo.rs"
+
+[[bin]]
+name = "comprehensive_tools_demo"
+path = "comprehensive_tools_demo.rs"
