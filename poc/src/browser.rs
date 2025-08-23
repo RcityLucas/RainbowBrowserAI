@@ -64,9 +64,8 @@ impl SimpleBrowser {
     pub async fn new_with_config(retry_attempts: u32, timeout_duration: Duration) -> Result<Self> {
         info!("Initializing Chrome WebDriver (retries: {}, timeout: {:?})...", retry_attempts, timeout_duration);
         
-        // Ensure ChromeDriver is running
-        crate::chromedriver_manager::ensure_chromedriver().await
-            .context("Failed to ensure ChromeDriver is running")?;
+        // Ensure ChromeDriver is running - removed dependency
+        // Note: ChromeDriver should be started externally before running this application
         
         // Configure Chrome capabilities with basic settings  
         let caps = ChromeCapabilities::new();
@@ -93,23 +92,29 @@ impl SimpleBrowser {
     async fn connect_with_retry(caps: ChromeCapabilities, max_attempts: u32) -> Result<WebDriver> {
         let mut last_error_msg = String::new();
         
+        // Get ChromeDriver port from environment variable or use default
+        let chromedriver_port = std::env::var("CHROMEDRIVER_PORT")
+            .unwrap_or_else(|_| "9520".to_string());
+        let chromedriver_url = format!("http://localhost:{}", chromedriver_port);
+        
         // First check if ChromeDriver is reachable
-        info!("Checking ChromeDriver availability at http://localhost:9520...");
-        match reqwest::get("http://localhost:9520/status").await {
+        info!("Checking ChromeDriver availability at {}...", chromedriver_url);
+        match reqwest::get(format!("{}/status", chromedriver_url)).await {
             Ok(response) => {
                 if response.status().is_success() {
-                    info!("ChromeDriver is responding at port 9520");
+                    info!("ChromeDriver is responding at port {}", chromedriver_port);
                 } else {
                     warn!("ChromeDriver returned status: {}", response.status());
                 }
             }
             Err(e) => {
-                error!("ChromeDriver is not reachable at http://localhost:9520: {}", e);
+                error!("ChromeDriver is not reachable at {}: {}", chromedriver_url, e);
                 error!("Please ensure ChromeDriver is running:");
                 error!("  1. Download ChromeDriver from https://chromedriver.chromium.org/");
-                error!("  2. Run: chromedriver --port=9520");
+                error!("  2. Run: chromedriver --port={}", chromedriver_port);
                 return Err(anyhow::anyhow!(
-                    "ChromeDriver is not running on port 9520. Please start it with: chromedriver --port=9520"
+                    "ChromeDriver is not running on port {}. Please start it with: chromedriver --port={}", 
+                    chromedriver_port, chromedriver_port
                 ));
             }
         }
@@ -118,7 +123,7 @@ impl SimpleBrowser {
             info!("Attempting to connect to ChromeDriver (attempt {}/{})", attempt, max_attempts);
             match timeout(
                 Duration::from_secs(10),
-                WebDriver::new("http://localhost:9520", caps.clone())
+                WebDriver::new(&chromedriver_url, caps.clone())
             ).await {
                 Ok(Ok(driver)) => {
                     info!("✅ ChromeDriver connected successfully on attempt {}", attempt);
@@ -513,9 +518,17 @@ impl SimpleBrowser {
 
     /// Get current URL
     pub async fn current_url(&self) -> Result<String> {
-        self.driver.current_url().await
-            .map(|url| url.to_string())
-            .context("Failed to get current URL")
+        match self.driver.current_url().await {
+            Ok(url) => Ok(url.to_string()),
+            Err(e) => {
+                // If we haven't navigated anywhere yet, return a default
+                if e.to_string().contains("no such window") || e.to_string().contains("window handle") {
+                    Ok("about:blank".to_string())
+                } else {
+                    Err(e).context("Failed to get current URL")
+                }
+            }
+        }
     }
 
     /// Count elements matching a selector
@@ -559,6 +572,41 @@ impl SimpleBrowser {
         let json_value = result.json();
         
         Ok(json_value.clone())
+    }
+    /// Navigate back in browser history
+    pub async fn back(&self) -> Result<()> {
+        self.driver.back().await
+            .context("Failed to navigate back")
+    }
+
+    /// Navigate forward in browser history
+    pub async fn forward(&self) -> Result<()> {
+        self.driver.forward().await
+            .context("Failed to navigate forward")
+    }
+
+    /// Refresh the current page
+    pub async fn refresh(&self) -> Result<()> {
+        self.driver.refresh().await
+            .context("Failed to refresh page")
+    }
+
+    /// Scroll the page
+    pub async fn scroll(&self, direction: &str) -> Result<()> {
+        let script = match direction {
+            "up" | "page_up" => "window.scrollBy(0, -window.innerHeight);",
+            "down" | "page_down" => "window.scrollBy(0, window.innerHeight);",
+            "top" => "window.scrollTo(0, 0);",
+            "bottom" => "window.scrollTo(0, document.body.scrollHeight);",
+            _ => return Err(anyhow::anyhow!("Invalid scroll direction: {}", direction)),
+        };
+        
+        self.driver.execute(script, vec![]).await
+            .context(format!("Failed to scroll {}", direction))?;
+        
+        // Wait for scroll to complete
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        Ok(())
     }
 }
 

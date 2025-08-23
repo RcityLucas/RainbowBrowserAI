@@ -293,7 +293,7 @@ impl SmartActions {
         let smart_type = self.detect_field_type(&name, &id, &tag_name, &field_type, element).await?;
         
         // Get current value
-        let current_value = element.value().await.ok();
+        let current_value = element.value().await.ok().flatten();
         
         // Extract validation information
         let validation = self.extract_validation_info(element).await?;

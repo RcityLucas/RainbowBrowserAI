@@ -323,23 +323,8 @@ pub async fn navigate_handler(
             code: 429,
         })?;
     
-    // Get or create browser
-    let (browser, session_id) = if let Some(sid) = req.session_id {
-        // Use existing session
-        let sessions = state.sessions.read().await;
-        if let Some(session) = sessions.get(&sid) {
-            (session.browser.clone(), Some(sid))
-        } else {
-            return Err(ApiError {
-                error: "Session not found".to_string(),
-                details: None,
-                code: 404,
-            });
-        }
-    } else {
-        // Create new browser
-        (Arc::new(SimpleBrowser::new().await?), None)
-    };
+    // Get or create browser session with smart reuse
+    let (browser, actual_session_id) = get_or_create_browser_session(&state, req.session_id).await?;
     
     // Navigate
     browser.navigate_to(&safe_url.to_string()).await?;
@@ -366,7 +351,7 @@ pub async fn navigate_handler(
         success: true,
         title,
         screenshot_path,
-        session_id,
+        session_id: Some(actual_session_id),
     }))
 }
 
@@ -410,48 +395,21 @@ pub async fn natural_language_handler(
         // Execute the parsed command
         let result = match parsed.action.as_str() {
             "navigate" => {
-                if let Some(url) = &parsed.url {
-                    // Try to navigate to the URL
-                    match SimpleBrowser::new().await {
-                        Ok(browser) => {
-                            match browser.navigate_to(url).await {
-                                Ok(_) => {
-                                    // Take screenshot if requested
-                                    if parsed.screenshot {
-                                        let filename = format!("mock_{}.png", Uuid::new_v4());
-                                        let _ = browser.take_screenshot(&filename).await;
-                                        serde_json::json!({
-                                            "success": true,
-                                            "action": "navigate",
-                                            "url": url,
-                                            "screenshot": parsed.screenshot,
-                                            "screenshot_path": format!("screenshots/{}", filename)
-                                        })
-                                    } else {
-                                        serde_json::json!({
-                                            "success": true,
-                                            "action": "navigate",
-                                            "url": url
-                                        })
-                                    }
-                                },
-                                Err(e) => serde_json::json!({
-                                    "success": false,
-                                    "error": format!("Navigation failed: {}", e)
-                                })
-                            }
-                        },
-                        Err(e) => serde_json::json!({
+                // Use execute_parsed_command for proper session management
+                info!("Mock mode: Executing navigate command");
+                match execute_parsed_command(state.clone(), &parsed, req.session_id.clone()).await {
+                    Ok(result) => {
+                        info!("Mock mode: navigate execution successful");
+                        result
+                    },
+                    Err(e) => {
+                        error!("Mock mode: navigate execution failed: {}", e);
+                        serde_json::json!({
                             "success": false,
-                            "error": format!("Failed to start browser: {}", e),
-                            "hint": "Make sure ChromeDriver is running on port 9515"
+                            "action": "navigate",
+                            "error": format!("Navigation failed: {}", e)
                         })
                     }
-                } else {
-                    serde_json::json!({
-                        "success": false,
-                        "error": "No URL found in command"
-                    })
                 }
             },
             "test" => {
@@ -482,12 +440,42 @@ pub async fn natural_language_handler(
                     "operations": cost_tracker.operations.len()
                 })
             },
+            "scroll" | "click" | "back" | "forward" | "refresh" | "input" => {
+                // In mock mode, execute browser actions using session management
+                info!("Mock mode: Executing {} command", parsed.action);
+                match execute_parsed_command(state.clone(), &parsed, req.session_id.clone()).await {
+                    Ok(result) => {
+                        info!("Mock mode: {} execution successful", parsed.action);
+                        result
+                    },
+                    Err(e) => {
+                        error!("Mock mode: {} execution failed: {}", parsed.action, e);
+                        serde_json::json!({
+                            "success": false,
+                            "action": parsed.action,
+                            "error": format!("{} execution failed: {}", parsed.action, e)
+                        })
+                    }
+                }
+            },
             _ => {
-                serde_json::json!({
-                    "success": false,
-                    "action": parsed.action,
-                    "error": "Unknown action"
-                })
+                // For unknown actions, still try to execute them through execute_parsed_command
+                // This allows for future action types to be added without modifying this handler
+                info!("Mock mode: Attempting to execute unknown action: {}", parsed.action);
+                match execute_parsed_command(state.clone(), &parsed, req.session_id.clone()).await {
+                    Ok(result) => {
+                        info!("Mock mode: {} execution successful", parsed.action);
+                        result
+                    },
+                    Err(e) => {
+                        error!("Mock mode: {} execution failed: {}", parsed.action, e);
+                        serde_json::json!({
+                            "success": false,
+                            "action": parsed.action,
+                            "error": format!("Unknown or unsupported action '{}': {}", parsed.action, e)
+                        })
+                    }
+                }
             }
         };
         
@@ -1021,6 +1009,107 @@ pub async fn plugin_metrics_handler(State(state): State<ApiState>) -> Result<Jso
 
 // Helper functions
 
+/// Smart session management: reuse existing session if available, otherwise create new one
+/// Returns (browser, session_id) tuple
+async fn get_or_create_browser_session(
+    state: &ApiState,
+    session_id: Option<String>,
+) -> Result<(Arc<SimpleBrowser>, String)> {
+    info!("🔍 DEBUG: get_or_create_browser_session called with session_id: {:?}", session_id);
+    if let Some(sid) = session_id {
+        // Try to use existing session
+        let sessions = state.sessions.read().await;
+        if let Some(session) = sessions.get(&sid) {
+            info!("✅ Using explicitly requested session: {}", sid);
+            return Ok((session.browser.clone(), sid));
+        } else {
+            return Err(anyhow::anyhow!("Session not found: {}", sid));
+        }
+    }
+
+    // No session ID provided, try to reuse any existing session with simple validation
+    {
+        let sessions = state.sessions.read().await;
+        if let Some((session_id, session)) = sessions.iter().next() {
+            info!("Found existing session {}, attempting simple reuse...", session_id);
+            
+            // Simple check: if session is less than 5 minutes old, assume it's valid
+            let session_age = chrono::Utc::now().signed_duration_since(session.last_used);
+            if session_age.num_minutes() < 5 {
+                info!("✅ Reusing recent session {} (age: {} minutes)", session_id, session_age.num_minutes());
+                
+                // Update last_used time
+                let browser_clone = session.browser.clone();
+                let session_id_clone = session_id.clone();
+                drop(sessions); // Release read lock
+                
+                let mut sessions_write = state.sessions.write().await;
+                if let Some(session_mut) = sessions_write.get_mut(&session_id_clone) {
+                    session_mut.last_used = chrono::Utc::now();
+                }
+                
+                return Ok((browser_clone, session_id_clone));
+            } else {
+                info!("Session {} is too old ({} minutes), creating new one", session_id, session_age.num_minutes());
+                
+                // Clean up old session
+                let session_id_clone = session_id.clone();
+                drop(sessions); // Release read lock
+                let mut sessions_write = state.sessions.write().await;
+                sessions_write.remove(&session_id_clone);
+                info!("Cleaned up old session: {}", session_id_clone);
+            }
+        } else {
+            info!("No existing sessions found, will create new one");
+        }
+    }
+
+    // No existing valid sessions, create a new one with generated ID
+    let browser = Arc::new(SimpleBrowser::new().await?);
+    
+    // Navigate to a default page so the browser is properly initialized
+    // This ensures commands like current_url() will work
+    if let Err(e) = browser.navigate_to("https://www.example.com").await {
+        warn!("Failed to navigate to initial example.com page: {}", e);
+    }
+    
+    let session_id = uuid::Uuid::new_v4().to_string();
+    let session = BrowserSession {
+        id: session_id.clone(),
+        browser: browser.clone(),
+        created_at: chrono::Utc::now(),
+        last_used: chrono::Utc::now(),
+    };
+    
+    // Store the new session
+    {
+        let mut sessions = state.sessions.write().await;
+        
+        // Only remove truly invalid sessions (where the browser window was closed)
+        let mut invalid_session_ids = Vec::new();
+        for (id, existing_session) in sessions.iter() {
+            // Quick check if browser is completely dead
+            if !existing_session.browser.is_alive().await {
+                // Double check with get_title
+                if existing_session.browser.get_title().await.is_err() {
+                    invalid_session_ids.push(id.clone());
+                }
+            }
+        }
+        
+        for id in invalid_session_ids {
+            warn!("Removing dead session: {}", id);
+            sessions.remove(&id);
+        }
+        
+        // Insert the new session
+        sessions.insert(session_id.clone(), session);
+        info!("✅ Created new browser session: {} (total sessions: {})", session_id, sessions.len());
+    }
+    
+    Ok((browser, session_id))
+}
+
 async fn execute_parsed_command(
     state: ApiState,
     command: &ParsedCommand,
@@ -1028,16 +1117,47 @@ async fn execute_parsed_command(
 ) -> Result<serde_json::Value> {
     match command.action.as_str() {
         "navigate" => {
-            if let Some(url) = command.urls.first() {
-                let req = NavigateRequest {
-                    url: url.clone(),
-                    screenshot: Some(command.parameters.take_screenshot),
-                    session_id,
-                };
-                let response = navigate_handler(State(state), Json(req)).await?;
-                Ok(serde_json::to_value(response.0)?)
-            } else {
-                Err(anyhow::anyhow!("No URL specified"))
+            let url = command.url.as_ref()
+                .or_else(|| command.urls.first())
+                .ok_or_else(|| anyhow::anyhow!("No URL specified"))?;
+            
+            // Get or create browser session with smart reuse
+            let (browser, actual_session_id) = get_or_create_browser_session(&state, session_id.clone()).await?;
+            
+            // Navigate to URL
+            match browser.navigate_to(url).await {
+                Ok(_) => {
+                    let title = browser.get_title().await.unwrap_or_default();
+                    let mut result = serde_json::json!({
+                        "success": true,
+                        "action": "navigate",
+                        "url": url,
+                        "title": title,
+                        "session_id": actual_session_id
+                    });
+                    
+                    // Take screenshot if requested
+                    if command.parameters.take_screenshot {
+                        let filename = command.parameters.screenshot_filename
+                            .as_ref()
+                            .cloned()
+                            .unwrap_or_else(|| format!("navigate_{}.png", chrono::Utc::now().timestamp()));
+                        
+                        match browser.take_screenshot(&filename).await {
+                            Ok(_) => {
+                                result["screenshot_path"] = serde_json::Value::String(format!("screenshots/{}", filename));
+                            },
+                            Err(e) => {
+                                warn!("Screenshot failed: {}", e);
+                            }
+                        }
+                    }
+                    
+                    Ok(result)
+                },
+                Err(e) => {
+                    Err(anyhow::anyhow!("Navigation failed: {}", e))
+                }
             }
         }
         "test" => {
@@ -1142,6 +1262,127 @@ async fn execute_parsed_command(
                 "results": results
             }))
         }
+        "scroll" => {
+            // Get or create browser session with smart reuse
+            let (browser, actual_session_id) = get_or_create_browser_session(&state, session_id.clone()).await?;
+            
+            let scroll_direction = command.scroll_direction.as_deref().unwrap_or("down");
+            match browser.scroll(scroll_direction).await {
+                Ok(_) => {
+                    Ok(serde_json::json!({
+                        "success": true,
+                        "action": "scroll",
+                        "direction": scroll_direction,
+                        "message": format!("Successfully scrolled {}", scroll_direction),
+                        "session_id": actual_session_id
+                    }))
+                },
+                Err(e) => {
+                    Err(anyhow::anyhow!("Scroll failed: {}", e))
+                }
+            }
+        }
+        "click" => {
+            // Get or create browser session with smart reuse
+            let (browser, actual_session_id) = get_or_create_browser_session(&state, session_id.clone()).await?;
+            
+            let selector = command.element_selector.as_deref()
+                .ok_or_else(|| anyhow::anyhow!("No element selector provided for click action"))?;
+            
+            match browser.click(selector).await {
+                Ok(_) => {
+                    Ok(serde_json::json!({
+                        "success": true,
+                        "action": "click",
+                        "selector": selector,
+                        "message": format!("Successfully clicked element: {}", selector),
+                        "session_id": actual_session_id
+                    }))
+                },
+                Err(e) => {
+                    Err(anyhow::anyhow!("Click failed: {}", e))
+                }
+            }
+        }
+        "back" => {
+            // Get or create browser session with smart reuse
+            let (browser, actual_session_id) = get_or_create_browser_session(&state, session_id.clone()).await?;
+            
+            match browser.back().await {
+                Ok(_) => {
+                    Ok(serde_json::json!({
+                        "success": true,
+                        "action": "back",
+                        "message": "Successfully navigated back",
+                        "session_id": actual_session_id
+                    }))
+                },
+                Err(e) => {
+                    Err(anyhow::anyhow!("Navigate back failed: {}", e))
+                }
+            }
+        }
+        "forward" => {
+            // Get or create browser session with smart reuse
+            let (browser, actual_session_id) = get_or_create_browser_session(&state, session_id.clone()).await?;
+            
+            match browser.forward().await {
+                Ok(_) => {
+                    Ok(serde_json::json!({
+                        "success": true,
+                        "action": "forward",
+                        "message": "Successfully navigated forward",
+                        "session_id": actual_session_id
+                    }))
+                },
+                Err(e) => {
+                    Err(anyhow::anyhow!("Navigate forward failed: {}", e))
+                }
+            }
+        }
+        "refresh" => {
+            // Get or create browser session with smart reuse
+            let (browser, actual_session_id) = get_or_create_browser_session(&state, session_id.clone()).await?;
+            
+            match browser.refresh().await {
+                Ok(_) => {
+                    Ok(serde_json::json!({
+                        "success": true,
+                        "action": "refresh",
+                        "message": "Successfully refreshed page",
+                        "session_id": actual_session_id
+                    }))
+                },
+                Err(e) => {
+                    Err(anyhow::anyhow!("Refresh failed: {}", e))
+                }
+            }
+        }
+        "input" => {
+            // Get or create browser session with smart reuse
+            let (browser, actual_session_id) = get_or_create_browser_session(&state, session_id.clone()).await?;
+            
+            let selector = command.element_selector.as_deref()
+                .ok_or_else(|| anyhow::anyhow!("No element selector provided for input action"))?;
+            let text = command.input_text.as_deref()
+                .ok_or_else(|| anyhow::anyhow!("No input text provided for input action"))?;
+            
+            match browser.fill_field(selector, text).await {
+                Ok(_) => {
+                    Ok(serde_json::json!({
+                        "success": true,
+                        "action": "input",
+                        "selector": selector,
+                        "text": text,
+                        "message": format!("Successfully entered text in field: {}", selector),
+                        "session_id": actual_session_id
+                    }))
+                },
+                Err(e) => {
+                    Err(anyhow::anyhow!("Input failed: {}", e))
+                }
+            }
+        }
         _ => Err(anyhow::anyhow!("Unsupported action: {}", command.action))
     }
 }
@@ -1151,11 +1392,13 @@ pub fn create_router(state: ApiState) -> Router {
     // Create the static file service for the dashboard
     let static_files = ServeDir::new("static");
 
-    Router::new()
+    // Create API routes without the static file serving interference
+    let api_routes = Router::new()
         // Health and metrics
         .route("/health", get(health_handler))
         .route("/metrics", get(metrics_handler))
         .route("/cost", get(cost_handler))
+        .route("/events", get(sse_handler))
         
         // Browser operations
         .route("/navigate", post(navigate_handler))
@@ -1168,13 +1411,21 @@ pub fn create_router(state: ApiState) -> Router {
         
         // Plugin operations
         .route("/plugins", post(plugin_handler))
-        .route("/plugins/metrics", get(plugin_metrics_handler))
+        .route("/plugins/metrics", get(plugin_metrics_handler));
+
+    // Main router combining API routes and static files
+    Router::new()
+        // Mount API routes at both root and /api for compatibility
+        .merge(api_routes.clone())
+        .nest("/api", api_routes)
         
-        // Real-time updates
-        .route("/events", get(sse_handler))
-        
-        // Serve static files and dashboard at root
-        .nest_service("/", static_files)
+        // Static content - served last to avoid conflicts
+        .route("/", get(|| async { 
+            let content = std::fs::read_to_string("static/index.html")
+                .unwrap_or_else(|_| "File not found".to_string());
+            axum::response::Html(content)
+        }))
+        .nest_service("/static", static_files)
         
         // Add middleware
         .layer(

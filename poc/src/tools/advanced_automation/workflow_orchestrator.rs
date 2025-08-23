@@ -742,7 +742,8 @@ impl WorkflowOrchestrator {
             
             ConditionType::PageUrl => {
                 let current_url = self.driver.current_url().await?.to_string();
-                self.compare_values(&current_url, &condition.value, &condition.operator)
+                let url_value = serde_json::Value::String(current_url);
+                self.compare_values(&url_value, &condition.value, &condition.operator)
             }
             
             ConditionType::Variable => {

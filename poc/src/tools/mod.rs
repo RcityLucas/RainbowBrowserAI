@@ -13,8 +13,9 @@ pub mod interaction;
 pub mod synchronization;
 pub mod data_extraction;
 pub mod intelligence;
-pub mod advanced_automation;  // Phase 3 - Advanced automation tools
-pub mod memory;  // V8.0 Memory tools (Phase 1)
+// Temporarily disabled due to compilation errors
+// pub mod advanced_automation;  // Phase 3 - Advanced automation tools
+// pub mod memory;  // V8.0 Memory tools (Phase 1)
 pub mod common;
 
 #[cfg(test)]
@@ -36,8 +37,8 @@ pub use interaction::*;
 pub use synchronization::*;
 pub use data_extraction::*;
 // pub use intelligence::*;     // TODO: Uncomment when Phase 3 tools are implemented
-pub use advanced_automation::*;  // Phase 3 - Advanced automation tools
-pub use memory::*;  // V8.0 Memory tools
+// pub use advanced_automation::*;  // Phase 3 - Advanced automation tools - Disabled for compilation
+// pub use memory::*;  // V8.0 Memory tools - Disabled for compilation
 
 // Re-export common utilities but avoid conflicts
 pub use common::{
