@@ -139,6 +139,142 @@ class RainbowDashboard {
         document.getElementById('input-text-btn')?.addEventListener('click', () => {
             this.executeElementAction('input');
         });
+
+        // V8.0 Advanced Scroll Actions
+        document.getElementById('scroll-to-position-btn')?.addEventListener('click', () => {
+            this.executeV8ScrollToPosition();
+        });
+
+        document.getElementById('scroll-to-element-btn')?.addEventListener('click', () => {
+            this.executeV8ScrollToElement();
+        });
+
+        document.getElementById('scroll-smooth-test-btn')?.addEventListener('click', () => {
+            this.executeV8ScrollTest(true);
+        });
+
+        document.getElementById('scroll-instant-test-btn')?.addEventListener('click', () => {
+            this.executeV8ScrollTest(false);
+        });
+
+        // V8.0 Smart Navigation
+        document.getElementById('nav-smart-wait-btn')?.addEventListener('click', () => {
+            this.executeV8Navigation('smart');
+        });
+
+        document.getElementById('nav-preload-btn')?.addEventListener('click', () => {
+            this.executeV8Navigation('preload');
+        });
+
+        document.getElementById('nav-immediate-btn')?.addEventListener('click', () => {
+            this.executeV8Navigation('immediate');
+        });
+
+        // V8.0 Smart Click Actions
+        document.getElementById('click-double-btn')?.addEventListener('click', () => {
+            this.executeV8Click('double');
+        });
+
+        document.getElementById('click-right-btn')?.addEventListener('click', () => {
+            this.executeV8Click('right');
+        });
+
+        document.getElementById('click-middle-btn')?.addEventListener('click', () => {
+            this.executeV8Click('middle');
+        });
+
+        document.getElementById('click-with-ctrl-btn')?.addEventListener('click', () => {
+            this.executeV8Click('left', ['ctrl']);
+        });
+
+        document.getElementById('click-with-shift-btn')?.addEventListener('click', () => {
+            this.executeV8Click('left', ['shift']);
+        });
+
+        document.getElementById('click-smart-btn')?.addEventListener('click', () => {
+            this.executeV8Click('smart');
+        });
+
+        // V8.0 Advanced Input
+        document.getElementById('type-slow-btn')?.addEventListener('click', () => {
+            this.executeV8TypeText('slow');
+        });
+
+        document.getElementById('type-instant-btn')?.addEventListener('click', () => {
+            this.executeV8TypeText('instant');
+        });
+
+        document.getElementById('clear-and-type-btn')?.addEventListener('click', () => {
+            this.executeV8TypeText('clear');
+        });
+
+        // V8.0 Page Analysis
+        document.getElementById('analyze-lightning-btn')?.addEventListener('click', () => {
+            this.executeV8Analysis('lightning');
+        });
+
+        document.getElementById('analyze-quick-btn')?.addEventListener('click', () => {
+            this.executeV8Analysis('quick');
+        });
+
+        document.getElementById('analyze-standard-btn')?.addEventListener('click', () => {
+            this.executeV8Analysis('standard');
+        });
+
+        document.getElementById('analyze-deep-btn')?.addEventListener('click', () => {
+            this.executeV8Analysis('deep');
+        });
+
+        // V8.0 Data Extraction
+        document.getElementById('extract-text-btn')?.addEventListener('click', () => {
+            this.executeV8Extraction('text');
+        });
+
+        document.getElementById('extract-attribute-btn')?.addEventListener('click', () => {
+            this.executeV8Extraction('attributes');
+        });
+
+        document.getElementById('extract-links-btn')?.addEventListener('click', () => {
+            this.executeV8Extraction('links');
+        });
+
+        document.getElementById('extract-images-btn')?.addEventListener('click', () => {
+            this.executeV8Extraction('images');
+        });
+
+        // V8.0 Wait Strategies
+        document.getElementById('wait-element-btn')?.addEventListener('click', () => {
+            this.executeV8Wait('element');
+        });
+
+        document.getElementById('wait-visible-btn')?.addEventListener('click', () => {
+            this.executeV8Wait('visible');
+        });
+
+        document.getElementById('wait-clickable-btn')?.addEventListener('click', () => {
+            this.executeV8Wait('clickable');
+        });
+
+        document.getElementById('wait-network-btn')?.addEventListener('click', () => {
+            this.executeV8Wait('network');
+        });
+
+        // V8.0 Session Management
+        document.getElementById('session-save-btn')?.addEventListener('click', () => {
+            this.executeV8SessionAction('save');
+        });
+
+        document.getElementById('session-restore-btn')?.addEventListener('click', () => {
+            this.executeV8SessionAction('restore');
+        });
+
+        document.getElementById('session-clear-cache-btn')?.addEventListener('click', () => {
+            this.executeV8SessionAction('clear-cache');
+        });
+
+        document.getElementById('session-clear-cookies-btn')?.addEventListener('click', () => {
+            this.executeV8SessionAction('clear-cookies');
+        });
     }
 
     // Tab Management
@@ -1130,6 +1266,355 @@ class RainbowDashboard {
             `;
         } catch (error) {
             this.showNotification(`Element action failed: ${error.message}`, 'error');
+        }
+    }
+
+    // V8.0 Advanced Functions
+    async executeV8ScrollToPosition() {
+        try {
+            const x = document.getElementById('scroll-to-x')?.value;
+            const y = document.getElementById('scroll-to-y')?.value;
+            
+            if (!x || !y) {
+                this.showNotification('Please enter both X and Y coordinates', 'warning');
+                return;
+            }
+
+            const command = `scroll to position ${x},${y}`;
+            const response = await this.apiRequest('/command', {
+                method: 'POST',
+                body: JSON.stringify({
+                    command: command,
+                    session_id: this.currentSession
+                })
+            });
+
+            this.showNotification(`Scrolled to position (${x}, ${y})`, response.success ? 'success' : 'warning');
+            this.updateBrowserResult('Scroll to Position', response);
+        } catch (error) {
+            this.showNotification(`Scroll to position failed: ${error.message}`, 'error');
+        }
+    }
+
+    async executeV8ScrollToElement() {
+        try {
+            const elementId = document.getElementById('scroll-to-element')?.value;
+            
+            if (!elementId) {
+                this.showNotification('Please enter an element ID', 'warning');
+                return;
+            }
+
+            const command = `scroll to element with id "${elementId}"`;
+            const response = await this.apiRequest('/command', {
+                method: 'POST',
+                body: JSON.stringify({
+                    command: command,
+                    session_id: this.currentSession
+                })
+            });
+
+            this.showNotification(`Scrolled to element: ${elementId}`, response.success ? 'success' : 'warning');
+            this.updateBrowserResult('Scroll to Element', response);
+        } catch (error) {
+            this.showNotification(`Scroll to element failed: ${error.message}`, 'error');
+        }
+    }
+
+    async executeV8ScrollTest(smooth) {
+        try {
+            const command = smooth ? 
+                'scroll down 500 pixels smoothly' : 
+                'scroll down 500 pixels instantly';
+            
+            const response = await this.apiRequest('/command', {
+                method: 'POST',
+                body: JSON.stringify({
+                    command: command,
+                    session_id: this.currentSession
+                })
+            });
+
+            this.showNotification(`${smooth ? 'Smooth' : 'Instant'} scroll test executed`, response.success ? 'success' : 'warning');
+            this.updateBrowserResult(`${smooth ? 'Smooth' : 'Instant'} Scroll Test`, response);
+        } catch (error) {
+            this.showNotification(`Scroll test failed: ${error.message}`, 'error');
+        }
+    }
+
+    async executeV8Navigation(mode) {
+        try {
+            const urlInput = document.getElementById('url-input');
+            const url = urlInput?.value || 'https://example.com';
+            
+            let command;
+            switch(mode) {
+                case 'smart':
+                    command = `navigate to ${url} with smart wait strategy`;
+                    break;
+                case 'preload':
+                    command = `navigate to ${url} with preload enabled`;
+                    break;
+                case 'immediate':
+                    command = `navigate to ${url} immediately without waiting`;
+                    break;
+                default:
+                    command = `navigate to ${url}`;
+            }
+
+            const response = await this.apiRequest('/command', {
+                method: 'POST',
+                body: JSON.stringify({
+                    command: command,
+                    session_id: this.currentSession
+                })
+            });
+
+            this.showNotification(`V8.0 ${mode} navigation executed`, response.success ? 'success' : 'warning');
+            this.updateBrowserResult(`V8.0 ${mode} Navigation`, response);
+        } catch (error) {
+            this.showNotification(`V8.0 navigation failed: ${error.message}`, 'error');
+        }
+    }
+
+    async executeV8Click(clickType, modifiers = []) {
+        try {
+            const selector = document.getElementById('v8-click-selector')?.value || 
+                            document.getElementById('click-selector')?.value;
+            
+            if (!selector) {
+                this.showNotification('Please enter a CSS selector', 'warning');
+                return;
+            }
+
+            let command = '';
+            if (clickType === 'double') {
+                command = `double click element with selector "${selector}"`;
+            } else if (clickType === 'right') {
+                command = `right click element with selector "${selector}"`;
+            } else if (clickType === 'middle') {
+                command = `middle click element with selector "${selector}"`;
+            } else if (clickType === 'smart') {
+                command = `smart click element with selector "${selector}"`;
+            } else if (modifiers.length > 0) {
+                command = `click element with selector "${selector}" while holding ${modifiers.join('+')}`;
+            } else {
+                command = `click element with selector "${selector}"`;
+            }
+
+            const response = await this.apiRequest('/command', {
+                method: 'POST',
+                body: JSON.stringify({
+                    command: command,
+                    session_id: this.currentSession
+                })
+            });
+
+            this.showNotification(`V8.0 ${clickType} click executed`, response.success ? 'success' : 'warning');
+            this.updateBrowserResult(`V8.0 ${clickType} Click`, response);
+        } catch (error) {
+            this.showNotification(`V8.0 click failed: ${error.message}`, 'error');
+        }
+    }
+
+    async executeV8TypeText(mode) {
+        try {
+            const selector = document.getElementById('v8-input-selector')?.value;
+            const text = document.getElementById('v8-input-text')?.value;
+            
+            if (!selector || !text) {
+                this.showNotification('Please enter both selector and text', 'warning');
+                return;
+            }
+
+            let command;
+            switch(mode) {
+                case 'slow':
+                    command = `type "${text}" slowly into element with selector "${selector}"`;
+                    break;
+                case 'instant':
+                    command = `type "${text}" instantly into element with selector "${selector}"`;
+                    break;
+                case 'clear':
+                    command = `clear and type "${text}" into element with selector "${selector}"`;
+                    break;
+                default:
+                    command = `type "${text}" into element with selector "${selector}"`;
+            }
+
+            const response = await this.apiRequest('/command', {
+                method: 'POST',
+                body: JSON.stringify({
+                    command: command,
+                    session_id: this.currentSession
+                })
+            });
+
+            this.showNotification(`V8.0 ${mode} type executed`, response.success ? 'success' : 'warning');
+            this.updateBrowserResult(`V8.0 ${mode} Type`, response);
+        } catch (error) {
+            this.showNotification(`V8.0 type failed: ${error.message}`, 'error');
+        }
+    }
+
+    updateBrowserResult(action, response) {
+        const resultContainer = document.getElementById('browser-result');
+        if (resultContainer) {
+            resultContainer.innerHTML = `
+                <div><strong>Action:</strong> ${action}</div>
+                <div><strong>Result:</strong> ${response.success ? 'Success' : 'Failed'}</div>
+                ${response.explanation ? `<div><strong>Explanation:</strong> ${response.explanation}</div>` : ''}
+                <pre>${JSON.stringify(response, null, 2)}</pre>
+            `;
+        }
+    }
+
+    // V8.0 Page Analysis Functions
+    async executeV8Analysis(level) {
+        try {
+            let command;
+            switch(level) {
+                case 'lightning':
+                    command = 'analyze page with lightning speed (under 50ms)';
+                    break;
+                case 'quick':
+                    command = 'analyze page quickly (under 200ms)';
+                    break;
+                case 'standard':
+                    command = 'analyze page standard (under 500ms)';
+                    break;
+                case 'deep':
+                    command = 'analyze page deeply (under 1000ms)';
+                    break;
+                default:
+                    command = 'analyze page';
+            }
+
+            const response = await this.apiRequest('/command', {
+                method: 'POST',
+                body: JSON.stringify({
+                    command: command,
+                    session_id: this.currentSession
+                })
+            });
+
+            this.showNotification(`V8.0 ${level} analysis completed`, response.success ? 'success' : 'warning');
+            this.updateBrowserResult(`V8.0 ${level} Analysis`, response);
+        } catch (error) {
+            this.showNotification(`V8.0 analysis failed: ${error.message}`, 'error');
+        }
+    }
+
+    // V8.0 Data Extraction Functions
+    async executeV8Extraction(type) {
+        try {
+            const selector = document.getElementById('extract-selector')?.value || '*';
+            
+            let command;
+            switch(type) {
+                case 'text':
+                    command = `extract text from elements matching "${selector}"`;
+                    break;
+                case 'attributes':
+                    command = `extract attributes from elements matching "${selector}"`;
+                    break;
+                case 'links':
+                    command = `extract all links from page`;
+                    break;
+                case 'images':
+                    command = `extract all image sources from page`;
+                    break;
+                default:
+                    command = `extract data from "${selector}"`;
+            }
+
+            const response = await this.apiRequest('/command', {
+                method: 'POST',
+                body: JSON.stringify({
+                    command: command,
+                    session_id: this.currentSession
+                })
+            });
+
+            this.showNotification(`V8.0 ${type} extraction completed`, response.success ? 'success' : 'warning');
+            this.updateBrowserResult(`V8.0 ${type} Extraction`, response);
+        } catch (error) {
+            this.showNotification(`V8.0 extraction failed: ${error.message}`, 'error');
+        }
+    }
+
+    // V8.0 Wait Strategy Functions
+    async executeV8Wait(strategy) {
+        try {
+            const selector = document.getElementById('wait-selector')?.value;
+            const timeout = document.getElementById('wait-timeout')?.value || 5000;
+            
+            let command;
+            switch(strategy) {
+                case 'element':
+                    command = `wait for element "${selector}" to appear within ${timeout}ms`;
+                    break;
+                case 'visible':
+                    command = `wait for element "${selector}" to be visible within ${timeout}ms`;
+                    break;
+                case 'clickable':
+                    command = `wait for element "${selector}" to be clickable within ${timeout}ms`;
+                    break;
+                case 'network':
+                    command = `wait for network to be idle within ${timeout}ms`;
+                    break;
+                default:
+                    command = `wait ${timeout}ms`;
+            }
+
+            const response = await this.apiRequest('/command', {
+                method: 'POST',
+                body: JSON.stringify({
+                    command: command,
+                    session_id: this.currentSession
+                })
+            });
+
+            this.showNotification(`V8.0 ${strategy} wait completed`, response.success ? 'success' : 'warning');
+            this.updateBrowserResult(`V8.0 ${strategy} Wait`, response);
+        } catch (error) {
+            this.showNotification(`V8.0 wait failed: ${error.message}`, 'error');
+        }
+    }
+
+    // V8.0 Session Management Functions
+    async executeV8SessionAction(action) {
+        try {
+            let command;
+            switch(action) {
+                case 'save':
+                    command = 'save current browser session state';
+                    break;
+                case 'restore':
+                    command = 'restore previous browser session state';
+                    break;
+                case 'clear-cache':
+                    command = 'clear browser cache';
+                    break;
+                case 'clear-cookies':
+                    command = 'clear browser cookies';
+                    break;
+                default:
+                    command = `session ${action}`;
+            }
+
+            const response = await this.apiRequest('/command', {
+                method: 'POST',
+                body: JSON.stringify({
+                    command: command,
+                    session_id: this.currentSession
+                })
+            });
+
+            this.showNotification(`V8.0 session ${action} completed`, response.success ? 'success' : 'warning');
+            this.updateBrowserResult(`V8.0 Session ${action}`, response);
+        } catch (error) {
+            this.showNotification(`V8.0 session action failed: ${error.message}`, 'error');
         }
     }
 }

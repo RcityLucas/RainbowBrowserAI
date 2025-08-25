@@ -121,19 +121,34 @@ echo -e "\n${BLUE}Building the project...${NC}"
 echo -e "${YELLOW}  This may take a few minutes on first run...${NC}"
 
 # Check if release binary exists and is up-to-date
-if [ -f "target/release/rainbow-poc" ] && [ "target/release/rainbow-poc" -nt "src/main.rs" ]; then
+if [ -f "target/release/rainbow-poc" ] && [ "target/release/rainbow-poc" -nt "src/main.rs" ] && [ -x "target/release/rainbow-poc" ]; then
     echo -e "${GREEN}  ✓ Using existing release build${NC}"
     BINARY_PATH="./target/release/rainbow-poc"
 else
+    echo -e "${YELLOW}  🔨 Building release binary...${NC}"
     # Build in release mode for better performance
-    RAINBOW_MOCK_MODE=true cargo build --release --bin rainbow-poc 2>&1 | while read line; do
+    if RAINBOW_MOCK_MODE=true cargo build --release --bin rainbow-poc 2>&1 | while read line; do
         if [[ $line == *"Compiling"* ]]; then
             echo -ne "\r${YELLOW}  ⚙ Compiling... ${NC}"
         elif [[ $line == *"Finished"* ]]; then
             echo -e "\r${GREEN}  ✓ Build completed successfully${NC}"
+        elif [[ $line == *"error"* ]]; then
+            echo -e "\r${RED}  ✗ Build failed: $line${NC}"
         fi
-    done
-    BINARY_PATH="./target/release/rainbow-poc"
+    done; then
+        if [ -f "target/release/rainbow-poc" ] && [ -x "target/release/rainbow-poc" ]; then
+            BINARY_PATH="./target/release/rainbow-poc"
+            echo -e "${GREEN}  ✅ Release binary ready${NC}"
+        else
+            echo -e "${RED}  ❌ Build completed but binary not found or not executable${NC}"
+            echo -e "${YELLOW}  🔄 Will fallback to cargo run${NC}"
+            BINARY_PATH=""
+        fi
+    else
+        echo -e "${RED}  ❌ Build failed${NC}"
+        echo -e "${YELLOW}  🔄 Will fallback to cargo run${NC}"
+        BINARY_PATH=""
+    fi
 fi
 
 # Function to cleanup on exit
@@ -174,8 +189,43 @@ export CHROMEDRIVER_PORT=$CHROMEDRIVER_PORT
 
 # Use the compiled binary directly to avoid recompilation
 if [ ! -z "$BINARY_PATH" ] && [ -f "$BINARY_PATH" ]; then
-    exec $BINARY_PATH serve --port $SERVER_PORT
+    echo -e "${GREEN}🚀 Starting service using release binary...${NC}"
+    $BINARY_PATH serve --port $SERVER_PORT &
+    SERVER_PID=$!
 else
+    echo -e "${YELLOW}📦 Binary not found, using cargo run...${NC}"
     # Fallback to cargo run if binary not found
-    exec cargo run --release --bin rainbow-poc -- serve --port $SERVER_PORT
+    cargo run --release --bin rainbow-poc -- serve --port $SERVER_PORT &
+    SERVER_PID=$!
 fi
+
+# Wait for server to start and verify it's working
+echo -e "${BLUE}⏳ Waiting for server to start...${NC}"
+for i in {1..15}; do
+    if curl -s http://localhost:$SERVER_PORT/api/health > /dev/null 2>&1; then
+        echo -e "${GREEN}✅ Service started successfully on port $SERVER_PORT${NC}"
+        echo -e "${GREEN}🌐 Dashboard: ${BLUE}http://localhost:$SERVER_PORT${NC}"
+        echo -e "${GREEN}📊 Health: ${BLUE}http://localhost:$SERVER_PORT/api/health${NC}"
+        echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
+        echo -e "${GREEN}🎉 RainbowBrowserAI is ready for use!${NC}"
+        echo -e "${YELLOW}Press Ctrl+C to stop the service${NC}"
+        echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
+        break
+    fi
+    if [ $i -eq 15 ]; then
+        echo -e "${RED}❌ Service failed to start on port $SERVER_PORT${NC}"
+        echo -e "${YELLOW}💡 Troubleshooting:${NC}"
+        echo -e "${YELLOW}  1. Check if port $SERVER_PORT is available: netstat -tulpn | grep $SERVER_PORT${NC}"
+        echo -e "${YELLOW}  2. Check ChromeDriver: curl -s http://localhost:$CHROMEDRIVER_PORT/status${NC}"
+        echo -e "${YELLOW}  3. Check logs for errors${NC}"
+        if [ ! -z "$SERVER_PID" ]; then
+            echo -e "${YELLOW}  4. Server process ID: $SERVER_PID${NC}"
+        fi
+        exit 1
+    fi
+    echo -ne "\r${YELLOW}  ⏳ Waiting for service... (${i}/15)${NC}"
+    sleep 2
+done
+
+# Wait for the main process
+wait $SERVER_PID
