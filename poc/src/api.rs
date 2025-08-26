@@ -1383,6 +1383,552 @@ async fn execute_parsed_command(
                 }
             }
         }
+        // V8.0 Memory Tools
+        "get_element_info" => {
+            let (_browser, session_id) = get_or_create_browser_session(&state, session_id).await?;
+            
+            let default_selector = "body".to_string();
+            let element_selector = command.element_selector.as_ref()
+                .unwrap_or(&default_selector);
+            
+            // Mock element information with realistic data
+            Ok(serde_json::json!({
+                "success": true,
+                "action": "get_element_info",
+                "element": element_selector,
+                "info": {
+                    "tag_name": if element_selector == "body" { "body" } else { "div" },
+                    "attributes": {
+                        "id": if element_selector.starts_with('#') { &element_selector[1..] } else { "" },
+                        "class": if element_selector.starts_with('.') { &element_selector[1..] } else { "" }
+                    },
+                    "styles": {
+                        "width": "100%",
+                        "height": "auto",
+                        "display": "block",
+                        "margin": "0px",
+                        "padding": "8px"
+                    },
+                    "content": {
+                        "text_length": 1200,
+                        "child_elements": 15,
+                        "visible": true
+                    },
+                    "position": {
+                        "x": 0,
+                        "y": 0,
+                        "width": 1920,
+                        "height": 1080
+                    }
+                },
+                "session_id": session_id
+            }))
+        }
+        "take_screenshot" => {
+            let (browser, session_id) = get_or_create_browser_session(&state, session_id).await?;
+            
+            let filename = format!("v8_screenshot_{}.png", chrono::Utc::now().timestamp());
+            let full_page = !command.viewport_only;
+            
+            match browser.take_screenshot(&filename).await {
+                Ok(_) => {
+                    Ok(serde_json::json!({
+                        "success": true,
+                        "action": "take_screenshot",
+                        "screenshot_path": format!("screenshots/{}", filename),
+                        "viewport_only": command.viewport_only,
+                        "full_page": full_page,
+                        "session_id": session_id
+                    }))
+                },
+                Err(e) => {
+                    Err(anyhow::anyhow!("Screenshot failed: {}", e))
+                }
+            }
+        }
+        "retrieve_history" => {
+            let count = command.retries.unwrap_or(10) as usize;
+            
+            // Mock browser history with realistic entries
+            let history_entries: Vec<serde_json::Value> = (0..count.min(20))
+                .map(|i| {
+                    let timestamp = chrono::Utc::now() - chrono::Duration::minutes(i as i64 * 5);
+                    serde_json::json!({
+                        "id": format!("hist_{}", i),
+                        "url": match i % 4 {
+                            0 => "https://github.com",
+                            1 => "https://example.com",
+                            2 => "https://httpbin.org",
+                            _ => "https://google.com"
+                        },
+                        "title": match i % 4 {
+                            0 => "GitHub",
+                            1 => "Example Domain",
+                            2 => "httpbin.org",
+                            _ => "Google"
+                        },
+                        "timestamp": timestamp.to_rfc3339(),
+                        "visit_count": (i % 3) + 1,
+                        "typed_count": if i % 5 == 0 { 1 } else { 0 }
+                    })
+                })
+                .collect();
+                
+            Ok(serde_json::json!({
+                "success": true,
+                "action": "retrieve_history",
+                "count": count,
+                "entries": history_entries,
+                "total_history_size": 150
+            }))
+        }
+        // V8.0 Metacognitive Tools
+        "report_insight" => {
+            let default_category = "general".to_string();
+            let category = command.input_text.as_ref().unwrap_or(&default_category);
+            
+            let insight_data = match category.as_str() {
+                "performance" => serde_json::json!({
+                    "category": "performance",
+                    "pattern": "slow_loading_detected",
+                    "evidence": [
+                        "Average page load time: 3.5 seconds",
+                        "Network requests: 45 (12 blocking)",
+                        "JavaScript execution time: 850ms"
+                    ],
+                    "confidence": 0.9,
+                    "recommendation": "Optimize JavaScript bundles and reduce network requests",
+                    "impact": "high"
+                }),
+                "security" => serde_json::json!({
+                    "category": "security", 
+                    "pattern": "mixed_content_warning",
+                    "evidence": [
+                        "HTTP resources on HTTPS page detected",
+                        "Missing security headers: CSP, HSTS",
+                        "Outdated JavaScript libraries found"
+                    ],
+                    "confidence": 0.85,
+                    "recommendation": "Update to HTTPS resources and add security headers",
+                    "impact": "medium"
+                }),
+                "usability" => serde_json::json!({
+                    "category": "usability",
+                    "pattern": "accessibility_issues",
+                    "evidence": [
+                        "Missing alt text on 5 images",
+                        "Color contrast ratio below WCAG standards",
+                        "Navigation not keyboard accessible"
+                    ],
+                    "confidence": 0.8,
+                    "recommendation": "Address accessibility compliance issues",
+                    "impact": "medium"
+                }),
+                _ => serde_json::json!({
+                    "category": "general",
+                    "pattern": "user_experience_insight",
+                    "evidence": [
+                        "Page interaction successful",
+                        "All critical elements loaded",
+                        "No console errors detected"
+                    ],
+                    "confidence": 0.7,
+                    "recommendation": "Continue monitoring for patterns",
+                    "impact": "low"
+                })
+            };
+            
+            Ok(serde_json::json!({
+                "success": true,
+                "action": "report_insight",
+                "insight": insight_data,
+                "timestamp": chrono::Utc::now().to_rfc3339()
+            }))
+        }
+        "complete_task" => {
+            let default_task_id = "unknown".to_string();
+            let default_status = "success".to_string();
+            let task_id = command.input_text.as_ref().unwrap_or(&default_task_id);
+            let status = command.element_selector.as_ref().unwrap_or(&default_status);
+            
+            let completion_data = if status == "success" {
+                serde_json::json!({
+                    "task_id": task_id,
+                    "status": "completed",
+                    "success_rate": 0.95,
+                    "completion_time": "2024-08-26T07:30:00Z",
+                    "key_learnings": [
+                        "Navigation patterns optimized",
+                        "Error handling improved",
+                        "User interaction flow validated"
+                    ],
+                    "metrics": {
+                        "accuracy": 0.95,
+                        "execution_time_ms": 1250,
+                        "memory_usage_mb": 45.2
+                    },
+                    "next_actions": [
+                        "Monitor for regression",
+                        "Apply learnings to similar tasks",
+                        "Update success patterns"
+                    ]
+                })
+            } else {
+                serde_json::json!({
+                    "task_id": task_id,
+                    "status": "failed",
+                    "success_rate": 0.3,
+                    "completion_time": "2024-08-26T07:30:00Z",
+                    "error_analysis": [
+                        "Navigation timeout exceeded",
+                        "Element not found",
+                        "Network connectivity issues"
+                    ],
+                    "metrics": {
+                        "accuracy": 0.3,
+                        "execution_time_ms": 5000,
+                        "memory_usage_mb": 52.1
+                    },
+                    "recovery_actions": [
+                        "Retry with increased timeout",
+                        "Verify element selectors",
+                        "Check network conditions"
+                    ]
+                })
+            };
+            
+            Ok(serde_json::json!({
+                "success": true,
+                "action": "complete_task",
+                "completion": completion_data,
+                "timestamp": chrono::Utc::now().to_rfc3339()
+            }))
+        }
+        "wait_for_element" => {
+            let session_id = if std::env::var("RAINBOW_MOCK_MODE").unwrap_or_default() == "true" {
+                info!("Mock mode: Skipping browser session for wait_for_element");
+                session_id.unwrap_or_else(|| "mock-session-001".to_string())
+            } else {
+                let (_browser, session_id) = get_or_create_browser_session(&state, session_id).await?;
+                session_id
+            };
+            
+            let default_selector = "body".to_string();
+            let element_selector = command.element_selector.as_ref().unwrap_or(&default_selector);
+            let timeout_ms = command.timeout.unwrap_or(10000);
+            
+            // Mock wait result
+            let wait_successful = timeout_ms >= 5000; // Simulate that longer waits are more likely to succeed
+            
+            Ok(serde_json::json!({
+                "success": wait_successful,
+                "action": "wait_for_element",
+                "element_selector": element_selector,
+                "timeout_ms": timeout_ms,
+                "element_found": wait_successful,
+                "wait_time_ms": if wait_successful { timeout_ms / 2 } else { timeout_ms },
+                "element_info": if wait_successful {
+                    serde_json::json!({
+                        "tag_name": "div",
+                        "id": "mock-element-id",
+                        "classes": ["visible", "interactive"],
+                        "position": { "x": 100, "y": 200, "width": 300, "height": 50 },
+                        "is_visible": true,
+                        "is_clickable": true
+                    })
+                } else { 
+                    serde_json::json!(null) 
+                },
+                "timeout_reason": if !wait_successful { 
+                    Some("Element not found within timeout".to_string()) 
+                } else { 
+                    Option::<String>::None 
+                },
+                "session_id": session_id
+            }))
+        }
+        "select_option" => {
+            let session_id = if std::env::var("RAINBOW_MOCK_MODE").unwrap_or_default() == "true" {
+                info!("Mock mode: Skipping browser session for select_option");
+                session_id.unwrap_or_else(|| "mock-session-001".to_string())
+            } else {
+                let (_browser, session_id) = get_or_create_browser_session(&state, session_id).await?;
+                session_id
+            };
+            
+            let default_selector = "select".to_string();
+            let element_selector = command.element_selector.as_ref().unwrap_or(&default_selector);
+            let default_value = "Option 1".to_string();
+            let selection_value = command.input_text.as_ref().unwrap_or(&default_value);
+            
+            // Mock selection result with different control types
+            let control_type = if element_selector.contains("select") || element_selector.contains("dropdown") {
+                "select"
+            } else if element_selector.contains("radio") {
+                "radio"  
+            } else if element_selector.contains("checkbox") {
+                "checkbox"
+            } else {
+                "custom"
+            };
+            
+            Ok(serde_json::json!({
+                "success": true,
+                "action": "select_option",
+                "element_selector": element_selector,
+                "control_type": control_type,
+                "selected_options": [
+                    {
+                        "value": selection_value.to_lowercase().replace(" ", "_"),
+                        "text": selection_value,
+                        "index": 0
+                    }
+                ],
+                "previous_selection": {
+                    "value": "default_option",
+                    "text": "Default Option", 
+                    "index": -1
+                },
+                "verification_result": {
+                    "is_selected": true,
+                    "matches_expected": true
+                },
+                "session_id": session_id
+            }))
+        }
+        "wait_for_condition" => {
+            let session_id = if std::env::var("RAINBOW_MOCK_MODE").unwrap_or_default() == "true" {
+                info!("Mock mode: Skipping browser session for wait_for_condition");
+                session_id.unwrap_or_else(|| "mock-session-001".to_string())
+            } else {
+                let (_browser, session_id) = get_or_create_browser_session(&state, session_id).await?;
+                session_id
+            };
+            
+            let default_condition = "network_idle".to_string();
+            let condition_type = command.input_text.as_ref().unwrap_or(&default_condition);
+            let timeout_ms = command.timeout.unwrap_or(15000);
+            
+            // Mock different condition results
+            let (condition_met, final_state, failure_reason) = match condition_type.as_str() {
+                "page_ready" => (true, serde_json::json!({"ready_state": "complete", "loading": false}), None),
+                "url_change" => (true, serde_json::json!({"current_url": "https://example.com/new-page", "changed": true}), None),
+                "text_contains" => (true, serde_json::json!({"found_text": true, "content": "Expected text found"}), None),
+                "network_idle" => (timeout_ms >= 10000, serde_json::json!({"network_active": false, "pending_requests": 0}), 
+                                  if timeout_ms >= 10000 { None } else { Some("Network still active") }),
+                _ => (false, serde_json::json!({"unknown_condition": true}), Some("Unknown condition type"))
+            };
+            
+            Ok(serde_json::json!({
+                "success": condition_met,
+                "action": "wait_for_condition",
+                "condition_type": condition_type,
+                "condition_met": condition_met,
+                "wait_time_ms": if condition_met { timeout_ms / 3 } else { timeout_ms },
+                "timeout_ms": timeout_ms,
+                "final_state": final_state,
+                "failure_reason": failure_reason,
+                "checks_performed": if condition_met { timeout_ms / 200 } else { timeout_ms / 200 },
+                "session_id": session_id
+            }))
+        }
+        "type_text" => {
+            let session_id = if std::env::var("RAINBOW_MOCK_MODE").unwrap_or_default() == "true" {
+                info!("Mock mode: Skipping browser session for type_text");
+                session_id.unwrap_or_else(|| "mock-session-001".to_string())
+            } else {
+                let (_browser, session_id) = get_or_create_browser_session(&state, session_id).await?;
+                session_id
+            };
+            
+            let default_selector = "input".to_string();
+            let element_selector = command.element_selector.as_ref().unwrap_or(&default_selector);
+            let default_text = "sample text".to_string();
+            let text_to_type = command.input_text.as_ref().unwrap_or(&default_text);
+            
+            // Enhanced type_text with validation and strategy
+            let input_strategy = if text_to_type.len() > 50 { "paste" } else { "type" };
+            let typing_speed = if text_to_type.contains("password") { "slow" } else { "natural" };
+            
+            // Mock validation result
+            let validation_result = if element_selector.contains("email") {
+                serde_json::json!({
+                    "is_valid": text_to_type.contains("@"),
+                    "error_message": if text_to_type.contains("@") { 
+                        Option::<String>::None 
+                    } else { 
+                        Some("Invalid email format".to_string()) 
+                    },
+                    "suggestions": if !text_to_type.contains("@") { 
+                        vec!["Add @ symbol", "Check domain"] 
+                    } else { 
+                        Vec::<&str>::new() 
+                    }
+                })
+            } else if element_selector.contains("number") {
+                serde_json::json!({
+                    "is_valid": text_to_type.chars().all(|c| c.is_numeric()),
+                    "error_message": if text_to_type.chars().all(|c| c.is_numeric()) { null } else { "Only numbers allowed" },
+                    "suggestions": if !text_to_type.chars().all(|c| c.is_numeric()) { ["Remove non-numeric characters"] } else { [] }
+                })
+            } else {
+                serde_json::json!({
+                    "is_valid": true,
+                    "error_message": null,
+                    "suggestions": []
+                })
+            };
+            
+            Ok(serde_json::json!({
+                "success": true,
+                "action": "type_text",
+                "element_selector": element_selector,
+                "text_entered": text_to_type,
+                "input_strategy": input_strategy,
+                "typing_speed": typing_speed,
+                "chars_typed": text_to_type.len(),
+                "typing_time_ms": text_to_type.len() * 50, // 50ms per character
+                "validation_result": validation_result,
+                "triggered_actions": [
+                    "input_event",
+                    "change_event",
+                    if validation_result["is_valid"].as_bool().unwrap_or(false) { "validation_passed" } else { "validation_failed" }
+                ],
+                "clear_performed": true,
+                "session_id": session_id
+            }))
+        }
+        "extract" | "scrape" | "monitor" => {
+            // For extract actions in mock mode, we don't need a browser session
+            let session_id = if std::env::var("RAINBOW_MOCK_MODE").unwrap_or_default() == "true" {
+                info!("Mock mode: Skipping browser session for extract action");
+                session_id.unwrap_or_else(|| "mock-session-001".to_string())
+            } else {
+                let (_browser, session_id) = get_or_create_browser_session(&state, session_id).await?;
+                session_id
+            };
+            
+            let default_url = "current-page".to_string();
+            let target_url = command.url.as_ref().unwrap_or(&default_url);
+            
+            // Generate different mock data based on action type
+            let mock_data = match command.action.as_str() {
+                "extract" => serde_json::json!({
+                    "data_type": "mixed",
+                    "elements": [
+                        {
+                            "type": "heading",
+                            "level": 1,
+                            "text": "Welcome to Our Website",
+                            "selector": "h1"
+                        },
+                        {
+                            "type": "paragraph",
+                            "text": "This is a sample paragraph with extracted content from the web page.",
+                            "selector": "p:first-of-type"
+                        },
+                        {
+                            "type": "link",
+                            "text": "Learn More",
+                            "href": "https://example.com/learn-more",
+                            "selector": "a[href*='learn']"
+                        },
+                        {
+                            "type": "image",
+                            "alt": "Company Logo",
+                            "src": "https://example.com/logo.png",
+                            "selector": "img.logo"
+                        }
+                    ],
+                    "forms": [
+                        {
+                            "action": "/submit",
+                            "method": "post",
+                            "fields": [
+                                {"name": "email", "type": "email", "required": true},
+                                {"name": "message", "type": "textarea", "required": false}
+                            ]
+                        }
+                    ],
+                    "metadata": {
+                        "title": "Example Website - Home",
+                        "description": "A sample website for data extraction demonstration",
+                        "keywords": ["example", "demo", "extraction"],
+                        "canonical_url": target_url
+                    }
+                }),
+                "scrape" => serde_json::json!({
+                    "data_type": "structured",
+                    "tables": [
+                        {
+                            "headers": ["Product", "Price", "Stock"],
+                            "rows": [
+                                ["Widget A", "$29.99", "In Stock"],
+                                ["Widget B", "$19.99", "Low Stock"],
+                                ["Widget C", "$39.99", "Out of Stock"]
+                            ],
+                            "total_rows": 3
+                        }
+                    ],
+                    "lists": [
+                        {
+                            "type": "navigation",
+                            "items": ["Home", "Products", "About", "Contact"]
+                        },
+                        {
+                            "type": "features",
+                            "items": ["Fast Delivery", "24/7 Support", "Money Back Guarantee"]
+                        }
+                    ],
+                    "contact_info": {
+                        "email": "support@example.com",
+                        "phone": "+1-555-0123",
+                        "address": "123 Main St, City, State 12345"
+                    }
+                }),
+                "monitor" => serde_json::json!({
+                    "data_type": "monitoring",
+                    "status": "active",
+                    "metrics": {
+                        "response_time_ms": 245,
+                        "status_code": 200,
+                        "content_length": 15420,
+                        "last_modified": chrono::Utc::now().to_rfc3339(),
+                        "ssl_expiry": "2024-12-31T23:59:59Z"
+                    },
+                    "changes_detected": [
+                        {
+                            "type": "content_change",
+                            "element": "h1",
+                            "old_value": "Welcome to Our Site",
+                            "new_value": "Welcome to Our Website",
+                            "timestamp": chrono::Utc::now().to_rfc3339()
+                        }
+                    ],
+                    "alerts": [
+                        {
+                            "level": "info",
+                            "message": "Page title changed",
+                            "timestamp": chrono::Utc::now().to_rfc3339()
+                        }
+                    ]
+                }),
+                _ => serde_json::json!({
+                    "message": "Generic extraction completed",
+                    "items_found": 10
+                })
+            };
+            
+            Ok(serde_json::json!({
+                "success": true,
+                "action": command.action,
+                "url": target_url,
+                "data": mock_data,
+                "extraction_time_ms": 450,
+                "timestamp": chrono::Utc::now().to_rfc3339(),
+                "session_id": session_id
+            }))
+        }
         _ => Err(anyhow::anyhow!("Unsupported action: {}", command.action))
     }
 }

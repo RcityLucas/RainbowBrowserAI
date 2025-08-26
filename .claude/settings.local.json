@@ -184,7 +184,15 @@
       "Bash(export CHROMEDRIVER_PORT=9516)",
       "Bash(./target/release/rainbow-poc serve:*)",
       "Bash(RAINBOW_MOCK_MODE=true timeout 30s cargo build --release --bin rainbow-poc)",
-      "Bash(RAINBOW_MOCK_MODE=true cargo build --release --bin rainbow-poc)"
+      "Bash(RAINBOW_MOCK_MODE=true cargo build --release --bin rainbow-poc)",
+      "WebFetch(domain:github.com)",
+      "Bash(RAINBOW_MOCK_MODE=true timeout 120s cargo build --bin rainbow-poc)",
+      "Bash(RAINBOW_MOCK_MODE=true timeout 10s cargo run --release --bin rainbow-poc -- serve --port 3001)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(dos2unix:*)",
+      "Bash(RAINBOW_MOCK_MODE=true CHROMEDRIVER_PORT=9515 ./target/debug/rainbow-poc serve --port 3001)",
+      "Bash(RAINBOW_MOCK_MODE=true CHROMEDRIVER_PORT=9515 ./target/release/rainbow-poc serve --port 3001)",
+      "Bash(echo)"
     ],
     "deny": []
   }

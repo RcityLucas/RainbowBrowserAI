@@ -537,6 +537,168 @@ JSON:"#,
                     }
                 }
             }
+        } else if input_lower.contains("get") && input_lower.contains("element") && input_lower.contains("info") {
+            // V8.0 Memory Tool: get_element_info
+            command.action = "get_element_info".to_string();
+            command.confidence = 0.9;
+            
+            // Extract element reference (body, header, etc.)
+            if input_lower.contains("body") {
+                command.element_selector = Some("body".to_string());
+            } else if input_lower.contains("header") {
+                command.element_selector = Some("header".to_string());
+            } else if let Some(cap) = Regex::new(r"#([a-zA-Z0-9_-]+)").unwrap().captures(&input_lower) {
+                command.element_selector = Some(format!("#{}", &cap[1]));
+            } else if let Some(cap) = Regex::new(r"\.([a-zA-Z0-9_-]+)").unwrap().captures(&input_lower) {
+                command.element_selector = Some(format!(".{}", &cap[1]));
+            }
+            
+            // Extract URL if present
+            let url_regex = Regex::new(r"([a-zA-Z0-9][a-zA-Z0-9-]*\.)+[a-zA-Z]{2,}").unwrap();
+            if let Some(cap) = url_regex.captures(&input_lower) {
+                command.url = Some(cap[0].to_string());
+            }
+        } else if input_lower.contains("take") && input_lower.contains("screenshot") {
+            // V8.0 Memory Tool: take_screenshot  
+            command.action = "take_screenshot".to_string();
+            command.confidence = 0.95;
+            command.screenshot = true;
+            
+            // Extract viewport preference
+            if input_lower.contains("viewport") || input_lower.contains("current") {
+                command.viewport_only = true;
+            } else if input_lower.contains("full") || input_lower.contains("page") {
+                command.viewport_only = false;
+            }
+            
+            // Extract URL if present
+            let url_regex = Regex::new(r"([a-zA-Z0-9][a-zA-Z0-9-]*\.)+[a-zA-Z]{2,}").unwrap();
+            if let Some(cap) = url_regex.captures(&input_lower) {
+                command.url = Some(cap[0].to_string());
+            }
+        } else if (input_lower.contains("get") || input_lower.contains("retrieve")) && input_lower.contains("history") {
+            // V8.0 Memory Tool: retrieve_history
+            command.action = "retrieve_history".to_string();
+            command.confidence = 0.9;
+            
+            // Extract count if specified
+            if let Some(cap) = Regex::new(r"(\d+)").unwrap().captures(&input_lower) {
+                // Store count in retries field for mock purposes
+                command.retries = cap[1].parse().ok();
+            } else {
+                // Default to 10 history items
+                command.retries = Some(10);
+            }
+        } else if input_lower.contains("report") && input_lower.contains("insight") {
+            // V8.0 Metacognitive Tool: report_insight
+            command.action = "report_insight".to_string();
+            command.confidence = 0.95;
+            
+            // Extract insight category
+            if input_lower.contains("performance") {
+                command.input_text = Some("performance".to_string());
+            } else if input_lower.contains("security") {
+                command.input_text = Some("security".to_string());
+            } else if input_lower.contains("usability") {
+                command.input_text = Some("usability".to_string());
+            } else if input_lower.contains("error") {
+                command.input_text = Some("error".to_string());
+            } else {
+                command.input_text = Some("general".to_string());
+            }
+        } else if (input_lower.contains("complete") || input_lower.contains("mark")) && input_lower.contains("task") {
+            // V8.0 Metacognitive Tool: complete_task
+            command.action = "complete_task".to_string();
+            command.confidence = 0.9;
+            
+            // Extract task ID or name
+            if let Some(cap) = Regex::new(r"task\s+([a-zA-Z0-9_-]+)").unwrap().captures(&input_lower) {
+                command.input_text = Some(cap[1].to_string());
+            }
+            
+            // Extract success status
+            if input_lower.contains("successful") || input_lower.contains("completed") {
+                command.element_selector = Some("success".to_string());
+            } else if input_lower.contains("failed") || input_lower.contains("error") {
+                command.element_selector = Some("failed".to_string());
+            }
+        } else if (input_lower.contains("wait") && input_lower.contains("element")) || input_lower.contains("wait for") {
+            // wait_for_element tool
+            command.action = "wait_for_element".to_string();
+            command.confidence = 0.9;
+            
+            // Extract element selector or description
+            if let Some(cap) = Regex::new(r#"(?:selector|element)?\s*[\"']([^\"']+)[\"']"#).unwrap().captures(&input_lower) {
+                command.element_selector = Some(cap[1].to_string());
+            } else if input_lower.contains("button") {
+                command.element_selector = Some("button".to_string());
+            } else if input_lower.contains("link") {
+                command.element_selector = Some("a".to_string());
+            } else if input_lower.contains("form") {
+                command.element_selector = Some("form".to_string());
+            }
+            
+            // Extract timeout if specified
+            if let Some(cap) = Regex::new(r"(\d+)\s*(?:second|sec)s?").unwrap().captures(&input_lower) {
+                command.timeout = cap[1].parse::<u64>().ok().map(|s| s * 1000);
+            } else if let Some(cap) = Regex::new(r"(\d+)\s*(?:ms|millisecond)s?").unwrap().captures(&input_lower) {
+                command.timeout = cap[1].parse().ok();
+            }
+        } else if input_lower.contains("select") && (input_lower.contains("option") || input_lower.contains("dropdown") || input_lower.contains("choose")) {
+            // select_option tool
+            command.action = "select_option".to_string();
+            command.confidence = 0.9;
+            
+            // Extract selector
+            if let Some(cap) = Regex::new(r#"(?:from|in|selector)\s*[\"']([^\"']+)[\"']"#).unwrap().captures(&input_lower) {
+                command.element_selector = Some(cap[1].to_string());
+            } else if input_lower.contains("dropdown") {
+                command.element_selector = Some("select".to_string());
+            }
+            
+            // Extract selection value
+            if let Some(cap) = Regex::new(r#"(?:select|choose|option)\s*[\"']([^\"']+)[\"']"#).unwrap().captures(&input_lower) {
+                command.input_text = Some(cap[1].to_string());
+            }
+        } else if (input_lower.contains("wait") && input_lower.contains("condition")) || 
+                  (input_lower.contains("wait") && (input_lower.contains("until") || input_lower.contains("page") || input_lower.contains("load"))) {
+            // wait_for_condition tool
+            command.action = "wait_for_condition".to_string();
+            command.confidence = 0.85;
+            
+            // Determine condition type
+            if input_lower.contains("load") || input_lower.contains("ready") {
+                command.input_text = Some("page_ready".to_string());
+            } else if input_lower.contains("url") {
+                command.input_text = Some("url_change".to_string());
+            } else if input_lower.contains("text") || input_lower.contains("content") {
+                command.input_text = Some("text_contains".to_string());
+            } else {
+                command.input_text = Some("network_idle".to_string());
+            }
+            
+            // Extract timeout
+            if let Some(cap) = Regex::new(r"(\d+)\s*(?:second|sec)s?").unwrap().captures(&input_lower) {
+                command.timeout = cap[1].parse::<u64>().ok().map(|s| s * 1000);
+            }
+        } else if (input_lower.contains("type") && input_lower.contains("text")) || input_lower.contains("enter text") {
+            // Enhanced type_text tool (different from basic input)
+            command.action = "type_text".to_string();
+            command.confidence = 0.9;
+            
+            // Extract text to type
+            if let Some(cap) = Regex::new(r#"(?:type|enter)\s*[\"']([^\"']+)[\"']"#).unwrap().captures(&input_lower) {
+                command.input_text = Some(cap[1].to_string());
+            }
+            
+            // Extract element selector
+            if let Some(cap) = Regex::new(r#"(?:into|in|selector)\s*[\"']([^\"']+)[\"']"#).unwrap().captures(&input_lower) {
+                command.element_selector = Some(cap[1].to_string());
+            } else if input_lower.contains("input") {
+                command.element_selector = Some("input".to_string());
+            } else if input_lower.contains("textarea") {
+                command.element_selector = Some("textarea".to_string());
+            }
         } else if input_lower.contains("extract") || input_lower.contains("scrape") || input_lower.contains("data") {
             command.action = "extract".to_string();
             command.confidence = 0.85;

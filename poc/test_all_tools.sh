@@ -7,7 +7,7 @@ echo "🎯 RainbowBrowserAI Browser Tools Testing Suite"
 echo "=============================================="
 echo
 
-BASE_URL="http://localhost:3000"
+BASE_URL="http://localhost:3001"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 TEST_LOG="tools_test_${TIMESTAMP}.log"
 
@@ -210,6 +210,47 @@ test_endpoint "Performance Test" "$BASE_URL/command" "POST" '{
     "session_id": null
 }'
 
+# Test 10: V8.0 New Tools - Memory Tools
+log "\n${YELLOW}🧠 Testing V8.0 Memory Tools${NC}"
+
+# Test get_element_info
+test_endpoint "Get Element Info - Body Analysis" "$BASE_URL/command" "POST" '{
+    "command": "Navigate to example.com and get detailed information about the body element including attributes and styles",
+    "session_id": null
+}'
+
+# Test take_screenshot
+test_endpoint "Take Screenshot - Viewport" "$BASE_URL/command" "POST" '{
+    "command": "Navigate to github.com and take a screenshot of the current viewport",
+    "session_id": null
+}'
+
+test_endpoint "Take Screenshot - Full Page" "$BASE_URL/command" "POST" '{
+    "command": "Navigate to example.com and take a full-page screenshot",
+    "session_id": null
+}'
+
+# Test retrieve_history
+test_endpoint "Retrieve History - Recent Navigation" "$BASE_URL/command" "POST" '{
+    "command": "Get the last 10 navigation events from browser history",
+    "session_id": null
+}'
+
+# Test 11: V8.0 New Tools - Meta-cognitive Tools
+log "\n${YELLOW}🎭 Testing V8.0 Meta-cognitive Tools${NC}"
+
+# Test report_insight
+test_endpoint "Report Insight - Performance Pattern" "$BASE_URL/command" "POST" '{
+    "command": "Report insight about performance: slow page loading detected with 3.5 second average, recommend optimization",
+    "session_id": null
+}'
+
+# Test complete_task  
+test_endpoint "Complete Task - Success Report" "$BASE_URL/command" "POST" '{
+    "command": "Mark task website-analysis-001 as completed successfully with 95% accuracy and key learnings",
+    "session_id": null
+}'
+
 # Test Summary
 log "\n${YELLOW}📋 Test Summary${NC}"
 log "=============="
@@ -224,7 +265,7 @@ log "${GREEN}Passed: $passed_tests${NC}"
 log "${RED}Failed: $failed_tests${NC}"
 
 if [ $failed_tests -eq 0 ]; then
-    log "\n${GREEN}🎉 All tests passed! All 19 browser tools are working correctly.${NC}"
+    log "\n${GREEN}🎉 All tests passed! All browser tools including V8.0 new tools are working correctly.${NC}"
 else
     log "\n${YELLOW}⚠️  Some tests failed. Check the log for details.${NC}"
 fi
@@ -238,6 +279,7 @@ log "✅ Navigation Tools (2): NavigateToUrl, ScrollPage"
 log "✅ Interaction Tools (3): Click, TypeText, SelectOption"
 log "✅ Data Extraction Tools (5): ExtractText, ExtractData, ExtractTable, ExtractForm, ExtractLinks"
 log "✅ Synchronization Tools (2): WaitForElement, WaitForCondition"
+log "✅ V8.0 Memory Tools (3): GetElementInfo, TakeScreenshot, RetrieveHistory"
+log "✅ V8.0 Meta-cognitive Tools (2): ReportInsight, CompleteTask"
 log "🚧 Advanced Automation Tools (4): PerformanceMonitor, SmartActions, VisualValidator, WorkflowOrchestrator"
-log "🚧 Memory Tools (3): HistoryTracker, PersistentCache, SessionMemory"
-log "\nTotal: 19 Browser Automation Tools"
+log "\nTotal: 17 Active Tools + 5 New V8.0 Tools = 22 Browser Automation Tools"

@@ -44,7 +44,7 @@ pub mod simple_memory;
 // pub mod multi_model_orchestration;
 // pub mod self_healing;
 // pub mod advanced_analytics;
-// Tools module - temporarily disabled due to compilation issues - will test separately
+// Tools module - temporarily disabled due to existing compilation issues
 // pub mod tools;
 
 // Core exports required for start.sh
