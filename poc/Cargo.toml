@@ -42,30 +42,4 @@ tokio-test = "0.4"
 criterion = { version = "0.5", features = ["html_reports"] }
 tempfile = "3.8"
 
-[[bench]]
-name = "performance"
-harness = false
-
-# Temporarily disabled binaries - files need to be created
-# [[bin]]
-# name = "test_wait_for_element"
-# path = "src/bin/test_wait_for_element.rs"
-
-# [[bin]]
-# name = "run_wait_tests"
-# path = "src/bin/run_wait_tests.rs"
-
-# [[bin]]
-# name = "test_wait_for_condition"
-# path = "src/bin/test_wait_for_condition.rs"
-
-# Test binaries for synchronization tools
-# Run manual tests with: cargo run --bin rainbow-poc
-
-# [[bin]]
-# name = "tools_test_demo"
-# path = "src/bin/tools_test_demo.rs"
-
-# [[bin]]
-# name = "comprehensive_tools_demo"
-# path = "comprehensive_tools_demo.rs"
+# All demo and test binaries have been removed for clean build

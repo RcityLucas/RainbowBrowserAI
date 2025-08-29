@@ -1,7 +1,7 @@
 use anyhow::{Result, Context};
-use thirtyfour::{WebDriver, ChromeCapabilities, WebElement, By, session::scriptret::ScriptRet};
+use thirtyfour::{WebDriver, ChromeCapabilities, WebElement, By, session::scriptret::ScriptRet, Key};
 use tracing::{info, error, warn};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::time::timeout;
 use serde::{Serialize, Deserialize, de::DeserializeOwned};
 use async_trait::async_trait;
@@ -297,6 +297,97 @@ impl SimpleBrowser {
         Ok(())
     }
 
+    
+    
+    /// Wait for an element to appear
+    pub async fn wait_for_element(&self, selector: &str, timeout: Duration) -> Result<()> {
+        info!("Waiting for element: {} (timeout: {:?})", selector, timeout);
+        
+        let start = Instant::now();
+        while start.elapsed() < timeout {
+            if let Ok(_) = self.driver.find(By::Css(selector)).await {
+                info!("Element found: {}", selector);
+                return Ok(());
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+        
+        Err(anyhow::anyhow!("Timeout waiting for element: {}", selector))
+    }
+    
+    /// Extract all text from the page
+    pub async fn extract_text(&self) -> Result<String> {
+        info!("Extracting text from page");
+        
+        let text: String = self.driver.execute(
+            "return document.body.innerText;",
+            vec![]
+        ).await
+            .context("Failed to extract text")?
+            .convert()
+            .context("Failed to convert text")?;
+        
+        info!("Extracted {} characters of text", text.len());
+        Ok(text)
+    }
+    
+    /// Extract all links from the page
+    pub async fn extract_links(&self) -> Result<Vec<String>> {
+        info!("Extracting links from page");
+        
+        let links: Vec<String> = self.driver.execute(
+            "return Array.from(document.querySelectorAll('a')).map(a => a.href);",
+            vec![]
+        ).await
+            .context("Failed to extract links")?
+            .convert()
+            .context("Failed to convert links")?;
+        
+        info!("Extracted {} links", links.len());
+        Ok(links)
+    }
+    
+    /// Press a key
+    pub async fn press_key(&self, key: &str) -> Result<()> {
+        info!("Pressing key: {}", key);
+        
+        let key_to_send = match key.to_lowercase().as_str() {
+            "enter" => format!("{}", '\u{E007}'), // Unicode for Enter key
+            "tab" => format!("{}", '\u{E004}'),   // Unicode for Tab key
+            "escape" | "esc" => format!("{}", '\u{E00C}'), // Unicode for Escape key
+            "space" => " ".to_string(),
+            "backspace" => format!("{}", '\u{E003}'), // Unicode for Backspace
+            "delete" => format!("{}", '\u{E017}'),    // Unicode for Delete
+            "arrowup" | "up" => format!("{}", '\u{E013}'),    // Unicode for Arrow Up
+            "arrowdown" | "down" => format!("{}", '\u{E015}'), // Unicode for Arrow Down
+            "arrowleft" | "left" => format!("{}", '\u{E012}'), // Unicode for Arrow Left
+            "arrowright" | "right" => format!("{}", '\u{E014}'), // Unicode for Arrow Right
+            _ => key.to_string(),
+        };
+        
+        // Send key to the active element
+        self.driver.active_element().await?
+            .send_keys(key_to_send).await
+            .context(format!("Failed to press key: {}", key))?;
+        
+        info!("Successfully pressed key: {}", key);
+        Ok(())
+    }
+    
+    /// Clear an input field
+    pub async fn clear_input(&self, selector: &str) -> Result<()> {
+        info!("Clearing input field: {}", selector);
+        
+        let element = self.driver.find(By::Css(selector)).await
+            .context(format!("Failed to find element: {}", selector))?;
+        
+        element.clear().await
+            .context(format!("Failed to clear element: {}", selector))?;
+        
+        info!("Successfully cleared: {}", selector);
+        Ok(())
+    }
+    
     /// Set viewport size
     async fn set_viewport_size(&self, width: u32, height: u32) -> Result<()> {
         self.driver.set_window_rect(0, 0, width, height).await
@@ -382,15 +473,6 @@ impl SimpleBrowser {
 
     // === Workflow-specific methods ===
 
-    /// Click an element by selector
-    pub async fn click(&self, selector: &str) -> Result<()> {
-        let element = self.driver.find(thirtyfour::By::Css(selector)).await
-            .context(format!("Failed to find element: {}", selector))?;
-        element.click().await
-            .context(format!("Failed to click element: {}", selector))?;
-        Ok(())
-    }
-
     /// Fill a form field with text
     pub async fn fill_field(&self, selector: &str, value: &str) -> Result<()> {
         let element = self.driver.find(thirtyfour::By::Css(selector)).await
@@ -402,13 +484,6 @@ impl SimpleBrowser {
         Ok(())
     }
 
-    /// Get text content of an element
-    pub async fn get_text(&self, selector: &str) -> Result<String> {
-        let element = self.driver.find(thirtyfour::By::Css(selector)).await
-            .context(format!("Failed to find element: {}", selector))?;
-        element.text().await
-            .context(format!("Failed to get text from: {}", selector))
-    }
 
     /// Get attribute value of an element
     pub async fn get_attribute(&self, selector: &str, attribute: &str) -> Result<String> {
@@ -427,17 +502,6 @@ impl SimpleBrowser {
         }
     }
 
-    /// Wait for an element to appear
-    pub async fn wait_for_element(&self, selector: &str, timeout: Duration) -> Result<()> {
-        let start = std::time::Instant::now();
-        while start.elapsed() < timeout {
-            if self.element_exists(selector).await? {
-                return Ok(());
-            }
-            tokio::time::sleep(Duration::from_millis(500)).await;
-        }
-        Err(anyhow::anyhow!("Timeout waiting for element: {}", selector))
-    }
 
     /// Wait for text to appear on the page
     pub async fn wait_for_text(&self, text: &str, timeout: Duration) -> Result<()> {
@@ -606,6 +670,116 @@ impl SimpleBrowser {
         
         // Wait for scroll to complete
         tokio::time::sleep(Duration::from_millis(200)).await;
+        Ok(())
+    }
+
+    /// Click an element by CSS selector
+    pub async fn click_element(&self, selector: &str) -> Result<()> {
+        info!("Clicking element: {}", selector);
+        
+        // Wait for element to be present and clickable
+        let element = timeout(
+            Duration::from_secs(10),
+            self.driver.find(By::Css(selector))
+        ).await
+        .context("Timeout waiting for element")?
+        .context(format!("Element not found: {}", selector))?;
+        
+        // Scroll to element to ensure it's visible
+        self.scroll_to_element(&element).await?;
+        
+        // Wait a moment for scroll to complete
+        tokio::time::sleep(Duration::from_millis(500)).await;
+        
+        // Click the element
+        element.click().await
+            .context(format!("Failed to click element: {}", selector))?;
+        
+        info!("Successfully clicked element: {}", selector);
+        Ok(())
+    }
+
+    /// Type text into an input element
+    pub async fn type_text(&self, selector: &str, text: &str) -> Result<()> {
+        info!("Typing '{}' into element: {}", text, selector);
+        
+        // Find the input element
+        let element = timeout(
+            Duration::from_secs(10),
+            self.driver.find(By::Css(selector))
+        ).await
+        .context("Timeout waiting for element")?
+        .context(format!("Element not found: {}", selector))?;
+        
+        // Scroll to element
+        self.scroll_to_element(&element).await?;
+        
+        // Clear existing text first
+        element.clear().await
+            .context(format!("Failed to clear element: {}", selector))?;
+        
+        // Type the text
+        element.send_keys(text).await
+            .context(format!("Failed to type text into element: {}", selector))?;
+        
+        info!("Successfully typed text into element: {}", selector);
+        Ok(())
+    }
+
+    /// Select an option from a dropdown by value
+    pub async fn select_option(&self, selector: &str, value: &str) -> Result<()> {
+        info!("Selecting option '{}' from dropdown: {}", value, selector);
+        
+        // Find the select element
+        let select_element = timeout(
+            Duration::from_secs(10),
+            self.driver.find(By::Css(selector))
+        ).await
+        .context("Timeout waiting for select element")?
+        .context(format!("Select element not found: {}", selector))?;
+        
+        // Scroll to element
+        self.scroll_to_element(&select_element).await?;
+        
+        // Find and click the option
+        let option_selector = format!("{} option[value='{}']", selector, value);
+        let option_element = select_element.find(By::Css(&option_selector)).await
+            .context(format!("Option not found: {}", value))?;
+        
+        option_element.click().await
+            .context(format!("Failed to select option: {}", value))?;
+        
+        info!("Successfully selected option: {}", value);
+        Ok(())
+    }
+
+    /// Get text content from an element
+    pub async fn get_text(&self, selector: &str) -> Result<String> {
+        info!("Getting text from element: {}", selector);
+        
+        let element = timeout(
+            Duration::from_secs(10),
+            self.driver.find(By::Css(selector))
+        ).await
+        .context("Timeout waiting for element")?
+        .context(format!("Element not found: {}", selector))?;
+        
+        let text = element.text().await
+            .context(format!("Failed to get text from element: {}", selector))?;
+        
+        info!("Got text '{}' from element: {}", text, selector);
+        Ok(text)
+    }
+
+    /// Scroll to make an element visible
+    async fn scroll_to_element(&self, element: &WebElement) -> Result<()> {
+        let script = "arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});";
+        let element_json = element.to_json()?;
+        self.driver.execute(script, vec![element_json]).await
+            .context("Failed to scroll to element")?;
+        
+        // Wait for scroll animation to complete
+        tokio::time::sleep(Duration::from_millis(500)).await;
         Ok(())
     }
 }

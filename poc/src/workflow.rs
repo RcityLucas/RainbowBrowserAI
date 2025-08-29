@@ -381,7 +381,7 @@ impl WorkflowEngine {
             ActionType::Click { selector, wait_after } => {
                 info!("🖱️ Clicking: {}", selector);
                 let expanded_selector = self.expand_template(selector)?;
-                browser.click(&expanded_selector).await?;
+                browser.click_element(&expanded_selector).await?;
                 
                 if *wait_after > 0 {
                     sleep(Duration::from_secs(*wait_after)).await;

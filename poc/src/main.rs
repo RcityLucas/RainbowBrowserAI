@@ -192,33 +192,55 @@ async fn navigate_endpoint(
 async fn test_browser() -> anyhow::Result<()> {
     info!("Testing browser connectivity...");
     
-    let browser = SimpleBrowser::new().await?;
-    browser.navigate_to("https://example.com").await?;
+    // Use API client for testing
+    let api_url = std::env::var("RAINBOW_API_URL")
+        .unwrap_or_else(|_| "http://localhost:3001".to_string());
     
-    let title = browser.get_title().await?;
-    info!("Page title: {}", title);
+    let api_client = rainbow_poc::api_client::ApiClient::new(api_url.clone());
     
-    info!("✅ Browser test successful!");
+    // First check if server is healthy
+    if !api_client.health_check().await? {
+        anyhow::bail!("Server is not healthy at {}", api_url);
+    }
+    
+    // Test a simple navigation command
+    let response = api_client.execute_command("Navigate to https://example.com").await?;
+    
+    if response.success {
+        info!("✅ Browser test successful!");
+        println!("Server responded successfully: {}", response.explanation);
+    } else {
+        anyhow::bail!("Browser test failed: {}", response.explanation);
+    }
+    
     Ok(())
 }
 
 async fn execute_command(command: &str, config: Config) -> anyhow::Result<()> {
     info!("Executing command: {}", command);
     
-    let browser = Arc::new(Mutex::new(SimpleBrowser::new().await?));
-    let llm_service = Arc::new(LLMService::new(config.llm.api_key.clone().unwrap_or_default()));
-    let context = Arc::new(Mutex::new(ConversationContext::new()));
+    // Try to use API client first, which calls http://localhost:3001/api/command
+    // This avoids the need to connect directly to ChromeDriver
+    let api_url = std::env::var("RAINBOW_API_URL")
+        .unwrap_or_else(|_| "http://localhost:3001".to_string());
     
-    let state = AppState {
-        browser,
-        llm_service,
-        context,
-    };
-    
-    let result = execute_with_state(command, state).await?;
-    println!("{}", result);
-    
-    Ok(())
+    // Use the API client to execute the command
+    match rainbow_poc::api_client::execute_via_api_or_direct(command, Some(api_url)).await {
+        Ok(result) => {
+            println!("{}", result);
+            Ok(())
+        }
+        Err(e) => {
+            // If API fails, show helpful error message
+            eprintln!("Error: {}", e);
+            eprintln!("\nHint: Make sure the server is running with:");
+            eprintln!("  cargo run -- serve --port 3001");
+            eprintln!("\nOr if you want to use direct browser connection:");
+            eprintln!("  1. Start ChromeDriver: chromedriver --port=9520");
+            eprintln!("  2. Set environment: export RAINBOW_USE_DIRECT=true");
+            Err(e)
+        }
+    }
 }
 
 async fn execute_with_state(command: &str, state: AppState) -> anyhow::Result<String> {
@@ -283,14 +305,29 @@ async fn execute_with_state(command: &str, state: AppState) -> anyhow::Result<St
 async fn navigate_to_url(url: &str, screenshot: bool) -> anyhow::Result<()> {
     info!("Navigating to {}", url);
     
-    let browser = SimpleBrowser::new().await?;
-    browser.navigate_to(url).await?;
+    // Use API client for navigation
+    let api_url = std::env::var("RAINBOW_API_URL")
+        .unwrap_or_else(|_| "http://localhost:3001".to_string());
     
-    if screenshot {
-        browser.take_screenshot("screenshot.png").await?;
-        info!("Screenshot saved to screenshot.png");
+    // Create a command string for navigation
+    let command = if screenshot {
+        format!("Navigate to {} and take a screenshot", url)
+    } else {
+        format!("Navigate to {}", url)
+    };
+    
+    // Use the API client to execute the command
+    match rainbow_poc::api_client::execute_via_api_or_direct(&command, Some(api_url)).await {
+        Ok(result) => {
+            println!("{}", result);
+            info!("✅ Navigation successful!");
+            Ok(())
+        }
+        Err(e) => {
+            eprintln!("Error: {}", e);
+            eprintln!("\nHint: Make sure the server is running with:");
+            eprintln!("  cargo run -- serve --port 3001");
+            Err(e)
+        }
     }
-    
-    info!("✅ Navigation successful!");
-    Ok(())
 }

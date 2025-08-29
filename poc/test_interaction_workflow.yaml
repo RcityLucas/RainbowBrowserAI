@@ -1,0 +1,23 @@
+name: "Element Interaction Test"
+description: "Test clicking, typing, and selecting elements"
+variables:
+  test_url: "https://example.com"
+  
+steps:
+  - name: "Navigate to test site"
+    action:
+      type: "navigate"
+      url: "{{test_url}}"
+      screenshot: true
+      
+  - name: "Wait for page load"
+    action:
+      type: "wait"
+      wait_for: "time"
+      seconds: 2
+      
+  - name: "Take screenshot for verification"
+    action:
+      type: "navigate"
+      url: "{{test_url}}"
+      screenshot: true

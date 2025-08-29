@@ -7,7 +7,7 @@ pub mod session_memory;
 pub mod persistent_cache;
 pub mod history_tracker;
 pub mod get_element_info;
-pub mod take_screenshot;
+// pub mod take_screenshot; // Disabled due to missing base64 dependency
 pub mod retrieve_history;
 
 use async_trait::async_trait;
@@ -97,6 +97,6 @@ pub use self::{
     persistent_cache::PersistentCache,
     history_tracker::HistoryTracker,
     get_element_info::{GetElementInfo, GetElementInfoParams, ElementInfo},
-    take_screenshot::{TakeScreenshot, TakeScreenshotParams, Screenshot},
+    // take_screenshot::{TakeScreenshot, TakeScreenshotParams, Screenshot}, // Disabled due to missing base64 dependency
     retrieve_history::{RetrieveHistory, RetrieveHistoryParams, HistoryResult},
 };

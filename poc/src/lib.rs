@@ -3,6 +3,7 @@ pub mod browser;
 pub mod config;
 pub mod llm_service;
 pub mod api;
+pub mod api_client;
 pub mod mock_llm_provider;
 
 // Supporting modules used by core
@@ -26,6 +27,32 @@ pub mod error_recovery;
 pub mod llm_integration;
 pub mod contextual_awareness;
 pub mod simple_memory;
+
+// New enhanced modules for instruction parsing and extraction
+pub mod instruction_parser;
+pub mod semantic_analyzer;
+pub mod action_mapper;
+// pub mod enhanced_executor;  // Temporarily disabled due to compilation issues
+// pub mod api_v2;  // Depends on enhanced_executor
+
+// Enhanced perception system - MVP and complete implementation
+pub mod perception_mvp;
+pub mod final_integration;
+
+// Continuous improvement pipeline for automated learning and optimization
+pub mod continuous_improvement_pipeline;
+
+// A/B testing framework for systematic improvement validation
+pub mod ab_testing_framework;
+
+// Tool orchestration system - depends on tools module
+// pub mod tool_orchestrator;
+
+// V8 Perception system
+pub mod v8_perception;
+
+// Tools module - temporarily disabled due to compilation issues
+// pub mod tools;
 
 // Commented out non-essential advanced modules
 // These can be re-enabled when needed for advanced features
@@ -70,6 +97,23 @@ pub use error_recovery::{ErrorRecoveryManager, ErrorRecoveryConfig, ErrorCategor
 pub use llm_integration::{LLMIntegrationManager, LLMConfig, LLMProvider, ModelSelectionStrategy, LLMMetrics, LLMRequest, LLMResponse, IntentUnderstanding, Entity, CreativeSolution as LLMCreativeSolution, ProviderHealth, create_llm_integration_manager, create_custom_llm_integration_manager};
 pub use contextual_awareness::{ContextualAwareness, ContextSnapshot, ContextualRecommendations, TemporalContext, EnvironmentalContext, UserContext, SystemContext, create_contextual_awareness, create_contextual_awareness_with_memory};
 pub use simple_memory::{SimpleMemory, SimpleMemoryConfig, InteractionRecord, LearnedPattern, SimpleMemoryStats, create_simple_memory};
+
+// New enhanced instruction parsing and extraction exports
+pub use instruction_parser::{InstructionParser, UserInstruction, ContextHints, Feedback, PageType};
+pub use semantic_analyzer::{SemanticAnalyzer, SemanticPageModel, PageRegion, SemanticElement};
+pub use action_mapper::{ActionMapper, ExecutableAction, ActionExecutor, ActionResult};
+// pub use enhanced_executor::{EnhancedExecutor, EnhancedCommandProcessor, demo_enhanced_execution};
+// pub use api_v2::{ApiV2State, create_v2_routes};
+
+// Enhanced perception system exports
+pub use perception_mvp::{PerceptionEngineMVP, PerceivedElement, PageType as PerceptionPageType};
+pub use final_integration::{UnifiedBrowserSystem, UnifiedCommand, UnifiedCommandResult, demonstrate_unified_system};
+
+// Continuous improvement pipeline exports
+pub use continuous_improvement_pipeline::{
+    ContinuousImprovementPipeline, PipelineConfig, MetricsCollector as ImprovementMetricsCollector,
+    PerformanceMetric, ImprovementReport, UserFeedback, ImprovementStatus
+};
 
 // Commented out non-essential exports
 // pub use organic_perception_simple::{SimpleOrganicPerception, IntelligenceMode, IntelligenceStats as SimpleIntelligenceStats};

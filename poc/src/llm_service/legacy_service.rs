@@ -717,6 +717,22 @@ JSON:"#,
             if let Some(cap) = url_regex.captures(&input_lower) {
                 command.url = Some(cap[0].to_string());
             }
+        } else if (input_lower.contains("search for") || input_lower.contains("search ") || input_lower.contains("find ")) && !input_lower.contains("navigate") {
+            // Handle search commands explicitly before navigation
+            command.action = "search".to_string();
+            command.confidence = 0.9;
+            
+            // Extract the search query
+            if let Some(query_start) = input_lower.find("search for ") {
+                let query = user_input[query_start + 11..].trim().to_string();
+                command.input_text = Some(query);
+            } else if let Some(query_start) = input_lower.find("search ") {
+                let query = user_input[query_start + 7..].trim().to_string();
+                command.input_text = Some(query);
+            } else if let Some(query_start) = input_lower.find("find ") {
+                let query = user_input[query_start + 5..].trim().to_string();
+                command.input_text = Some(query);
+            }
         } else if input_lower.contains("navigate") || input_lower.contains("go to") || input_lower.contains("open") || input_lower.contains("visit") || input_lower.contains("browse") {
             command.action = "navigate".to_string();
             command.confidence = 0.95;
@@ -859,6 +875,17 @@ JSON:"#,
                         TaskType::Search => {
                             command.action = "search".to_string();
                             command.confidence = 0.8;
+                            // Extract the search query from the input
+                            if let Some(query_start) = input_lower.find("search for ") {
+                                let query = user_input[query_start + 11..].trim().to_string();
+                                command.input_text = Some(query);
+                            } else if let Some(query_start) = input_lower.find("search ") {
+                                let query = user_input[query_start + 7..].trim().to_string();
+                                command.input_text = Some(query);
+                            } else if let Some(query_start) = input_lower.find("find ") {
+                                let query = user_input[query_start + 5..].trim().to_string();
+                                command.input_text = Some(query);
+                            }
                         },
                         TaskType::Analysis => {
                             command.action = "analyze".to_string();
