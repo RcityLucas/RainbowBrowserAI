@@ -21,7 +21,7 @@ use crate::command_registry::{
     ExecutionRecord as CommandExecutionRecord, ExecutionContext, FallbackStrategy, Precondition,
     SuccessCriterion
 };
-use crate::contextual_awareness::{ContextualAwareness, ContextSnapshot};
+use crate::intelligence::core::contextual_awareness::{ContextualAwareness, ContextSnapshot};
 use crate::simple_memory::{SimpleMemory, InteractionRecord};
 use crate::creative_engine::CreativeEngine;
 
@@ -777,29 +777,29 @@ impl IntelligentExecutor {
             let context = ContextSnapshot {
                 id: Uuid::new_v4(),
                 timestamp: Utc::now(),
-                temporal_context: crate::contextual_awareness::TemporalContext {
-                    time_of_day: crate::contextual_awareness::TimeOfDay::Afternoon,
+                temporal_context: crate::intelligence::core::contextual_awareness::TemporalContext {
+                    time_of_day: crate::intelligence::core::contextual_awareness::TimeOfDay::Afternoon,
                     day_of_week: chrono::Weekday::Mon,
                     is_business_hours: true,
                     is_weekend: false,
-                    season: crate::contextual_awareness::Season::Spring,
+                    season: crate::intelligence::core::contextual_awareness::Season::Spring,
                     urgency_indicators: Vec::new(),
                 },
-                environmental_context: crate::contextual_awareness::EnvironmentalContext {
-                    device_type: crate::contextual_awareness::DeviceType::Desktop,
+                environmental_context: crate::intelligence::core::contextual_awareness::EnvironmentalContext {
+                    device_type: crate::intelligence::core::contextual_awareness::DeviceType::Desktop,
                     screen_resolution: (1920, 1080),
-                    network_quality: crate::contextual_awareness::NetworkQuality::Good,
+                    network_quality: crate::intelligence::core::contextual_awareness::NetworkQuality::Good,
                     location_hints: Vec::new(),
                     language_preference: "en".to_string(),
                 },
-                user_context: crate::contextual_awareness::UserContext {
-                    interaction_style: crate::contextual_awareness::InteractionStyle::CasualAndFlexible,
+                user_context: crate::intelligence::core::contextual_awareness::UserContext {
+                    interaction_style: crate::intelligence::core::contextual_awareness::InteractionStyle::CasualAndFlexible,
                     preferred_task_types: Vec::new(),
-                    expertise_level: crate::contextual_awareness::ExpertiseLevel::Intermediate,
+                    expertise_level: crate::intelligence::core::contextual_awareness::ExpertiseLevel::Intermediate,
                     recent_patterns: Vec::new(),
                     success_patterns: Vec::new(),
                 },
-                system_context: crate::contextual_awareness::SystemContext {
+                system_context: crate::intelligence::core::contextual_awareness::SystemContext {
                     available_memory: 1000,
                     cpu_usage: 0.5,
                     response_time_avg: 100.0,
@@ -847,29 +847,29 @@ impl IntelligentExecutor {
             let context = ContextSnapshot {
                 id: Uuid::new_v4(),
                 timestamp: Utc::now(),
-                temporal_context: crate::contextual_awareness::TemporalContext {
-                    time_of_day: crate::contextual_awareness::TimeOfDay::Afternoon,
+                temporal_context: crate::intelligence::core::contextual_awareness::TemporalContext {
+                    time_of_day: crate::intelligence::core::contextual_awareness::TimeOfDay::Afternoon,
                     day_of_week: chrono::Weekday::Mon,
                     is_business_hours: true,
                     is_weekend: false,
-                    season: crate::contextual_awareness::Season::Spring,
+                    season: crate::intelligence::core::contextual_awareness::Season::Spring,
                     urgency_indicators: Vec::new(),
                 },
-                environmental_context: crate::contextual_awareness::EnvironmentalContext {
-                    device_type: crate::contextual_awareness::DeviceType::Desktop,
+                environmental_context: crate::intelligence::core::contextual_awareness::EnvironmentalContext {
+                    device_type: crate::intelligence::core::contextual_awareness::DeviceType::Desktop,
                     screen_resolution: (1920, 1080),
-                    network_quality: crate::contextual_awareness::NetworkQuality::Good,
+                    network_quality: crate::intelligence::core::contextual_awareness::NetworkQuality::Good,
                     location_hints: Vec::new(),
                     language_preference: "en".to_string(),
                 },
-                user_context: crate::contextual_awareness::UserContext {
-                    interaction_style: crate::contextual_awareness::InteractionStyle::CasualAndFlexible,
+                user_context: crate::intelligence::core::contextual_awareness::UserContext {
+                    interaction_style: crate::intelligence::core::contextual_awareness::InteractionStyle::CasualAndFlexible,
                     preferred_task_types: Vec::new(),
-                    expertise_level: crate::contextual_awareness::ExpertiseLevel::Intermediate,
+                    expertise_level: crate::intelligence::core::contextual_awareness::ExpertiseLevel::Intermediate,
                     recent_patterns: Vec::new(),
                     success_patterns: Vec::new(),
                 },
-                system_context: crate::contextual_awareness::SystemContext {
+                system_context: crate::intelligence::core::contextual_awareness::SystemContext {
                     available_memory: 1000,
                     cpu_usage: 0.5,
                     response_time_avg: 100.0,
@@ -940,7 +940,7 @@ impl IntelligentExecutor {
                 id: result.id,
                 timestamp: Utc::now(),
                 user_input: result.command_name.clone(),
-                classified_task: crate::llm_service::llm_service_enhanced::TaskType::Navigation,
+                classified_task: crate::intelligence::core::llm_service::llm_service_enhanced::TaskType::Navigation,
                 confidence: result.confidence,
                 execution_success: result.success,
                 execution_time_ms: result.duration_ms,

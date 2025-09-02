@@ -14,6 +14,39 @@ pub mod context_aware;
 pub mod smart_forms;
 pub mod dynamic_handler;
 pub mod testing_framework;
+pub mod browser_connection;
+pub mod lightning_real;
+pub mod quick_real;
+pub mod standard_perception;
+pub mod deep_perception;
+pub mod cache_system;
+pub mod natural_language;
+pub mod perception_orchestrator;
+pub mod enhanced_error_recovery;
+pub mod enhanced_form_handler;
+pub mod advanced_perception_engine;
+
+// Re-export key types for external use
+pub use perception_orchestrator::{
+    PerceptionOrchestrator, UnifiedPerceptionResult, PerceptionLevel, 
+    ExecutionInfo, PerformanceMetrics, Recommendation, RecommendationType,
+    RecommendationPriority, ImplementationEffort
+};
+pub use advanced_perception_engine::{
+    AdvancedPerceptionEngine, AdvancedPerceptionResult, AdvancedPerceptionConfig,
+    PerceptionStrategy, PerceptionStats, ComprehensiveStats
+};
+pub use enhanced_error_recovery::{
+    EnhancedErrorRecovery, RecoveryResult, RecoveryConfig, RecoveryStrategy
+};
+pub use enhanced_form_handler::{
+    EnhancedFormHandler, FormInteractionResult, FormFieldType, FormFieldState
+};
+pub use lightning_real::{LightningData, RealLightningPerception, PageStatus, PageState};
+pub use quick_real::{QuickData, RealQuickPerception};
+pub use standard_perception::{StandardData, RealStandardPerception};
+pub use deep_perception::{DeepData, RealDeepPerception};
+pub use browser_connection::{BrowserConnection, BrowserConfig};
 
 /// Core perception engine that understands web pages
 pub struct PerceptionEngineMVP {
@@ -57,7 +90,7 @@ pub struct PerceivedElement {
     pub attributes: HashMap<String, String>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum ElementType {
     Button,
     Link,
@@ -67,6 +100,10 @@ pub enum ElementType {
     Image,
     Text,
     Container,
+    Form,
+    Navigation,
+    Media,
+    Other,
     Unknown,
 }
 

@@ -15,7 +15,7 @@ use std::sync::{Arc, RwLock};
 use tracing::{info, warn, error};
 use uuid::Uuid;
 
-use crate::llm_service::llm_service_enhanced::TaskType;
+use crate::intelligence::core::llm_service::llm_service_enhanced::TaskType;
 
 /// Simple memory configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]

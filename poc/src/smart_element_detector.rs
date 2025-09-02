@@ -49,21 +49,36 @@ impl SmartElementDetector {
             "input[id*='search']".to_string(),
             // Google
             "input[name='q']".to_string(),
-            "textarea[name='q']".to_string(),
-            // Generic search patterns
-            "input[type='search']".to_string(),
-            "input[placeholder*='Search']".to_string(),
-            "input[placeholder*='search']".to_string(),
             "input[aria-label*='Search']".to_string(),
-            "input[aria-label*='search']".to_string(),
-            "[role='search'] input".to_string(),
-            "form[role='search'] input[type='text']".to_string(),
-            ".search-input".to_string(),
-            ".search-box".to_string(),
-            "#search-input".to_string(),
-            "#searchbox".to_string(),
+            // Generic patterns
+            "input[type='search']".to_string(),
+            "input[placeholder*='search']".to_string(),
+            "input[placeholder*='Search']".to_string(),
             "[data-testid*='search']".to_string(),
-            "[data-test*='search']".to_string(),
+            ".search-input".to_string(),
+            "#search".to_string(),
+            ".search-box".to_string(),
+        ]);
+        
+        // Common button patterns
+        fallback_selectors.insert("button".to_string(), vec![
+            "button".to_string(),
+            "input[type='button']".to_string(),
+            "input[type='submit']".to_string(),
+            "[role='button']".to_string(),
+            ".button".to_string(),
+            ".btn".to_string(),
+        ]);
+        
+        // Login/Sign in patterns
+        fallback_selectors.insert("login".to_string(), vec![
+            "button:contains('Sign in')".to_string(),
+            "button:contains('Login')".to_string(),
+            "a:contains('Sign in')".to_string(),
+            "a:contains('Login')".to_string(),
+            "[data-testid*='login']".to_string(),
+            "#login".to_string(),
+            ".login-button".to_string(),
         ]);
         
         // Common button selectors

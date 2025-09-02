@@ -1,0 +1,184 @@
+version: '3.8'
+
+services:
+  rainbow-poc:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - RUST_VERSION=1.75
+    image: rainbow-browser-ai:latest
+    container_name: rainbow-browser-ai
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+      - "9515:9515"  # ChromeDriver port
+    environment:
+      # Server Configuration
+      - SERVER_PORT=3001
+      - SERVER_HOST=0.0.0.0
+      - RAINBOW_MOCK_MODE=${RAINBOW_MOCK_MODE:-false}
+      
+      # Browser Configuration
+      - CHROMEDRIVER_PORT=9515
+      - BROWSER_HEADLESS=${BROWSER_HEADLESS:-true}
+      - BROWSER_TIMEOUT=30000
+      - MAX_BROWSER_SESSIONS=10
+      
+      # Performance
+      - CACHE_TTL_SECONDS=300
+      - MAX_CACHE_SIZE_MB=100
+      - WORKER_THREADS=4
+      
+      # Logging
+      - RUST_LOG=${RUST_LOG:-info}
+      - LOG_FORMAT=json
+      
+      # Security
+      - ENABLE_CORS=true
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000}
+      - RATE_LIMIT_PER_MINUTE=60
+      
+      # Optional: External services
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379}
+      - DATABASE_URL=${DATABASE_URL:-}
+    volumes:
+      - ./config:/app/config:ro
+      - ./logs:/app/logs
+      - ./screenshots:/app/screenshots
+      - ./static:/app/static:ro
+      - rainbow-data:/app/data
+    networks:
+      - rainbow-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '1'
+          memory: 1G
+
+  # Optional: Redis for caching
+  redis:
+    image: redis:7-alpine
+    container_name: rainbow-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - rainbow-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+
+  # Optional: PostgreSQL for persistence
+  postgres:
+    image: postgres:15-alpine
+    container_name: rainbow-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=rainbow_poc
+      - POSTGRES_USER=${DB_USER:-rainbow}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-changeme}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - rainbow-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rainbow"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+
+  # Optional: Monitoring with Prometheus
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: rainbow-prometheus
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    networks:
+      - rainbow-network
+    depends_on:
+      - rainbow-poc
+
+  # Optional: Grafana for visualization
+  grafana:
+    image: grafana/grafana:latest
+    container_name: rainbow-grafana
+    restart: unless-stopped
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_INSTALL_PLUGINS=redis-datasource
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+    networks:
+      - rainbow-network
+    depends_on:
+      - prometheus
+
+  # Optional: Nginx reverse proxy
+  nginx:
+    image: nginx:alpine
+    container_name: rainbow-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - ./static:/usr/share/nginx/html/static:ro
+    networks:
+      - rainbow-network
+    depends_on:
+      - rainbow-poc
+
+networks:
+  rainbow-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  rainbow-data:
+    driver: local
+  redis-data:
+    driver: local
+  postgres-data:
+    driver: local
+  prometheus-data:
+    driver: local
+  grafana-data:
+    driver: local

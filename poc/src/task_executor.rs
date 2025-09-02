@@ -7,9 +7,9 @@ use tracing::{info, warn, error};
 use std::time::{Duration, Instant};
 use chrono::Utc;
 
-use crate::llm_service::llm_service_enhanced::{TaskPlan, ActionStep, TaskType};
-use crate::workflow::{Workflow, WorkflowStep, ActionType as WorkflowActionType, WorkflowEngine, WorkflowResult};
-use crate::CostTracker;
+use crate::intelligence::core::llm_service::llm_service_enhanced::{TaskPlan, ActionStep, TaskType};
+use crate::utils::workflow::{Workflow, WorkflowStep, ActionType as WorkflowActionType, WorkflowEngine, WorkflowResult};
+use crate::utils::cost_tracker::CostTracker;
 
 /// Task execution coordinator that bridges LLM understanding and workflow execution
 pub struct TaskExecutor {
@@ -157,7 +157,7 @@ impl TaskExecutor {
             variables: std::collections::HashMap::new(),
             steps: workflow_steps,
             parallel: Some(false), // Execute steps sequentially by default
-            on_error: Some(crate::workflow::ErrorStrategy::Continue), // Continue on errors
+            on_error: Some(crate::utils::workflow::ErrorStrategy::Continue), // Continue on errors
             timeout: Some(task_plan.estimated_duration as u64),
         })
     }
@@ -207,8 +207,8 @@ impl TaskExecutor {
             name: action_step.description.clone(),
             action: workflow_action,
             condition: None,
-            on_error: Some(crate::workflow::ErrorStrategy::Continue),
-            retry: Some(crate::workflow::RetryConfig {
+            on_error: Some(crate::utils::workflow::ErrorStrategy::Continue),
+            retry: Some(crate::utils::workflow::RetryConfig {
                 max_attempts: 3,
                 delay_seconds: 2,
                 exponential_backoff: Some(true),

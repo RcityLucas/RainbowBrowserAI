@@ -10,13 +10,13 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use chrono::{DateTime, Utc};
 
-use crate::llm_integration::{
+use crate::intelligence::core::llm_integration::{
     LLMProviderTrait, LLMResponse, LLMContext, IntentUnderstanding, TaskPlan, Entity, 
     CreativeSolution, ProviderHealth, ModelInfo, ModelCapability, PerformanceTier,
     RateLimitStatus, LLMProvider
 };
-use crate::llm_service::llm_service_enhanced::{TaskType, ActionStep};
-use crate::contextual_awareness::ContextSnapshot;
+use crate::intelligence::core::llm_service::llm_service_enhanced::{TaskType, ActionStep};
+use crate::intelligence::core::contextual_awareness::ContextSnapshot;
 
 /// Mock LLM provider for testing and development
 pub struct MockLLMProvider {

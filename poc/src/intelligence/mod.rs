@@ -1,14 +1,13 @@
-// Intelligence Module - Organic AI Perception and Learning System
-//
-// This module implements the organic intelligence described in the design documents,
-// replacing hardcoded rule-based systems with learning, adaptive intelligence.
+// AI and intelligence module
+pub mod core; // Core intelligence components
 
-pub mod perception;
-pub mod patterns;
-pub mod confidence;
-pub mod learning;
+// Re-export main types from core
+pub use core::{
+    ai_decision_engine::*,
+    contextual_awareness::*,
+    llm_integration::*,
+    ml_confidence_scorer::*,
+};
 
-pub use perception::{OrganicPerception, IntentUnderstanding, Context, PerceptionMode, IntelligenceStats};
-pub use patterns::{Pattern, PatternMatcher, PatternType};
-pub use confidence::{ConfidenceCalibrator, ConfidenceScore};
-pub use learning::{LearningEngine, InteractionOutcome};
+// Re-export LLM service
+pub use core::llm_service::{LLMService, TaskType, TaskUnderstanding};

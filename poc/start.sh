@@ -66,6 +66,9 @@ CHROMEDRIVER_CMD=""
 if [ -f /usr/bin/chromedriver ]; then
     CHROMEDRIVER_CMD="/usr/bin/chromedriver"
     echo -e "${GREEN}  ✓ Found ChromeDriver at /usr/bin/chromedriver${NC}"
+elif [ -f ./chromedriver.exe ]; then
+    CHROMEDRIVER_CMD="./chromedriver.exe"
+    echo -e "${GREEN}  ✓ Found ChromeDriver at ./chromedriver.exe${NC}"
 elif [ -f ./chromedriver ]; then
     CHROMEDRIVER_CMD="./chromedriver"
     echo -e "${GREEN}  ✓ Found ChromeDriver at ./chromedriver${NC}"

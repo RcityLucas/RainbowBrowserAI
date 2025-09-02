@@ -4,7 +4,7 @@
 use anyhow::Result;
 use crate::perception_mvp::{PerceptionEngineMVP, PerceivedElement, ElementType};
 use crate::browser::SimpleBrowser;
-use crate::llm_service::ParsedCommand;
+use crate::intelligence::core::llm_service::ParsedCommand;
 use thirtyfour::WebDriver;
 use tracing::{info, debug, warn};
 
@@ -15,14 +15,21 @@ pub struct PerceptionAwareExecutor {
 }
 
 impl PerceptionAwareExecutor {
-    pub fn new(driver: WebDriver) -> Self {
-        let perception = PerceptionEngineMVP::new(driver.clone());
-        let browser = SimpleBrowser::new(driver);
+    pub async fn new() -> Result<Self> {
+        let browser = SimpleBrowser::new().await?;
+        // Get the WebDriver from SimpleBrowser for perception
+        // Note: SimpleBrowser doesn't expose driver, so we need to create a separate one
+        // For now, we'll create a mock perception engine
+        use thirtyfour::{DesiredCapabilities, WebDriver};
         
-        Self {
+        let caps = DesiredCapabilities::chrome();
+        let driver = WebDriver::new("http://localhost:9515", caps).await?;
+        let perception = PerceptionEngineMVP::new(driver);
+        
+        Ok(Self {
             perception,
             browser,
-        }
+        })
     }
 
     /// Execute a parsed command using perception
@@ -50,8 +57,8 @@ impl PerceptionAwareExecutor {
             Ok(element) => {
                 info!("Found element: {:?}", element);
                 
-                // Click the element
-                self.browser.click_element(&element.selector).await?;
+                // Click the element using SimpleBrowser's method
+                SimpleBrowser::click_element(&self.browser, &element.selector).await?;
                 
                 Ok(CommandResult {
                     success: true,
@@ -92,7 +99,7 @@ impl PerceptionAwareExecutor {
         if element.element_type == ElementType::Input || 
            element.element_type == ElementType::TextArea {
             self.browser.clear_element(&element.selector).await?;
-            self.browser.type_text(&element.selector, text).await?;
+            SimpleBrowser::type_text(&self.browser, &element.selector, text).await?;
             
             Ok(CommandResult {
                 success: true,
@@ -118,7 +125,7 @@ impl PerceptionAwareExecutor {
         let element = self.perception.find_element(selector_desc).await?;
         
         if element.element_type == ElementType::Select {
-            self.browser.select_option(&element.selector, option).await?;
+            SimpleBrowser::select_option(&self.browser, &element.selector, option).await?;
             
             Ok(CommandResult {
                 success: true,
@@ -158,15 +165,16 @@ impl PerceptionAwareExecutor {
         match self.perception.find_element("search box").await {
             Ok(search_box) => {
                 // Found search box, use it
-                self.browser.clear_element(&search_box.selector).await?;
-                self.browser.type_text(&search_box.selector, query).await?;
+                SimpleBrowser::clear_element(&self.browser, &search_box.selector).await?;
+                SimpleBrowser::type_text(&self.browser, &search_box.selector, query).await?;
                 
                 // Try to find and click search button
                 if let Ok(search_btn) = self.perception.find_element("search button").await {
-                    self.browser.click_element(&search_btn.selector).await?;
+                    SimpleBrowser::click_element(&self.browser, &search_btn.selector).await?;
                 } else {
                     // Press Enter if no button found
-                    self.browser.press_enter(&search_box.selector).await?;
+                    // Press Enter key to submit search
+                    SimpleBrowser::type_text(&self.browser, &search_box.selector, "\n").await?;
                 }
                 
                 Ok(CommandResult {
