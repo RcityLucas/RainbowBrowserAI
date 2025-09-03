@@ -36,7 +36,7 @@ pub use navigation::*;
 pub use interaction::*;
 pub use synchronization::*;
 pub use data_extraction::*;
-// pub use intelligence::*;     // TODO: Uncomment when Phase 3 tools are implemented
+pub use intelligence::*;     // Re-enabled with perception integration
 // pub use advanced_automation::*;  // Phase 3 - Advanced automation tools - Disabled for compilation
 pub use memory::*;  // V8.0 Memory tools - Re-enabled
 

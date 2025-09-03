@@ -24,7 +24,11 @@ use crate::{
     SimpleBrowser, BrowserPool, LLMService, WorkflowEngine, Workflow,
     MetricsCollector, SecurityMiddleware, Config, CostTracker,
     ParsedCommand, ScreenshotOptions, PluginManager,
+    llm_service::legacy_service::CommandParams,
     // api_v2::{ApiV2State, create_v2_routes, health_check_v2},
+    // Import perception modules - temporarily disabled for core action testing
+    // perception_mvp::{PerceptionEngineMVP, PageType as PerceptionPageType},
+    // perception_simple::{SimplePerception, PageType as SimplePageType, FoundElement},
 };
 
 /// API state shared across handlers
@@ -304,6 +308,25 @@ pub struct PluginMetrics {
     pub discovered_plugins: usize,
 }
 
+// Perception API types
+#[derive(Debug, Deserialize)]
+pub struct PerceptionRequest {
+    pub url: Option<String>,
+    pub action: String, // "classify", "find_element", "extract_data"
+    pub element_description: Option<String>,
+    pub session_id: Option<String>,
+    pub use_simple: Option<bool>, // Use simple perception instead of MVP
+}
+
+#[derive(Debug, Serialize)]
+pub struct PerceptionResponse {
+    pub success: bool,
+    pub page_type: Option<String>,
+    pub elements: Option<Vec<serde_json::Value>>,
+    pub data: Option<serde_json::Value>,
+    pub message: String,
+}
+
 // API Handlers
 
 /// Health check endpoint
@@ -479,7 +502,7 @@ pub async fn natural_language_handler(
                     "operations": cost_tracker.operations.len()
                 })
             },
-            "scroll" | "click" | "back" | "forward" | "refresh" | "input" => {
+            "scroll" | "click" | "back" | "forward" | "refresh" | "input" | "type" | "type_text" | "screenshot" | "take_screenshot" | "extract" | "analyze" => {
                 // In mock mode, execute browser actions using session management
                 info!("Mock mode: Executing {} command", parsed.action);
                 match execute_parsed_command(state.clone(), parsed.clone(), req.session_id.clone()).await {
@@ -524,6 +547,58 @@ pub async fn natural_language_handler(
             confidence: parsed.confidence,
             result: Some(result),
             explanation: format!("Mock mode: Parsed '{}' as {} action (confidence: {:.0}%)", 
+                                req.command, parsed.action, parsed.confidence * 100.0),
+        }));
+    }
+
+    // Simple command mapping for testing without API key
+    let simple_command_result = try_parse_simple_command(&req.command);
+    if let Some(parsed) = simple_command_result {
+        info!("Using simple command mapping for: {}", req.command);
+        let result = match execute_parsed_command(state.clone(), parsed.clone(), req.session_id.clone()).await {
+            Ok(result) => result.0,
+            Err(e) => {
+                error!("Simple command execution failed: {}", e);
+                serde_json::json!({
+                    "success": false,
+                    "action": parsed.action,
+                    "error": format!("Execution failed: {}", e)
+                })
+            }
+        };
+        
+        return Ok(Json(NaturalLanguageResponse {
+            success: result["success"].as_bool().unwrap_or(false),
+            action: parsed.action.clone(),
+            confidence: parsed.confidence,
+            result: Some(result),
+            explanation: format!("Simple mapping: Parsed '{}' as {} action (confidence: {:.0}%)", 
+                                req.command, parsed.action, parsed.confidence * 100.0),
+        }));
+    }
+
+    // Simple command mapping for testing without valid API key
+    let simple_command_result = try_parse_simple_command(&req.command);
+    if let Some(parsed) = simple_command_result {
+        info!("Using simple command mapping for: {}", req.command);
+        let result = match execute_parsed_command(state.clone(), parsed.clone(), req.session_id.clone()).await {
+            Ok(result) => result.0,
+            Err(e) => {
+                error!("Simple command execution failed: {}", e);
+                serde_json::json!({
+                    "success": false,
+                    "action": parsed.action,
+                    "error": format!("Execution failed: {}", e)
+                })
+            }
+        };
+        
+        return Ok(Json(NaturalLanguageResponse {
+            success: result["success"].as_bool().unwrap_or(false),
+            action: parsed.action.clone(),
+            confidence: parsed.confidence,
+            result: Some(result),
+            explanation: format!("Simple mapping: Parsed '{}' as {} action (confidence: {:.0}%)", 
                                 req.command, parsed.action, parsed.confidence * 100.0),
         }));
     }
@@ -798,10 +873,10 @@ async fn execute_parsed_command(
             })))
         },
         
-        "screenshot" => {
+        "screenshot" | "take_screenshot" => {
             let (browser, actual_session_id) = get_or_create_browser_session(&state, session_id).await?;
             
-            let filename = format!("instruction_{}.png", chrono::Utc::now().timestamp());
+            let filename = format!("screenshot_{}.png", chrono::Utc::now().timestamp());
             
             browser.take_screenshot(&filename).await
                 .map_err(|e| ApiError {
@@ -812,11 +887,191 @@ async fn execute_parsed_command(
                 
             Ok(Json(serde_json::json!({
                 "success": true,
-                "action": "screenshot",
+                "action": command.action.clone(),  // Use the actual action name from command
                 "path": format!("screenshots/{}", filename),
                 "session_id": actual_session_id,
                 "instruction_processed": true
             })))
+        },
+        
+        "click" => {
+            let (browser, actual_session_id) = get_or_create_browser_session(&state, session_id).await?;
+            
+            // Use the selector from command parameters
+            let default_selector = "*".to_string();
+            let selector = command.element_selector.as_ref()
+                .unwrap_or(&default_selector);
+            
+            match browser.click_element(selector).await {
+                Ok(_) => {
+                    Ok(Json(serde_json::json!({
+                        "success": true,
+                        "action": "click",
+                        "selector": selector,
+                        "session_id": actual_session_id,
+                        "instruction_processed": true
+                    })))
+                },
+                Err(e) => {
+                    Ok(Json(serde_json::json!({
+                        "success": false,
+                        "action": "click",
+                        "selector": selector,
+                        "error": e.to_string(),
+                        "session_id": actual_session_id,
+                        "instruction_processed": true
+                    })))
+                }
+            }
+        },
+        
+        "input" | "type" | "type_text" => {
+            let (browser, actual_session_id) = get_or_create_browser_session(&state, session_id).await?;
+            
+            let default_selector = "input".to_string();
+            let selector = command.element_selector.as_ref()
+                .unwrap_or(&default_selector);
+            let default_text = "".to_string();
+            let text = command.input_text.as_ref()
+                .unwrap_or(&default_text);
+            
+            match browser.type_text(selector, text).await {
+                Ok(_) => {
+                    Ok(Json(serde_json::json!({
+                        "success": true,
+                        "action": "type",
+                        "selector": selector,
+                        "text": text,
+                        "session_id": actual_session_id,
+                        "instruction_processed": true
+                    })))
+                },
+                Err(e) => {
+                    Ok(Json(serde_json::json!({
+                        "success": false,
+                        "action": "type",
+                        "selector": selector,
+                        "text": text,
+                        "error": e.to_string(),
+                        "session_id": actual_session_id,
+                        "instruction_processed": true
+                    })))
+                }
+            }
+        },
+        
+        "extract" => {
+            let (browser, actual_session_id) = get_or_create_browser_session(&state, session_id).await?;
+            
+            // Extract text from all elements matching selector
+            let default_selector = "*".to_string();
+            let selector = command.element_selector.as_ref()
+                .unwrap_or(&default_selector);
+            
+            match browser.get_text(selector).await {
+                Ok(text) => {
+                    Ok(Json(serde_json::json!({
+                        "success": true,
+                        "action": "extract",
+                        "selector": selector,
+                        "extracted_text": text,
+                        "session_id": actual_session_id,
+                        "instruction_processed": true
+                    })))
+                },
+                Err(e) => {
+                    Ok(Json(serde_json::json!({
+                        "success": false,
+                        "action": "extract",
+                        "selector": selector,
+                        "error": e.to_string(),
+                        "session_id": actual_session_id,
+                        "instruction_processed": true
+                    })))
+                }
+            }
+        },
+        
+        "analyze" => {
+            let (browser, actual_session_id) = get_or_create_browser_session(&state, session_id).await?;
+            
+            // Basic page analysis without perception modules
+            match browser.get_title().await {
+                Ok(title) => {
+                    let url = browser.get_current_url().await.unwrap_or_default();
+                    Ok(Json(serde_json::json!({
+                        "success": true,
+                        "action": "analyze",
+                        "title": title,
+                        "url": url,
+                        "analysis_engine": "Basic",
+                        "session_id": actual_session_id,
+                        "instruction_processed": true
+                    })))
+                },
+                Err(e) => {
+                    Ok(Json(serde_json::json!({
+                        "success": false,
+                        "action": "analyze",
+                        "error": e.to_string(),
+                        "session_id": actual_session_id,
+                        "instruction_processed": true
+                    })))
+                }
+            }
+        },
+        
+        "scroll" => {
+            let (browser, actual_session_id) = get_or_create_browser_session(&state, session_id).await?;
+            
+            // Basic scroll implementation
+            match browser.scroll("down").await {
+                Ok(_) => {
+                    Ok(Json(serde_json::json!({
+                        "success": true,
+                        "action": "scroll",
+                        "scroll_amount": 500,
+                        "session_id": actual_session_id,
+                        "instruction_processed": true
+                    })))
+                },
+                Err(e) => {
+                    Ok(Json(serde_json::json!({
+                        "success": false,
+                        "action": "scroll",
+                        "error": e.to_string(),
+                        "session_id": actual_session_id,
+                        "instruction_processed": true
+                    })))
+                }
+            }
+        },
+        
+        "refresh" => {
+            let (browser, actual_session_id) = get_or_create_browser_session(&state, session_id).await?;
+            
+            // Use the browser's refresh method
+            match browser.refresh().await {
+                Ok(_) => {
+                    let url = browser.get_current_url().await.unwrap_or_default();
+                    Ok(Json(serde_json::json!({
+                        "success": true,
+                        "action": "refresh",
+                        "url": url,
+                        "session_id": actual_session_id,
+                        "instruction_processed": true
+                    })))
+                },
+                Err(e) => {
+                    Ok(Json(serde_json::json!({
+                        "success": false,
+                        "action": "refresh",
+                        "error": e.to_string(),
+                        "session_id": actual_session_id,
+                        "instruction_processed": true
+                    })))
+                }
+            }
         },
         
         _ => {
@@ -824,7 +1079,7 @@ async fn execute_parsed_command(
                 "success": true,
                 "action": command.action,
                 "message": "Instruction acknowledged but action not yet implemented",
-                "suggestion": "Try navigation or screenshot instructions",
+                "suggestion": "Try navigation, screenshot, click, type, extract, analyze, or scroll instructions",
                 "instruction_processed": true
             })))
         }
@@ -1217,6 +1472,229 @@ pub async fn plugin_metrics_handler(State(state): State<ApiState>) -> Result<Jso
     }))
 }
 
+/// Handle perception operations
+pub async fn perception_handler(
+    State(state): State<ApiState>,
+    Json(req): Json<PerceptionRequest>,
+) -> Result<Json<PerceptionResponse>, ApiError> {
+    info!("Perception request: action={}, use_simple={}", req.action, req.use_simple.unwrap_or(false));
+    
+    // Get or create browser session
+    let (browser, _session_id) = get_or_create_browser_session(&state, req.session_id).await?;
+    
+    // Navigate if URL provided
+    if let Some(url) = req.url {
+        browser.navigate_to(&url).await
+            .map_err(|e| ApiError {
+                error: "Navigation failed".to_string(),
+                details: Some(e.to_string()),
+                code: 500,
+            })?;
+        
+        // Wait for page to load
+        tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+    }
+    
+    // Get the WebDriver from SimpleBrowser
+    let driver = browser.get_driver();
+    
+    match req.action.as_str() {
+        "classify" => {
+            // Basic page classification without perception
+            match driver.current_url().await {
+                Ok(url) => {
+                    // Simple URL-based classification using URL string
+                    let url_str = url.as_str();
+                    let page_type = if url_str.contains("login") || url_str.contains("auth") {
+                        "Login"
+                    } else if url_str.contains("shop") || url_str.contains("cart") || url_str.contains("product") {
+                        "Shopping"
+                    } else if url_str.contains("search") {
+                        "Search"
+                    } else if url_str.contains("form") {
+                        "Form"
+                    } else {
+                        "General"
+                    };
+                    
+                    Ok(Json(PerceptionResponse {
+                        success: true,
+                        page_type: Some(page_type.to_string()),
+                        elements: None,
+                        data: None,
+                        message: format!("Page classified as {} based on URL pattern", page_type),
+                    }))
+                }
+                Err(e) => {
+                    Err(ApiError {
+                        error: "Page classification failed".to_string(),
+                        details: Some(e.to_string()),
+                        code: 500,
+                    })
+                }
+            }
+        }
+        
+        "find_element" => {
+            let description = req.element_description
+                .ok_or_else(|| ApiError {
+                    error: "Element description required".to_string(),
+                    details: None,
+                    code: 400,
+                })?;
+            
+            // Basic element finding using common selectors
+            let selector = match description.to_lowercase().as_str() {
+                "button" => "button, input[type='button'], input[type='submit']",
+                "input" => "input, textarea",
+                "link" => "a",
+                "title" => "h1, h2, title",
+                "heading" => "h1, h2, h3, h4, h5, h6",
+                "form" => "form",
+                _ => "*",
+            };
+            
+            match driver.find(thirtyfour::By::Css(selector)).await {
+                Ok(element) => {
+                    let text = element.text().await.unwrap_or_default();
+                    let tag_name = element.tag_name().await.unwrap_or_default();
+                    
+                    Ok(Json(PerceptionResponse {
+                        success: true,
+                        page_type: None,
+                        elements: Some(vec![serde_json::json!({
+                            "selector": selector,
+                            "text": text,
+                            "tag": tag_name,
+                            "confidence": 0.7,
+                        })]),
+                        data: None,
+                        message: format!("Found element: {}", text),
+                    }))
+                }
+                Err(e) => {
+                    Err(ApiError {
+                        error: "Element not found".to_string(),
+                        details: Some(e.to_string()),
+                        code: 404,
+                    })
+                }
+            }
+        }
+        
+        "extract_data" => {
+            // Basic data extraction without perception
+            let mut elements = Vec::new();
+            
+            // Try to find common elements
+            let selectors = vec![
+                ("title", "title, h1"),
+                ("heading", "h1, h2, h3"),
+                ("button", "button, input[type='button'], input[type='submit']"),
+                ("link", "a"),
+                ("input", "input, textarea"),
+            ];
+            
+            for (element_type, selector) in selectors {
+                match driver.find_all(thirtyfour::By::Css(selector)).await {
+                    Ok(found_elements) => {
+                        for element in found_elements.iter().take(3) { // Limit to 3 per type
+                            if let Ok(text) = element.text().await {
+                                if !text.trim().is_empty() {
+                                    elements.push(serde_json::json!({
+                                        "type": element_type,
+                                        "selector": selector,
+                                        "text": text,
+                                        "confidence": 0.6,
+                                    }));
+                                }
+                            }
+                        }
+                    }
+                    Err(_) => {
+                        // Ignore elements that can't be found
+                    }
+                }
+            }
+            
+            Ok(Json(PerceptionResponse {
+                success: true,
+                page_type: Some("General".to_string()),
+                elements: Some(elements.clone()),
+                data: Some(serde_json::json!({
+                    "page_type": "General",
+                    "element_count": elements.len(),
+                    "extraction_method": "Basic browser without perception"
+                })),
+                message: format!("Extracted {} elements using basic browser methods", elements.len()),
+            }))
+        }
+        
+        _ => {
+            Err(ApiError {
+                error: "Invalid action".to_string(),
+                details: Some("Valid actions: classify, find_element, extract_data".to_string()),
+                code: 400,
+            })
+        }
+    }
+}
+
+/// Test basic browser functionality (perception modules bypassed)
+pub async fn perception_test_handler(State(state): State<ApiState>) -> Result<Json<serde_json::Value>, ApiError> {
+    info!("Testing basic browser functionality (perception bypassed)...");
+    
+    // Create a test browser
+    let browser = SimpleBrowser::new().await
+        .map_err(|e| ApiError {
+            error: "Failed to create browser".to_string(),
+            details: Some(e.to_string()),
+            code: 500,
+        })?;
+    
+    // Navigate to a test page
+    browser.navigate_to("https://example.com").await
+        .map_err(|e| ApiError {
+            error: "Navigation failed".to_string(),
+            details: Some(e.to_string()),
+            code: 500,
+        })?;
+    
+    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+    
+    let driver = browser.get_driver();
+    
+    // Test basic browser functionality
+    let page_url = driver.current_url().await
+        .map(|url| url.as_str().to_string())
+        .unwrap_or_else(|_| "Could not get URL".to_string());
+    
+    let page_title = driver.title().await
+        .unwrap_or_else(|_| "Could not get title".to_string());
+    
+    // Test finding a basic element
+    let has_h1 = match driver.find(thirtyfour::By::Tag("h1")).await {
+        Ok(_) => true,
+        Err(_) => false,
+    };
+    
+    Ok(Json(serde_json::json!({
+        "success": true,
+        "test_results": {
+            "basic_browser": {
+                "page_url": page_url,
+                "page_title": page_title,
+                "has_h1_element": has_h1,
+                "status": "operational"
+            },
+            "perception_modules": {
+                "status": "bypassed - not tested"
+            }
+        },
+        "message": "Basic browser functionality tested successfully (perception modules bypassed)"
+    })))
+}
+
 // Helper functions
 
 /// Smart session management: reuse existing session if available, otherwise create new one
@@ -1230,8 +1708,19 @@ async fn get_or_create_browser_session(
         // Try to use existing session
         let sessions = state.sessions.read().await;
         if let Some(session) = sessions.get(&sid) {
-            info!("✅ Using explicitly requested session: {}", sid);
-            return Ok((session.browser.clone(), sid));
+            // Check if the browser window is still valid
+            if session.browser.is_window_valid().await {
+                info!("✅ Using explicitly requested session: {}", sid);
+                return Ok((session.browser.clone(), sid));
+            } else {
+                warn!("Requested session {} has invalid browser window, creating new session", sid);
+                // Clean up invalid session
+                drop(sessions); // Release read lock
+                let mut sessions_write = state.sessions.write().await;
+                sessions_write.remove(&sid);
+                info!("Cleaned up invalid session: {}", sid);
+                // Continue to create new session below
+            }
         } else {
             return Err(anyhow::anyhow!("Session not found: {}", sid));
         }
@@ -1243,9 +1732,9 @@ async fn get_or_create_browser_session(
         if let Some((session_id, session)) = sessions.iter().next() {
             info!("Found existing session {}, attempting simple reuse...", session_id);
             
-            // Simple check: if session is less than 5 minutes old, assume it's valid
+            // Check both age and window validity
             let session_age = chrono::Utc::now().signed_duration_since(session.last_used);
-            if session_age.num_minutes() < 5 {
+            if session_age.num_minutes() < 5 && session.browser.is_window_valid().await {
                 info!("✅ Reusing recent session {} (age: {} minutes)", session_id, session_age.num_minutes());
                 
                 // Update last_used time
@@ -1298,12 +1787,10 @@ async fn get_or_create_browser_session(
         // Only remove truly invalid sessions (where the browser window was closed)
         let mut invalid_session_ids = Vec::new();
         for (id, existing_session) in sessions.iter() {
-            // Quick check if browser is completely dead
-            if !existing_session.browser.is_alive().await {
-                // Double check with get_title
-                if existing_session.browser.get_title().await.is_err() {
-                    invalid_session_ids.push(id.clone());
-                }
+            // Use the new window validation method
+            if !existing_session.browser.is_window_valid().await {
+                info!("Session {} has invalid browser window", id);
+                invalid_session_ids.push(id.clone());
             }
         }
         
@@ -1464,7 +1951,11 @@ pub fn create_router(state: ApiState) -> Router {
         
         // Plugin operations
         .route("/plugins", post(plugin_handler))
-        .route("/plugins/metrics", get(plugin_metrics_handler));
+        .route("/plugins/metrics", get(plugin_metrics_handler))
+        
+        // Perception operations
+        .route("/perception", post(perception_handler))
+        .route("/perception/test", get(perception_test_handler));
 
     // Main router combining API routes and static files
     Router::new()
@@ -1674,4 +2165,52 @@ pub async fn start_server(config: Config) -> Result<()> {
     axum::serve(listener, app).await?;
     
     Ok(())
+}
+
+/// Simple command parser for testing without LLM API
+fn try_parse_simple_command(command: &str) -> Option<ParsedCommand> {
+    let command_lower = command.to_lowercase();
+    
+    // Match common test commands
+    let (action, confidence) = if command_lower.contains("screenshot") || command_lower.contains("take a screenshot") {
+        ("screenshot", 0.9)
+    } else if command_lower.contains("refresh") || command_lower.contains("reload") {
+        ("refresh", 0.9)
+    } else if command_lower.contains("scroll down") || command_lower.contains("scroll bottom") {
+        ("scroll", 0.8)
+    } else if command_lower.contains("click") {
+        ("click", 0.7)
+    } else if command_lower.contains("type") || command_lower.contains("enter") {
+        ("type", 0.7)
+    } else if command_lower.starts_with("go to") || command_lower.starts_with("navigate") {
+        ("navigate", 0.8)
+    } else {
+        return None;
+    };
+    
+    Some(ParsedCommand {
+        action: action.to_string(),
+        confidence,
+        url: None,
+        urls: vec![],
+        screenshot: false,
+        filename: None,
+        viewport_width: None,
+        viewport_height: None,
+        viewport_only: false,
+        retries: None,
+        timeout: None,
+        parameters: CommandParams {
+            take_screenshot: false,
+            screenshot_filename: None,
+            viewport_width: None,
+            viewport_height: None,
+            retries: None,
+            timeout_seconds: None,
+            show_report: false,
+        },
+        scroll_direction: if action == "scroll" { Some("down".to_string()) } else { None },
+        element_selector: None,
+        input_text: None,
+    })
 }

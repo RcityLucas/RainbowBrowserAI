@@ -17,9 +17,9 @@ use crate::perception_mvp::{
     visual::VisualAnalyzer,
     semantic::SemanticAnalyzer as PerceptionSemanticAnalyzer,
     context_aware::ContextAwareSelector,
-    smart_forms::{SmartFormHandler, FormAnalysis, FormType, AutoFillResult, FormProfile},
+    smart_forms::{SmartFormHandler, SmartFormAnalysis, FormType, FillResult, FormProfile},
     dynamic_handler::{DynamicContentHandler, WaitCondition, ModalAction, DynamicContentResult},
-    testing_framework::PerceptionTestFramework,
+    // testing_framework::PerceptionTestFramework, // Module doesn't exist
 };
 
 use crate::semantic_analyzer::{SemanticAnalyzer, SemanticPageModel, PageType as MainPageType};
@@ -47,7 +47,7 @@ pub struct UnifiedBrowserSystem {
     user_profiles: Arc<RwLock<HashMap<String, UserProfile>>>,
     
     // Testing framework
-    test_framework: Option<Arc<Mutex<PerceptionTestFramework>>>,
+    // test_framework: Option<Arc<Mutex<PerceptionTestFramework>>>, // Module doesn't exist
     
     // Configuration
     config: SystemConfiguration,
@@ -69,11 +69,11 @@ pub struct SystemState {
 /// Performance tracking for the unified system
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct PerformanceTracker {
-    pub session_start: Option<Instant>,
+    pub session_start: Option<i64>, // Unix timestamp in seconds
     pub total_commands: u32,
     pub successful_commands: u32,
     pub failed_commands: u32,
-    pub average_response_time: Duration,
+    pub average_response_time: u64, // Duration in milliseconds
     pub perception_accuracy_rate: f32,
     pub form_completion_rate: f32,
     pub error_recovery_success_rate: f32,
@@ -86,7 +86,7 @@ pub struct LayerStats {
     pub usage_count: u32,
     pub success_count: u32,
     pub average_confidence: f32,
-    pub average_execution_time: Duration,
+    pub average_execution_time: u64, // milliseconds
 }
 
 /// User profile for personalized automation
@@ -211,7 +211,7 @@ pub enum UnifiedCommand {
 pub struct UnifiedCommandResult {
     pub success: bool,
     pub command_id: String,
-    pub execution_time: Duration,
+    pub execution_time: u64, // milliseconds
     pub layers_used: Vec<String>,
     pub confidence_scores: HashMap<String, f32>,
     pub data: Option<serde_json::Value>,
@@ -335,7 +335,7 @@ pub enum Impact {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CommandPerformanceMetrics {
     pub perception_time: Duration,
-    pub execution_time: Duration,
+    pub execution_time: u64, // milliseconds
     pub validation_time: Duration,
     pub total_time: Duration,
     pub memory_usage: u64,
@@ -392,6 +392,9 @@ pub struct CachedElement {
     pub access_count: u32,
 }
 
+/// Form Analysis type alias
+pub type FormAnalysis = SmartFormAnalysis;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FormState {
     pub active_forms: Vec<FormAnalysis>,
@@ -421,13 +424,13 @@ impl UnifiedBrowserSystem {
             session_id: session_id.clone(),
             
             // Initialize perception layers
-            mvp_engine: Arc::new(Mutex::new(PerceptionEngineMVP::new((**driver_arc).clone()))),
-            enhanced_engine: Arc::new(Mutex::new(EnhancedPerceptionEngine::new((**driver_arc).clone()))),
-            visual_analyzer: Arc::new(Mutex::new(VisualAnalyzer::new((**driver_arc).clone()))),
-            semantic_analyzer: Arc::new(Mutex::new(PerceptionSemanticAnalyzer::new((**driver_arc).clone()))),
-            context_selector: Arc::new(Mutex::new(ContextAwareSelector::new((**driver_arc).clone()))),
-            form_handler: Arc::new(Mutex::new(SmartFormHandler::new((**driver_arc).clone()))),
-            dynamic_handler: Arc::new(Mutex::new(DynamicContentHandler::new((**driver_arc).clone()))),
+            mvp_engine: Arc::new(Mutex::new(PerceptionEngineMVP::new(driver_arc.as_ref().clone()))),
+            enhanced_engine: Arc::new(Mutex::new(EnhancedPerceptionEngine::new(driver_arc.as_ref().clone()))),
+            visual_analyzer: Arc::new(Mutex::new(VisualAnalyzer::new())),
+            semantic_analyzer: Arc::new(Mutex::new(PerceptionSemanticAnalyzer::new(driver_arc.as_ref().clone()))),
+            context_selector: Arc::new(Mutex::new(ContextAwareSelector::new(driver_arc.as_ref().clone()))),
+            form_handler: Arc::new(Mutex::new(SmartFormHandler::new(driver_arc.as_ref().clone()))),
+            dynamic_handler: Arc::new(Mutex::new(DynamicContentHandler::new(driver_arc.as_ref().clone()))),
             
             // Initialize system state
             system_state: Arc::new(RwLock::new(SystemState {
@@ -454,21 +457,22 @@ impl UnifiedBrowserSystem {
             })),
             
             performance_tracker: Arc::new(Mutex::new(PerformanceTracker {
-                session_start: Some(Instant::now()),
+                session_start: Some(chrono::Utc::now().timestamp()),
                 ..Default::default()
             })),
             
             user_profiles: Arc::new(RwLock::new(HashMap::new())),
-            test_framework: None,
+            // test_framework: None, // Field commented out
             config: SystemConfiguration::default(),
         }
     }
 
-    /// Enable testing framework
-    pub fn with_testing(mut self) -> Self {
-        self.test_framework = Some(Arc::new(Mutex::new(
-            PerceptionTestFramework::new((**self.driver).clone())
-        )));
+    /// Enable testing framework (disabled - module not available)
+    pub fn with_testing(self) -> Self {
+        // self.test_framework = Some(Arc::new(Mutex::new(
+        //     PerceptionTestFramework::new((**self.driver).clone())
+        // )));
+        // Module not available, just return self unchanged
         self
     }
 
@@ -525,25 +529,52 @@ impl UnifiedBrowserSystem {
 
         let execution_time = start_time.elapsed();
 
-        // Update performance metrics
-        self.update_performance_metrics(&result, execution_time).await;
+        // Handle the result
+        match result {
+            Ok(exec_result) => {
+                // Update performance metrics
+                self.update_performance_metrics(&Ok(exec_result.clone()), execution_time).await;
 
-        // Record interaction
-        self.record_interaction(&command, &result, execution_time).await?;
+                // Record interaction
+                self.record_interaction(&command, &Ok(exec_result.clone()), execution_time).await?;
 
-        Ok(UnifiedCommandResult {
-            success: result.success,
-            command_id,
-            execution_time,
-            layers_used: result.layers_used,
-            confidence_scores: result.confidence_scores,
-            data: result.data,
-            error: result.error,
-            suggestions: result.suggestions,
-            side_effects: result.side_effects,
-            performance_metrics: result.performance_metrics,
-            accessibility_notes: result.accessibility_notes,
-        })
+                Ok(UnifiedCommandResult {
+                    success: exec_result.success,
+                    command_id,
+                    execution_time,
+                    layers_used: exec_result.layers_used,
+                    confidence_scores: exec_result.confidence_scores,
+                    data: exec_result.data,
+                    error: exec_result.error,
+                    suggestions: exec_result.suggestions,
+                    side_effects: exec_result.side_effects,
+                    performance_metrics: exec_result.performance_metrics,
+                    accessibility_notes: exec_result.accessibility_notes,
+                })
+            },
+            Err(e) => {
+                let error_str = e.to_string();
+                // Update performance metrics for error
+                self.update_performance_metrics(&Err(anyhow::anyhow!("{}", error_str)), execution_time).await;
+
+                // Record interaction for error
+                self.record_interaction(&command, &Err(anyhow::anyhow!("{}", error_str)), execution_time).await?;
+
+                Ok(UnifiedCommandResult {
+                    success: false,
+                    command_id,
+                    execution_time,
+                    layers_used: vec![],
+                    confidence_scores: HashMap::new(),
+                    data: None,
+                    error: Some(error_str),
+                    suggestions: vec![],
+                    side_effects: vec![],
+                    performance_metrics: HashMap::new(),
+                    accessibility_notes: vec![],
+                })
+            }
+        }
     }
 
     /// Navigate to URL with intelligent page analysis
@@ -910,10 +941,10 @@ impl UnifiedBrowserSystem {
             tracker.failed_commands += 1;
         }
         
-        // Update average response time
-        let total_time = tracker.average_response_time.as_millis() as f64 * (tracker.total_commands - 1) as f64;
+        // Update average response time (stored as milliseconds)
+        let total_time = tracker.average_response_time as f64 * (tracker.total_commands - 1) as f64;
         let new_average = (total_time + execution_time.as_millis() as f64) / tracker.total_commands as f64;
-        tracker.average_response_time = Duration::from_millis(new_average as u64);
+        tracker.average_response_time = new_average as u64;
         
         // Update layer usage statistics
         for layer in &result.layers_used {

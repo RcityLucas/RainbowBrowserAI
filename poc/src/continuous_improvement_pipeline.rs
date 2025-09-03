@@ -344,8 +344,8 @@ impl ContinuousImprovementPipeline {
                 confidence_score: confidence,
                 error_rate: if success { 0.0 } else { 1.0 },
                 command_type: self.classify_command(command),
-                page_context: context.get("page_type").unwrap_or("unknown").to_string(),
-                session_id: context.get("session_id").unwrap_or("unknown").to_string(),
+                page_context: context.get("page_type").unwrap_or(&"unknown".to_string()).clone(),
+                session_id: context.get("session_id").unwrap_or(&"unknown".to_string()).clone(),
             };
 
             collector.add_performance_metric(metric);

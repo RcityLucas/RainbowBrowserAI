@@ -243,7 +243,7 @@ impl SemanticAnalyzer {
         let body_html = self.driver.source().await?;
 
         // Classify page type
-        let (page_type, page_confidence) = self.page_classifier.classify(&url, &title, &body_html).await?;
+        let (page_type, page_confidence) = self.page_classifier.classify(url.as_str(), &title, &body_html).await?;
 
         // Analyze elements
         let elements = self.analyze_elements().await?;
@@ -390,9 +390,10 @@ impl SemanticAnalyzer {
         // Find associated label
         let label = self.find_field_label(input).await.unwrap_or_default();
 
-        // Classify field type
+        // Classify field type - clone placeholder for use in classification
+        let placeholder_str = placeholder.clone().unwrap_or_default();
         let (field_type, confidence) = self.form_analyzer.classify_field(
-            &name, &label, &placeholder.unwrap_or_default(), &input_type
+            &name, &label, &placeholder_str, &input_type
         )?;
 
         // Extract validation pattern
@@ -491,7 +492,7 @@ impl SemanticAnalyzer {
 
     /// Calculate element priority for interaction
     fn calculate_priority(&self, role: &ElementRole, text: &str, attributes: &HashMap<String, String>) -> f32 {
-        let mut priority = match role {
+        let mut priority: f32 = match role {
             ElementRole::PrimaryAction => 1.0,
             ElementRole::FormSubmit => 0.9,
             ElementRole::Search => 0.8,

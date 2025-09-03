@@ -13,7 +13,7 @@ pub mod semantic;
 pub mod context_aware;
 pub mod smart_forms;
 pub mod dynamic_handler;
-pub mod testing_framework;
+// pub mod testing_framework; // Module file doesn't exist
 
 /// Core perception engine that understands web pages
 pub struct PerceptionEngineMVP {
@@ -57,7 +57,7 @@ pub struct PerceivedElement {
     pub attributes: HashMap<String, String>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum ElementType {
     Button,
     Link,
@@ -529,3 +529,8 @@ mod tests {
         // assert!(text_matches("Register", "sign up"));
     }
 }
+
+// Re-export types from sub-modules for easier access
+pub use smart_forms::{SmartFormHandler, SmartFormAnalysis, FormType, FillResult, FormProfile, PersonalInfo, ContactInfo, AddressInfo};
+pub use dynamic_handler::{DynamicContentResult, ModalAction, WaitCondition};
+pub use integration::{EnhancedPerceptionEngine};

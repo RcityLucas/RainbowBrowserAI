@@ -7,6 +7,16 @@ use std::collections::HashMap;
 use thirtyfour::{WebDriver, WebElement, By};
 use regex::Regex;
 
+/// User form profile for auto-filling
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FormProfile {
+    pub name: String,
+    pub email: String,
+    pub phone: Option<String>,
+    pub address: Option<String>,
+    pub custom_fields: HashMap<String, String>,
+}
+
 /// Intelligent form detector and auto-filler
 pub struct SmartFormHandler {
     driver: WebDriver,
@@ -148,6 +158,7 @@ pub struct UserProfile {
     pub address: AddressInfo,
     pub contact: ContactInfo,
     pub preferences: HashMap<String, String>,
+    pub custom_fields: HashMap<String, String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -656,18 +667,20 @@ impl SmartFormHandler {
 
         // Check minlength/maxlength
         if let Ok(Some(min_len)) = input.attr("minlength").await {
+            let min_len_str = min_len.clone();
             rules.push(ValidationRule {
                 rule_type: ValidationType::MinLength,
-                pattern: Some(min_len),
+                pattern: Some(min_len_str.clone()),
                 message: format!("Minimum {} characters required", min_len),
                 required: true,
             });
         }
 
         if let Ok(Some(max_len)) = input.attr("maxlength").await {
+            let max_len_str = max_len.clone();
             rules.push(ValidationRule {
                 rule_type: ValidationType::MaxLength,
-                pattern: Some(max_len),
+                pattern: Some(max_len_str.clone()),
                 message: format!("Maximum {} characters allowed", max_len),
                 required: true,
             });
@@ -1001,8 +1014,9 @@ impl AutoFillEngine {
         strategies
     }
 
-    fn get_user_profile(&self, name: &str) -> Result<&UserProfile> {
+    fn get_user_profile(&self, name: &str) -> Result<UserProfile> {
         self.user_profiles.get(name)
+            .cloned()
             .ok_or_else(|| anyhow::anyhow!("User profile '{}' not found", name))
     }
 }
@@ -1122,6 +1136,3 @@ pub type FormAnalysis = SmartFormAnalysis;
 
 /// Auto Fill Result - alias for fill operation results  
 pub type AutoFillResult = FillResult;
-
-/// Form Profile - alias for user profile for forms
-pub type FormProfile = UserProfile;

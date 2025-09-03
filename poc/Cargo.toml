@@ -42,4 +42,10 @@ tokio-test = "0.4"
 criterion = { version = "0.5", features = ["html_reports"] }
 tempfile = "3.8"
 
-# All demo and test binaries have been removed for clean build
+[[bin]]
+name = "test-perception"
+path = "src/bin/test_perception.rs"
+
+[[bin]]
+name = "test-perception-tools"
+path = "src/bin/test_perception_tools.rs"

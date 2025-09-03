@@ -264,7 +264,26 @@
       "Bash(env RAINBOW_MOCK_MODE=true timeout 20s cargo check --message-format short --lib)",
       "Bash(env RAINBOW_MOCK_MODE=true timeout 30s cargo check --lib --message-format short)",
       "Bash(env RAINBOW_MOCK_MODE=true timeout 60s cargo check --lib --message-format short)",
-      "Bash(env RAINBOW_MOCK_MODE=true timeout 10s cargo check --lib --message-format short)"
+      "Bash(env RAINBOW_MOCK_MODE=true timeout 10s cargo check --lib --message-format short)",
+      "Read(/mnt/d/github/RainbrowBrowserAI/poc/src/perception_mvp/**)",
+      "Bash(env RAINBOW_MOCK_MODE=true timeout 30s cargo check --message-format short)",
+      "Bash(env RAINBOW_MOCK_MODE=true timeout 60s cargo build --bin rainbow-poc --message-format short)",
+      "Bash(env RAINBOW_MOCK_MODE=true timeout 90s cargo build --release --bin rainbow-poc)",
+      "Bash(env RAINBOW_MOCK_MODE=true timeout 30s cargo run --bin rainbow-poc -- serve --port 3001)",
+      "Bash(env RAINBOW_MOCK_MODE=true timeout 60s cargo build --release --bin rainbow-poc --message-format short)",
+      "Bash(env RAINBOW_MOCK_MODE=true timeout 120s cargo build --release --bin rainbow-poc --message-format short)",
+      "Bash(env RAINBOW_MOCK_MODE=true timeout 60s cargo build --release --bin rainbow-poc)",
+      "Bash(env RAINBOW_MOCK_MODE=true CHROMEDRIVER_PORT=9516 ./target/release/rainbow-poc serve --port 3001)",
+      "mcp__playwright__browser_navigate",
+      "mcp__playwright__browser_click",
+      "mcp__playwright__browser_type",
+      "Bash(env RAINBOW_MOCK_MODE=true timeout 120s cargo build --release --bin rainbow-poc)",
+      "Bash(env RAINBOW_MOCK_MODE=true timeout 30s cargo build --release --bin rainbow-poc --quiet)",
+      "Bash(env RAINBOW_MOCK_MODE=true timeout 60s cargo build --release --bin rainbow-poc --quiet)",
+      "Bash(env RAINBOW_MOCK_MODE=true timeout 30s cargo check --message-format short --lib)",
+      "Bash(env RAINBOW_MOCK_MODE=false timeout 60s cargo build --bin rainbow-poc --message-format short)",
+      "Bash(env RAINBOW_MOCK_MODE=false timeout 60s cargo build --release --bin rainbow-poc)",
+      "Bash(env RAINBOW_MOCK_MODE=false timeout 60s cargo build --release --bin rainbow-poc --message-format short)"
     ],
     "deny": []
   }

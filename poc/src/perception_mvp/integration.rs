@@ -17,7 +17,7 @@ pub struct PerceptionAwareExecutor {
 impl PerceptionAwareExecutor {
     pub fn new(driver: WebDriver) -> Self {
         let perception = PerceptionEngineMVP::new(driver.clone());
-        let browser = SimpleBrowser::new(driver);
+        let browser = SimpleBrowser::from_driver(driver);
         
         Self {
             perception,
@@ -166,7 +166,7 @@ impl PerceptionAwareExecutor {
                     self.browser.click_element(&search_btn.selector).await?;
                 } else {
                     // Press Enter if no button found
-                    self.browser.press_enter(&search_box.selector).await?;
+                    self.browser.press_key("enter").await?;
                 }
                 
                 Ok(CommandResult {
@@ -199,16 +199,20 @@ impl PerceptionAwareExecutor {
         
         let extracted_data = match page_type {
             crate::perception_mvp::PageType::ProductPage => {
-                self.extract_product_data().await?
+                let product = self.extract_product_data().await?;
+                serde_json::to_value(product)?
             }
             crate::perception_mvp::PageType::ArticlePage => {
-                self.extract_article_data().await?
+                let article = self.extract_article_data().await?;
+                serde_json::to_value(article)?
             }
             crate::perception_mvp::PageType::SearchResults => {
-                self.extract_search_results().await?
+                let results = self.extract_search_results().await?;
+                serde_json::to_value(results)?
             }
             _ => {
-                self.extract_generic_data().await?
+                let generic = self.extract_generic_data().await?;
+                serde_json::to_value(generic)?
             }
         };
         
@@ -268,7 +272,7 @@ impl PerceptionAwareExecutor {
     }
 
     /// Extract product information from e-commerce pages
-    async fn extract_product_data(&self) -> Result<ProductData> {
+    async fn extract_product_data(&mut self) -> Result<ProductData> {
         let title = self.perception.find_element("product title").await
             .map(|e| e.text)
             .unwrap_or_default();
@@ -291,7 +295,7 @@ impl PerceptionAwareExecutor {
     }
 
     /// Extract article content
-    async fn extract_article_data(&self) -> Result<ArticleData> {
+    async fn extract_article_data(&mut self) -> Result<ArticleData> {
         let title = self.perception.find_element("article title").await
             .map(|e| e.text)
             .unwrap_or_default();
@@ -313,7 +317,7 @@ impl PerceptionAwareExecutor {
     }
 
     /// Extract search results
-    async fn extract_search_results(&self) -> Result<Vec<SearchResult>> {
+    async fn extract_search_results(&mut self) -> Result<Vec<SearchResult>> {
         // Would find all search result items
         Ok(vec![])
     }
@@ -339,7 +343,7 @@ pub struct CommandResult {
 }
 
 /// Product data structure
-#[derive(Debug)]
+#[derive(Debug, serde::Serialize)]
 struct ProductData {
     title: String,
     price: String,
@@ -349,7 +353,7 @@ struct ProductData {
 }
 
 /// Article data structure
-#[derive(Debug)]
+#[derive(Debug, serde::Serialize)]
 struct ArticleData {
     title: String,
     author: String,
@@ -358,7 +362,7 @@ struct ArticleData {
 }
 
 /// Search result item
-#[derive(Debug)]
+#[derive(Debug, serde::Serialize)]
 struct SearchResult {
     title: String,
     url: String,
@@ -366,7 +370,7 @@ struct SearchResult {
 }
 
 /// Generic extracted data
-#[derive(Debug)]
+#[derive(Debug, serde::Serialize)]
 struct GenericData {
     headings: Vec<String>,
     paragraphs: Vec<String>,
@@ -374,29 +378,8 @@ struct GenericData {
     images: Vec<String>,
 }
 
-// Extension methods for SimpleBrowser to work with selectors
-impl SimpleBrowser {
-    async fn click_element(&self, selector: &str) -> Result<()> {
-        // Implementation would use WebDriver to click
-        // self.driver.find(By::Css(selector)).await?.click().await?;
-        Ok(())
-    }
-    
-    async fn clear_element(&self, selector: &str) -> Result<()> {
-        // self.driver.find(By::Css(selector)).await?.clear().await?;
-        Ok(())
-    }
-    
-    async fn type_text(&self, selector: &str, text: &str) -> Result<()> {
-        // self.driver.find(By::Css(selector)).await?.send_keys(text).await?;
-        Ok(())
-    }
-    
-    async fn select_option(&self, selector: &str, option: &str) -> Result<()> {
-        // Implementation for select elements
-        Ok(())
-    }
-}
+// Note: SimpleBrowser methods like click_element, clear_element, type_text, select_option
+// are already implemented in src/browser.rs
 
 /// Enhanced Perception Engine - Advanced perception capabilities
 /// This is an alias for the main PerceptionAwareExecutor for backward compatibility

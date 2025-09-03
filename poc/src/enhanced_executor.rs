@@ -14,8 +14,8 @@ use crate::{
     action_mapper::{ActionMapper, ExecutableAction, ActionExecutor, ActionResult},
     browser::SimpleBrowser,
     ConversationContext,
-    tool_orchestrator::{ToolOrchestrator, OrchestrationResult},
-    v8_perception::PerceptionEngine,
+    // tool_orchestrator::{ToolOrchestrator, OrchestrationResult}, // Module disabled
+    // v8_perception::PerceptionEngine, // Module doesn't exist
 };
 
 /// Enhanced executor that uses natural language understanding
@@ -24,7 +24,7 @@ pub struct EnhancedExecutor {
     workflow_parser: WorkflowParser,
     action_mapper: ActionMapper,
     last_page_model: Arc<Mutex<Option<SemanticPageModel>>>,
-    tool_orchestrator: Option<Arc<ToolOrchestrator>>,
+    // tool_orchestrator: Option<Arc<ToolOrchestrator>>, // Disabled - module not available
 }
 
 impl EnhancedExecutor {
@@ -34,15 +34,15 @@ impl EnhancedExecutor {
             workflow_parser: WorkflowParser::new(),
             action_mapper: ActionMapper::new(),
             last_page_model: Arc::new(Mutex::new(None)),
-            tool_orchestrator: None,
+            // tool_orchestrator: None, // Disabled
         }
     }
     
-    /// Set the tool orchestrator for complex tool coordination
-    pub fn with_orchestrator(mut self, browser: Arc<SimpleBrowser>, perception_engine: Arc<PerceptionEngine>) -> Self {
-        self.tool_orchestrator = Some(Arc::new(ToolOrchestrator::new(browser, perception_engine)));
-        self
-    }
+    // /// Set the tool orchestrator for complex tool coordination
+    // pub fn with_orchestrator(mut self, browser: Arc<SimpleBrowser>, perception_engine: Arc<PerceptionEngine>) -> Self {
+    //     self.tool_orchestrator = Some(Arc::new(ToolOrchestrator::new(browser, perception_engine)));
+    //     self
+    // }
     
     /// Execute instruction with tool orchestration
     pub async fn execute_with_orchestration(
@@ -59,35 +59,35 @@ impl EnhancedExecutor {
         let instruction = parser.parse_with_context(instruction_text, hints)?;
         drop(parser);
         
-        // If we have an orchestrator, use it
-        if let Some(ref orchestrator) = self.tool_orchestrator {
-            info!("Using tool orchestrator for execution");
-            
-            // Execute with orchestration
-            let orchestration_result = orchestrator.orchestrate(&instruction).await?;
-            
-            // Convert orchestration result to enhanced execution result
-            return Ok(EnhancedExecutionResult {
-                success: orchestration_result.success,
-                instruction: Some(instruction),
-                page_model: None, // Could be extracted from orchestration results
-                actions_executed: orchestration_result.step_results.iter()
-                    .map(|r| ActionResult {
-                        success: r.success,
-                        action_type: r.tool_name.clone(),
-                        details: r.output.clone().map(|o| o.to_string()),
-                        error: r.error.clone(),
-                    })
-                    .collect(),
-                clarification_needed: None,
-                error: if !orchestration_result.success {
-                    Some(orchestration_result.summary.clone())
-                } else {
-                    None
-                },
-                suggestions: vec![],
-            });
-        }
+        // Tool orchestrator is disabled for now
+        // if let Some(ref orchestrator) = self.tool_orchestrator {
+        //     info!("Using tool orchestrator for execution");
+        //     
+        //     // Execute with orchestration
+        //     let orchestration_result = orchestrator.orchestrate(&instruction).await?;
+        //     
+        //     // Convert orchestration result to enhanced execution result
+        //     return Ok(EnhancedExecutionResult {
+        //         success: orchestration_result.success,
+        //         instruction: Some(instruction),
+        //         page_model: None, // Could be extracted from orchestration results
+        //         actions_executed: orchestration_result.step_results.iter()
+        //             .map(|r| ActionResult {
+        //                 success: r.success,
+        //                 action_type: r.tool_name.clone(),
+        //                 details: r.output.clone().map(|o| o.to_string()),
+        //                 error: r.error.clone(),
+        //             })
+        //             .collect(),
+        //         clarification_needed: None,
+        //         error: if !orchestration_result.success {
+        //             Some(orchestration_result.summary.clone())
+        //         } else {
+        //             None
+        //         },
+        //         suggestions: vec![],
+        //     });
+        // }
         
         // Fall back to regular execution if no orchestrator
         warn!("No orchestrator configured, falling back to regular execution");

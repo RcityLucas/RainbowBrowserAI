@@ -1,4 +1,4 @@
-use anyhow::{Result, Context};
+use anyhow::{anyhow, Result, Context};
 use thirtyfour::{WebDriver, ChromeCapabilities, WebElement, By, session::scriptret::ScriptRet, Key};
 use tracing::{info, error, warn};
 use std::time::{Duration, Instant};
@@ -58,6 +58,15 @@ impl SimpleBrowser {
     /// Create a new browser instance with Chrome WebDriver
     pub async fn new() -> Result<Self> {
         Self::new_with_config(3, Duration::from_secs(30)).await
+    }
+
+    /// Create a SimpleBrowser from an existing WebDriver
+    pub fn from_driver(driver: WebDriver) -> Self {
+        Self {
+            driver,
+            retry_attempts: 3,
+            timeout_duration: Duration::from_secs(30),
+        }
     }
 
     /// Create a new browser instance with custom retry and timeout settings
@@ -163,6 +172,25 @@ impl SimpleBrowser {
         Err(anyhow::anyhow!("All connection attempts failed: {}", last_error_msg))
     }
 
+    /// Check if the browser window is still valid
+    pub async fn is_window_valid(&self) -> bool {
+        match self.driver.current_url().await {
+            Ok(_) => true,
+            Err(e) => {
+                let error_str = format!("{}", e);
+                if error_str.contains("window not found") || 
+                   error_str.contains("target window already closed") || 
+                   error_str.contains("web view not found") {
+                    warn!("Browser window validation failed: {}", e);
+                    false
+                } else {
+                    // Other errors might be temporary, consider window valid
+                    true
+                }
+            }
+        }
+    }
+
     /// Navigate to a specific URL with retry logic
     pub async fn navigate_to(&self, url: &str) -> Result<()> {
         self.navigate_to_with_retry(url, self.retry_attempts).await
@@ -171,6 +199,11 @@ impl SimpleBrowser {
     /// Navigate to a specific URL with custom retry attempts
     pub async fn navigate_to_with_retry(&self, url: &str, max_attempts: u32) -> Result<()> {
         info!("Navigating to: {} (max attempts: {})", url, max_attempts);
+        
+        // First check if the browser window is still valid
+        if !self.is_window_valid().await {
+            return Err(anyhow::anyhow!("Browser window is no longer valid, session needs to be recreated"));
+        }
         
         // Ensure URL has protocol
         let full_url = if url.starts_with("http://") || url.starts_with("https://") {
@@ -208,6 +241,15 @@ impl SimpleBrowser {
                 Ok(Err(e)) => {
                     warn!("Navigation attempt {} failed: {}", attempt, e);
                     last_error_msg = format!("{}", e);
+                    
+                    // Check if this is a window closure error
+                    let error_str = format!("{}", e);
+                    if error_str.contains("window not found") || 
+                       error_str.contains("target window already closed") || 
+                       error_str.contains("web view not found") {
+                        warn!("Browser window was closed, this session may be invalid");
+                        return Err(anyhow::anyhow!("Browser window was closed: {}", e));
+                    }
                 }
                 Err(_) => {
                     warn!("Navigation attempt {} timed out after {:?}", attempt, self.timeout_duration);
@@ -250,6 +292,11 @@ impl SimpleBrowser {
     pub async fn get_current_url(&self) -> Result<String> {
         let url = self.driver.current_url().await?;
         Ok(url.to_string())
+    }
+    
+    /// Get access to the underlying WebDriver
+    pub fn get_driver(&self) -> WebDriver {
+        self.driver.clone()
     }
 
     /// Take a screenshot with default options
@@ -696,6 +743,25 @@ impl SimpleBrowser {
             .context(format!("Failed to click element: {}", selector))?;
         
         info!("Successfully clicked element: {}", selector);
+        Ok(())
+    }
+
+    /// Clear an input element
+    pub async fn clear_element(&self, selector: &str) -> Result<()> {
+        info!("Clearing element: {}", selector);
+        
+        // Find the element
+        let element = timeout(
+            Duration::from_secs(10),
+            self.driver.find(By::Css(selector))
+        ).await
+        .map_err(|_| anyhow!("Timeout waiting for element: {}", selector))?
+        .map_err(|e| anyhow!("Failed to find element {}: {}", selector, e))?;
+        
+        // Clear the element
+        element.clear().await
+            .map_err(|e| anyhow!("Failed to clear element {}: {}", selector, e))?;
+        
         Ok(())
     }
 

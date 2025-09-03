@@ -127,7 +127,7 @@ if [ -f "target/release/rainbow-poc" ] && [ "target/release/rainbow-poc" -nt "sr
 else
     echo -e "${YELLOW}  🔨 Building release binary...${NC}"
     # Build in release mode for better performance
-    if RAINBOW_MOCK_MODE=true cargo build --release --bin rainbow-poc 2>&1 | while read line; do
+    if cargo build --release --bin rainbow-poc 2>&1 | while read line; do
         if [[ $line == *"Compiling"* ]]; then
             echo -ne "\r${YELLOW}  ⚙ Compiling... ${NC}"
         elif [[ $line == *"Finished"* ]]; then
@@ -173,7 +173,7 @@ echo -e "${BLUE}═════════════════════�
 echo -e "${GREEN}📍 Dashboard URL: ${BLUE}http://localhost:$SERVER_PORT${NC}"
 echo -e "${GREEN}📊 Health Check: ${BLUE}http://localhost:$SERVER_PORT/health${NC}"
 echo -e "${GREEN}🔧 ChromeDriver: ${BLUE}Port $CHROMEDRIVER_PORT${NC}"
-echo -e "${YELLOW}⚙  Mock Mode: ${GREEN}Enabled${NC}"
+echo -e "${YELLOW}⚙  Mock Mode: ${RED}Disabled - Real Browser Testing${NC}"
 echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
 echo ""
 
@@ -183,8 +183,20 @@ echo ""
  open http://localhost:$SERVER_PORT 2>/dev/null || \
  echo -e "${YELLOW}  Please open http://localhost:$SERVER_PORT in your browser${NC}") &
 
+# Load environment variables from .env file if it exists
+if [ -f ".env" ]; then
+    export $(grep -v '^#' .env | xargs)
+    echo -e "${GREEN}  ✓ Loaded environment variables from .env file${NC}"
+fi
+
 # Run the main application
-export RAINBOW_MOCK_MODE=true
+# Read mock mode from .env if it exists
+if [ -f ".env" ]; then
+    MOCK_MODE=$(grep -E "^RAINBOW_MOCK_MODE=" .env | cut -d '=' -f2)
+    export RAINBOW_MOCK_MODE=${MOCK_MODE:-false}
+else
+    export RAINBOW_MOCK_MODE=false
+fi
 export CHROMEDRIVER_PORT=$CHROMEDRIVER_PORT
 
 # Use the compiled binary directly to avoid recompilation

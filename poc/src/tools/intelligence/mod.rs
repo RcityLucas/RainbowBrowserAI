@@ -3,11 +3,17 @@
 // This module contains meta-cognitive tools that provide AI-driven
 // pattern recognition, insights, and task completion tracking.
 
+pub mod perception_analyzer;
+
 // TODO: Implement these modules in Phase 3
 // pub mod report_insight;
 // pub mod complete_task;
 
-// Re-export tools for easy access (commented out until implementation)
+// Re-export tools for easy access
+pub use perception_analyzer::{
+    PerceptionAnalyzer, PerceptionAnalyzerInput, PerceptionAnalyzerOutput,
+    PerceptionEngine, AnalysisType, PerceptionElement
+};
 // pub use report_insight::{ReportInsight, ReportInsightInput, ReportInsightOutput};
 // pub use complete_task::{CompleteTask, CompleteTaskInput, CompleteTaskOutput};
 

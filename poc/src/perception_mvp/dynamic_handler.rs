@@ -503,10 +503,11 @@ impl DynamicContentHandler {
         
         let result = timeout(timeout_duration, async {
             loop {
-                if self.ajax_monitor.is_network_idle().await? {
-                    break;
+                match self.ajax_monitor.is_network_idle().await {
+                    Ok(true) => break Ok(()),
+                    Ok(false) => sleep(Duration::from_millis(100)).await,
+                    Err(e) => break Err(e),
                 }
-                sleep(Duration::from_millis(100)).await;
             }
         }).await;
 
@@ -659,7 +660,14 @@ impl DynamicContentHandler {
     async fn get_page_height(&self) -> Result<i64> {
         let script = "return Math.max(document.body.scrollHeight, document.body.offsetHeight, document.documentElement.clientHeight, document.documentElement.scrollHeight, document.documentElement.offsetHeight);";
         let height = self.driver.execute(script, vec![]).await?;
-        Ok(height.as_i64().unwrap_or(0))
+        // ScriptRet can be converted to JSON Value - use its JSON representation
+        let height_str = format!("{:?}", height);
+        // Try to parse as number from the debug string
+        if let Ok(val) = height_str.parse::<i64>() {
+            Ok(val)
+        } else {
+            Ok(0) // Default to 0 if parsing fails
+        }
     }
 
     async fn scroll_to_bottom(&self) -> Result<()> {
@@ -693,7 +701,9 @@ impl DynamicContentHandler {
         timeout(Duration::from_secs(30), async {
             loop {
                 let ready = self.driver.execute(script, vec![]).await?;
-                if ready.as_bool().unwrap_or(false) {
+                // Check if the script returned true
+                let ready_str = format!("{:?}", ready);
+                if ready_str.contains("true") || ready_str == "Bool(true)" {
                     break;
                 }
                 sleep(Duration::from_millis(100)).await;

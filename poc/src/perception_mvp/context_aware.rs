@@ -435,14 +435,14 @@ impl ContextAwareSelector {
         let title = self.driver.title().await?;
         
         // Only update if URL changed
-        if url != self.context.current_page.url {
+        if url.as_str() != self.context.current_page.url {
             // Analyze the new page
-            let page_type = self.classify_page_type(&url, &title).await?;
+            let page_type = self.classify_page_type(url.as_str(), &title).await?;
             let dominant_elements = self.find_dominant_elements().await?;
             let available_actions = self.determine_available_actions(&page_type).await?;
             
             self.context.current_page = PageContext {
-                url,
+                url: url.to_string(),
                 title,
                 page_type,
                 timestamp: self.current_timestamp(),
@@ -492,7 +492,7 @@ impl ContextAwareSelector {
             },
             success,
             context_before: self.context.current_page.url.clone(),
-            context_after: self.driver.current_url().await?,
+            context_after: self.driver.current_url().await?.to_string(),
         };
 
         self.context.interaction_history.push(event);

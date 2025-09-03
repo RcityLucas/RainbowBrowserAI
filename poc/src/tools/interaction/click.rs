@@ -521,7 +521,7 @@ impl Tool for Click {
             script_result.json().clone()
         } else {
             // Normal click respects element state
-            self.browser.click(&params.selector).await
+            self.browser.click_element(&params.selector).await
                 .map(|_| json!({"success": true}))
                 .unwrap_or_else(|e| json!({"success": false, "error": e.to_string()}))
         };
