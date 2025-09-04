@@ -2,8 +2,6 @@ use axum::{
     extract::{State, Json},
     http::StatusCode,
     response::IntoResponse,
-    routing::{get, post},
-    Router,
 };
 use clap::{Parser, Subcommand};
 use rainbow_poc::{
@@ -13,10 +11,7 @@ use rainbow_poc::{
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use std::time::Duration;
 use tokio::sync::Mutex;
-use tower_http::cors::CorsLayer;
-use tower_http::services::ServeDir;
 use tracing::info;
 
 #[derive(Parser)]
@@ -249,7 +244,7 @@ async fn execute_with_state(command: &str, state: AppState) -> anyhow::Result<St
     let mut cost_tracker = CostTracker::new(100.0);
     let parsed = state.llm_service.parse_natural_command(command, &mut cost_tracker).await?;
     
-    let mut browser = state.browser.lock().await;
+    let browser = state.browser.lock().await;
     let mut context = state.context.lock().await;
     
     // Execute based on parsed command

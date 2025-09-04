@@ -13,7 +13,6 @@ use tracing::{info, warn, debug};
 use uuid::Uuid;
 
 use crate::llm_integration::LLMMetrics;
-use crate::contextual_awareness::ContextSnapshot;
 
 /// Health monitoring system for production operations
 pub struct HealthMonitor {

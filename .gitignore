@@ -540,6 +540,11 @@ workspace.json
 # License and legal files that might contain sensitive info
 license_private.txt
 
+# Claude Code local settings - contains user-specific permissions and configs
+**/.claude/
+.claude/settings.local.json
+poc/.claude/settings.local.json
+
 #===============================================================================
 # Infrastructure & DevOps
 #===============================================================================

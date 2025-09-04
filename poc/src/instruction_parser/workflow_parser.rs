@@ -1,4 +1,3 @@
-use anyhow::Result;
 use tracing::info;
 
 use super::intent_recognizer::{Intent, IntentRecognizer};
@@ -66,7 +65,7 @@ impl WorkflowParser {
     fn split_into_steps(&self, input: &str) -> Vec<String> {
         let mut steps = Vec::new();
         let mut current_step = String::new();
-        let mut in_quotes = false;
+        let in_quotes = false;
         
         // Common action keywords that indicate a new step
         let action_keywords = vec![
@@ -84,7 +83,7 @@ impl WorkflowParser {
         let conjunctions = vec![", and ", " and ", ", then ", " then ", ", ", ". "];
         
         // First, try to split by explicit conjunctions
-        let mut remaining = input.to_string();
+        let remaining = input.to_string();
         
         for conjunction in &conjunctions {
             if remaining.contains(conjunction) {

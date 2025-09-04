@@ -5,11 +5,10 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use thirtyfour::{By, WebDriver};
-use tracing::{info, debug, warn};
+use tracing::{debug, warn};
 
 use crate::instruction_parser::{UserInstruction, Intent};
-use crate::semantic_analyzer::{SemanticPageModel, InteractionPoint, SemanticElement};
+use crate::semantic_analyzer::SemanticPageModel;
 use crate::browser::SimpleBrowser;
 
 /// Action to be executed

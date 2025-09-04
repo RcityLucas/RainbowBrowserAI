@@ -2,7 +2,6 @@
 //! 
 //! Extracts entities (selectors, URLs, text, etc.) from natural language
 
-use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use regex::Regex;
 use lazy_static::lazy_static;

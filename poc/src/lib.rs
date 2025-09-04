@@ -32,21 +32,13 @@ pub mod simple_memory;
 pub mod instruction_parser;
 pub mod semantic_analyzer;
 pub mod action_mapper;
-pub mod enhanced_executor;  // Re-enabled after fixing perception_mvp
-// pub mod api_v2;  // Depends on enhanced_executor
-
-// Enhanced perception system - MVP and complete implementation
-// pub mod perception_mvp;  // Temporarily disabled for core action testing
-// pub mod final_integration; // Temporarily disabled due to compilation issues
-
-// Simple working perception module  
-// pub mod perception_simple; // Temporarily disabled for core action testing
+pub mod enhanced_executor;
 
 // Continuous improvement pipeline for automated learning and optimization
 pub mod continuous_improvement_pipeline;
 
-// A/B testing framework for systematic improvement validation
-// pub mod ab_testing_framework; // Module file doesn't exist
+// Perception module for intelligent page understanding
+pub mod perception_mvp;
 
 // Tool orchestration system - depends on tools module
 // pub mod tool_orchestrator;

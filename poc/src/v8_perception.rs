@@ -10,7 +10,6 @@ use std::time::{Duration, Instant};
 use serde::{Deserialize, Serialize};
 use anyhow::Result;
 use tracing::{info, debug, warn};
-use thirtyfour::WebElement;
 
 /// V8.0 Perception modes with timing constraints
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]

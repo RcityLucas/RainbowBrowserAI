@@ -10,13 +10,12 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{RwLock, Semaphore};
-use tracing::{info, warn, debug, error};
+use tracing::{info, warn, debug};
 use uuid::Uuid;
 
 use crate::llm_service::llm_service_enhanced::{TaskType, ActionStep};
 use crate::contextual_awareness::ContextSnapshot;
 use crate::cost_tracker::CostTracker;
-use crate::config::Config;
 
 /// Task plan for LLM integration
 #[derive(Debug, Clone, Serialize, Deserialize)]

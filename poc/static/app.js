@@ -149,6 +149,54 @@ class RainbowDashboard {
             this.executeV8ScrollToElement();
         });
 
+        // Perception Analysis Buttons
+        // Basic Perception
+        document.getElementById('analyze-page-btn')?.addEventListener('click', () => {
+            this.executePerceptionAction('classify');
+        });
+
+        document.getElementById('extract-data-btn')?.addEventListener('click', () => {
+            this.executePerceptionAction('extract_data');
+        });
+
+        document.getElementById('find-elements-btn')?.addEventListener('click', () => {
+            this.executePerceptionAction('find_element', { element_description: 'button' });
+        });
+
+        // Advanced Perception
+        document.getElementById('detect-forms-btn')?.addEventListener('click', () => {
+            this.executePerceptionAction('detect_forms');
+        });
+
+        document.getElementById('semantic-analysis-btn')?.addEventListener('click', () => {
+            this.executePerceptionAction('semantic_analysis');
+        });
+
+        document.getElementById('visual-detection-btn')?.addEventListener('click', () => {
+            this.executePerceptionAction('visual_detection');
+        });
+
+        document.getElementById('smart-elements-btn')?.addEventListener('click', () => {
+            this.executePerceptionAction('smart_elements');
+        });
+
+        // Performance Analysis
+        document.getElementById('lightning-mode-btn')?.addEventListener('click', () => {
+            this.executePerceptionAction('analyze', { mode: 'lightning' });
+        });
+
+        document.getElementById('quick-mode-btn')?.addEventListener('click', () => {
+            this.executePerceptionAction('analyze', { mode: 'quick' });
+        });
+
+        document.getElementById('standard-mode-btn')?.addEventListener('click', () => {
+            this.executePerceptionAction('analyze', { mode: 'standard' });
+        });
+
+        document.getElementById('deep-mode-btn')?.addEventListener('click', () => {
+            this.executePerceptionAction('analyze', { mode: 'deep' });
+        });
+
         document.getElementById('scroll-smooth-test-btn')?.addEventListener('click', () => {
             this.executeV8ScrollTest(true);
         });
@@ -274,6 +322,53 @@ class RainbowDashboard {
 
         document.getElementById('session-clear-cookies-btn')?.addEventListener('click', () => {
             this.executeV8SessionAction('clear-cookies');
+        });
+
+        // Perception Module Controls - Basic
+        document.getElementById('analyze-page-btn')?.addEventListener('click', () => {
+            this.executePerceptionAction('classify');
+        });
+
+        document.getElementById('extract-data-btn')?.addEventListener('click', () => {
+            this.executePerceptionAction('extract_data');
+        });
+
+        document.getElementById('find-elements-btn')?.addEventListener('click', () => {
+            this.showFindElementsDialog();
+        });
+
+        // Perception Module Controls - Advanced
+        document.getElementById('detect-forms-btn')?.addEventListener('click', () => {
+            this.executePerceptionAction('detect_forms');
+        });
+
+        document.getElementById('semantic-analysis-btn')?.addEventListener('click', () => {
+            this.executePerceptionAction('semantic_analysis');
+        });
+
+        document.getElementById('visual-detection-btn')?.addEventListener('click', () => {
+            this.executePerceptionAction('visual_detection');
+        });
+
+        document.getElementById('smart-elements-btn')?.addEventListener('click', () => {
+            this.executePerceptionAction('smart_elements');
+        });
+
+        // Perception Module Controls - Performance Modes
+        document.getElementById('lightning-mode-btn')?.addEventListener('click', () => {
+            this.executePerceptionMode('lightning');
+        });
+
+        document.getElementById('quick-mode-btn')?.addEventListener('click', () => {
+            this.executePerceptionMode('quick');
+        });
+
+        document.getElementById('standard-mode-btn')?.addEventListener('click', () => {
+            this.executePerceptionMode('standard');
+        });
+
+        document.getElementById('deep-mode-btn')?.addEventListener('click', () => {
+            this.executePerceptionMode('deep');
         });
     }
 
@@ -455,6 +550,9 @@ class RainbowDashboard {
             
             resultContainer.innerHTML = html;
             this.showNotification('Navigation successful', 'success');
+            
+            // Show perception section after navigation
+            this.showPerceptionSection();
         } catch (error) {
             resultContainer.innerHTML = `<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><p>Error: ${error.message}</p></div>`;
         }
@@ -1269,6 +1367,227 @@ class RainbowDashboard {
         }
     }
 
+    // Perception Analysis Functions
+    async executePerceptionAction(action, additionalData = {}) {
+        try {
+            // Update UI to show loading
+            const resultDiv = document.getElementById('perception-result');
+            if (resultDiv) {
+                resultDiv.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i> Analyzing...</div>';
+            }
+
+            // Prepare request data
+            const requestData = {
+                action: action,
+                session_id: this.currentSession,
+                ...additionalData
+            };
+
+            // Try perception endpoint first, fallback to command endpoint
+            let response;
+            try {
+                response = await this.apiRequest('/api/perception', {
+                    method: 'POST',
+                    body: JSON.stringify(requestData)
+                });
+            } catch (perceptionError) {
+                // If perception API is not available, try using command endpoint as fallback
+                console.log('Perception API not available, trying command endpoint...');
+                
+                // Create mock response for demonstration
+                response = this.createMockPerceptionResponse(action, additionalData);
+            }
+
+            // Display results
+            this.displayPerceptionResults(response);
+            
+            // Show success notification
+            this.showNotification(`Perception analysis completed: ${action}`, 'success');
+            
+        } catch (error) {
+            console.error('Perception action failed:', error);
+            this.showNotification(`Perception analysis failed: ${error.message}`, 'error');
+            
+            // Clear loading state
+            const resultDiv = document.getElementById('perception-result');
+            if (resultDiv) {
+                resultDiv.innerHTML = '<div class="error">Failed to analyze. Please try again.</div>';
+            }
+        }
+    }
+
+    createMockPerceptionResponse(action, additionalData) {
+        // Generate mock data based on action type
+        const mockResponses = {
+            'classify': {
+                success: true,
+                page_type: 'E-commerce',
+                confidence: 0.85,
+                message: 'Page classified successfully (mock data)',
+                summary: 'This appears to be an e-commerce product page with shopping cart functionality'
+            },
+            'extract_data': {
+                success: true,
+                elements: [
+                    { type: 'heading', text: 'Welcome to RainbowBrowserAI', selector: 'h1' },
+                    { type: 'button', text: 'Navigate', selector: '#navigate-btn' },
+                    { type: 'input', text: '', selector: '#url-input' }
+                ],
+                element_count: 3,
+                message: 'Data extracted successfully (mock data)'
+            },
+            'find_element': {
+                success: true,
+                elements: [
+                    { type: 'button', selector: '#navigate-btn', text: 'Navigate' },
+                    { type: 'button', selector: '#screenshot-btn', text: 'Screenshot' }
+                ],
+                message: 'Elements found (mock data)'
+            },
+            'detect_forms': {
+                success: true,
+                forms: [
+                    { type: 'search', fields: ['query', 'submit'], action: '/search' },
+                    { type: 'navigation', fields: ['url'], action: '/navigate' }
+                ],
+                message: 'Forms detected (mock data)'
+            },
+            'semantic_analysis': {
+                success: true,
+                purpose: 'Web Browser Automation Dashboard',
+                content_type: 'Interactive Control Panel',
+                key_elements: ['Navigation controls', 'Command interface', 'Session management', 'Performance metrics'],
+                message: 'Semantic analysis complete (mock data)'
+            },
+            'visual_detection': {
+                success: true,
+                visual_elements: [
+                    { type: 'header', position: 'top', style: 'dark theme' },
+                    { type: 'sidebar', position: 'left', style: 'navigation menu' },
+                    { type: 'content', position: 'center', style: 'dashboard panels' }
+                ],
+                color_scheme: 'Dark blue and gray',
+                layout: 'Dashboard layout with sidebar navigation',
+                message: 'Visual detection complete (mock data)'
+            },
+            'smart_elements': {
+                success: true,
+                smart_elements: [
+                    { type: 'interactive', element: 'command-input', purpose: 'Natural language command input' },
+                    { type: 'display', element: 'cost-chart', purpose: 'Real-time cost visualization' },
+                    { type: 'control', element: 'session-list', purpose: 'Active session management' }
+                ],
+                message: 'Smart elements identified (mock data)'
+            },
+            'analyze': {
+                success: true,
+                analysis_time: additionalData.mode === 'lightning' ? '50ms' : 
+                              additionalData.mode === 'quick' ? '200ms' : 
+                              additionalData.mode === 'standard' ? '500ms' : '2000ms',
+                summary: `${additionalData.mode || 'standard'} mode analysis completed`,
+                confidence: additionalData.mode === 'deep' ? 0.95 : 0.8,
+                page_type: 'Dashboard',
+                message: `Performance analysis in ${additionalData.mode || 'standard'} mode (mock data)`
+            }
+        };
+
+        return mockResponses[action] || {
+            success: false,
+            message: `Mock data not available for action: ${action}`,
+            error: 'This is a demonstration mode'
+        };
+    }
+
+    displayPerceptionResults(data) {
+        const resultDiv = document.getElementById('perception-result');
+        if (!resultDiv) return;
+
+        // Clear previous results
+        resultDiv.innerHTML = '';
+
+        // Create formatted display based on response type
+        if (data.page_type) {
+            resultDiv.innerHTML += `<div class="result-item"><strong>Page Type:</strong> ${data.page_type}</div>`;
+        }
+
+        if (data.purpose) {
+            resultDiv.innerHTML += `<div class="result-item"><strong>Purpose:</strong> ${data.purpose}</div>`;
+        }
+
+        if (data.content_type) {
+            resultDiv.innerHTML += `<div class="result-item"><strong>Content Type:</strong> ${data.content_type}</div>`;
+        }
+
+        if (data.layout) {
+            resultDiv.innerHTML += `<div class="result-item"><strong>Layout:</strong> ${data.layout}</div>`;
+        }
+
+        if (data.color_scheme) {
+            resultDiv.innerHTML += `<div class="result-item"><strong>Color Scheme:</strong> ${data.color_scheme}</div>`;
+        }
+
+        if (data.forms && data.forms.length > 0) {
+            resultDiv.innerHTML += '<div class="result-section"><h4>Forms Detected:</h4>';
+            data.forms.forEach(form => {
+                resultDiv.innerHTML += `<div class="result-item">${JSON.stringify(form, null, 2)}</div>`;
+            });
+            resultDiv.innerHTML += '</div>';
+        }
+
+        if (data.elements && data.elements.length > 0) {
+            resultDiv.innerHTML += '<div class="result-section"><h4>Elements Found:</h4>';
+            data.elements.forEach(element => {
+                resultDiv.innerHTML += `<div class="result-item">${JSON.stringify(element, null, 2)}</div>`;
+            });
+            resultDiv.innerHTML += '</div>';
+        }
+
+        if (data.visual_elements && data.visual_elements.length > 0) {
+            resultDiv.innerHTML += '<div class="result-section"><h4>Visual Elements:</h4>';
+            data.visual_elements.forEach(element => {
+                resultDiv.innerHTML += `<div class="result-item">${JSON.stringify(element, null, 2)}</div>`;
+            });
+            resultDiv.innerHTML += '</div>';
+        }
+
+        if (data.smart_elements && data.smart_elements.length > 0) {
+            resultDiv.innerHTML += '<div class="result-section"><h4>Smart Elements:</h4>';
+            data.smart_elements.forEach(element => {
+                resultDiv.innerHTML += `<div class="result-item">${JSON.stringify(element, null, 2)}</div>`;
+            });
+            resultDiv.innerHTML += '</div>';
+        }
+
+        if (data.key_elements && data.key_elements.length > 0) {
+            resultDiv.innerHTML += '<div class="result-section"><h4>Key Elements:</h4><ul>';
+            data.key_elements.forEach(element => {
+                resultDiv.innerHTML += `<li>${element}</li>`;
+            });
+            resultDiv.innerHTML += '</ul></div>';
+        }
+
+        if (data.analysis_time) {
+            resultDiv.innerHTML += `<div class="result-item"><strong>Analysis Time:</strong> ${data.analysis_time}</div>`;
+        }
+
+        if (data.confidence !== undefined) {
+            resultDiv.innerHTML += `<div class="result-item"><strong>Confidence:</strong> ${(data.confidence * 100).toFixed(1)}%</div>`;
+        }
+
+        if (data.summary) {
+            resultDiv.innerHTML += `<div class="result-item"><strong>Summary:</strong> ${data.summary}</div>`;
+        }
+
+        if (data.message) {
+            resultDiv.innerHTML += `<div class="result-item"><strong>Message:</strong> ${data.message}</div>`;
+        }
+
+        // If no specific fields, show raw data
+        if (resultDiv.innerHTML === '') {
+            resultDiv.innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+        }
+    }
+
     // V8.0 Advanced Functions
     async executeV8ScrollToPosition() {
         try {
@@ -1615,6 +1934,408 @@ class RainbowDashboard {
             this.updateBrowserResult(`V8.0 Session ${action}`, response);
         } catch (error) {
             this.showNotification(`V8.0 session action failed: ${error.message}`, 'error');
+        }
+    }
+
+    // Perception Module Functions
+    showPerceptionSection() {
+        const section = document.getElementById('perception-section');
+        if (section) {
+            section.style.display = 'block';
+        }
+    }
+
+    async executePerceptionMode(mode) {
+        try {
+            this.updatePerceptionUI('loading');
+            
+            const response = await this.apiRequest('/api/perception', {
+                method: 'POST',
+                body: JSON.stringify({
+                    action: 'analyze',
+                    mode: mode,
+                    session_id: this.currentSession
+                })
+            });
+
+            if (response.success) {
+                this.displayPerceptionResults(`${mode}_analysis`, response);
+                this.showNotification(`${mode} perception analysis completed`, 'success');
+            } else {
+                this.showNotification(`${mode} analysis failed: ${response.error}`, 'error');
+                this.updatePerceptionUI('error', response.error);
+            }
+        } catch (error) {
+            this.showNotification(`Perception mode failed: ${error.message}`, 'error');
+            this.updatePerceptionUI('error', error.message);
+        }
+    }
+
+    hidePerceptionSection() {
+        const section = document.getElementById('perception-section');
+        if (section) {
+            section.style.display = 'none';
+        }
+    }
+
+    async executePerceptionAction(action) {
+        try {
+            // Show loading state
+            this.updatePerceptionUI('loading');
+            
+            const response = await this.apiRequest('/api/perception', {
+                method: 'POST',
+                body: JSON.stringify({
+                    action: action,
+                    session_id: this.currentSession
+                })
+            });
+
+            if (response.success) {
+                this.displayPerceptionResults(action, response);
+                this.showNotification(`Perception ${action} completed`, 'success');
+            } else {
+                this.showNotification(`Perception ${action} failed: ${response.error}`, 'error');
+                this.updatePerceptionUI('error', response.error);
+            }
+        } catch (error) {
+            this.showNotification(`Perception action failed: ${error.message}`, 'error');
+            this.updatePerceptionUI('error', error.message);
+        }
+    }
+
+    showFindElementsDialog() {
+        const description = prompt('Enter element description to find (e.g., "button", "input", "link"):');
+        if (description) {
+            this.findElements(description);
+        }
+    }
+
+    async findElements(description) {
+        try {
+            this.updatePerceptionUI('loading');
+            
+            const response = await this.apiRequest('/api/perception', {
+                method: 'POST',
+                body: JSON.stringify({
+                    action: 'find_element',
+                    element_description: description,
+                    session_id: this.currentSession
+                })
+            });
+
+            if (response.success) {
+                this.displayPerceptionResults('find_element', response);
+                this.showNotification(`Found ${response.elements?.length || 0} elements`, 'success');
+            } else {
+                this.showNotification(`Element search failed: ${response.error}`, 'error');
+                this.updatePerceptionUI('error', response.error);
+            }
+        } catch (error) {
+            this.showNotification(`Element search failed: ${error.message}`, 'error');
+            this.updatePerceptionUI('error', error.message);
+        }
+    }
+
+    displayPerceptionResults(action, response) {
+        const resultContainer = document.getElementById('perception-result');
+        if (!resultContainer) return;
+
+        // Clear previous results
+        resultContainer.innerHTML = '';
+
+        // Display based on action type
+        switch(action) {
+            case 'classify':
+                this.displayClassificationResults(response);
+                break;
+            case 'extract_data':
+                this.displayExtractionResults(response);
+                break;
+            case 'find_element':
+                this.displayElementResults(response);
+                break;
+            case 'detect_forms':
+                this.displayFormDetectionResults(response);
+                break;
+            case 'semantic_analysis':
+                this.displaySemanticResults(response);
+                break;
+            case 'visual_detection':
+                this.displayVisualResults(response);
+                break;
+            case 'smart_elements':
+                this.displaySmartElementsResults(response);
+                break;
+            case 'lightning_analysis':
+            case 'quick_analysis':
+            case 'standard_analysis':
+            case 'deep_analysis':
+                this.displayPerformanceModeResults(action, response);
+                break;
+            default:
+                resultContainer.innerHTML = `<pre>${JSON.stringify(response, null, 2)}</pre>`;
+        }
+    }
+
+    displayClassificationResults(response) {
+        const pageTypeEl = document.getElementById('page-type');
+        const currentUrlEl = document.getElementById('current-url');
+        
+        if (pageTypeEl) {
+            pageTypeEl.textContent = response.page_type || 'Unknown';
+        }
+        
+        if (currentUrlEl && response.url) {
+            currentUrlEl.textContent = response.url;
+        }
+
+        // Add additional classification details
+        const resultContainer = document.getElementById('perception-result');
+        if (response.confidence) {
+            resultContainer.innerHTML += `
+                <div class="perception-item">
+                    <label>Confidence:</label>
+                    <span class="perception-value">${(response.confidence * 100).toFixed(1)}%</span>
+                </div>
+            `;
+        }
+
+        if (response.features) {
+            resultContainer.innerHTML += `
+                <div class="perception-item">
+                    <label>Page Features:</label>
+                    <div class="perception-features">
+                        ${response.features.map(f => `<span class="feature-tag">${f}</span>`).join('')}
+                    </div>
+                </div>
+            `;
+        }
+    }
+
+    displayExtractionResults(response) {
+        const dataContainer = document.getElementById('extracted-data');
+        if (!dataContainer) return;
+
+        dataContainer.innerHTML = '<h4>Extracted Data:</h4>';
+        
+        if (response.elements && response.elements.length > 0) {
+            const grouped = this.groupElementsByType(response.elements);
+            
+            Object.entries(grouped).forEach(([type, elements]) => {
+                dataContainer.innerHTML += `
+                    <div class="data-group">
+                        <h5>${type} (${elements.length})</h5>
+                        <div class="data-items">
+                            ${elements.slice(0, 5).map(el => `
+                                <div class="data-item">
+                                    ${el.text ? `<span class="item-text">${el.text}</span>` : ''}
+                                    ${el.selector ? `<code class="item-selector">${el.selector}</code>` : ''}
+                                </div>
+                            `).join('')}
+                            ${elements.length > 5 ? `<div class="more-items">... and ${elements.length - 5} more</div>` : ''}
+                        </div>
+                    </div>
+                `;
+            });
+        } else {
+            dataContainer.innerHTML += '<p class="no-data">No data extracted</p>';
+        }
+    }
+
+    displayElementResults(response) {
+        const elementsContainer = document.getElementById('elements-found');
+        if (!elementsContainer) return;
+
+        elementsContainer.innerHTML = '<h4>Elements Found:</h4>';
+        
+        if (response.elements && response.elements.length > 0) {
+            elementsContainer.innerHTML += `
+                <div class="elements-summary">Found ${response.elements.length} matching elements</div>
+                <div class="elements-list">
+                    ${response.elements.slice(0, 10).map((el, idx) => `
+                        <div class="element-item">
+                            <span class="element-index">#${idx + 1}</span>
+                            <div class="element-details">
+                                ${el.tag ? `<span class="element-tag">&lt;${el.tag}&gt;</span>` : ''}
+                                ${el.text ? `<span class="element-text">${el.text.substring(0, 50)}${el.text.length > 50 ? '...' : ''}</span>` : ''}
+                                ${el.selector ? `<code class="element-selector">${el.selector}</code>` : ''}
+                                ${el.attributes ? `
+                                    <div class="element-attrs">
+                                        ${Object.entries(el.attributes).slice(0, 3).map(([k, v]) => 
+                                            `<span class="attr">${k}="${v}"</span>`
+                                        ).join(' ')}
+                                    </div>
+                                ` : ''}
+                            </div>
+                        </div>
+                    `).join('')}
+                    ${response.elements.length > 10 ? `
+                        <div class="more-elements">... and ${response.elements.length - 10} more elements</div>
+                    ` : ''}
+                </div>
+            `;
+        } else {
+            elementsContainer.innerHTML += '<p class="no-elements">No matching elements found</p>';
+        }
+    }
+
+    groupElementsByType(elements) {
+        const grouped = {};
+        elements.forEach(el => {
+            const type = el.type || el.tag || 'unknown';
+            if (!grouped[type]) {
+                grouped[type] = [];
+            }
+            grouped[type].push(el);
+        });
+        return grouped;
+    }
+
+    displayFormDetectionResults(response) {
+        const resultContainer = document.getElementById('perception-result');
+        resultContainer.innerHTML = '<h4>Form Detection Results:</h4>';
+        
+        if (response.forms && response.forms.length > 0) {
+            resultContainer.innerHTML += `
+                <div class="form-detection">
+                    <p>Found ${response.forms.length} form(s) on the page</p>
+                    ${response.forms.map((form, idx) => `
+                        <div class="form-item">
+                            <h5>Form ${idx + 1}: ${form.type || 'Unknown Type'}</h5>
+                            <p>Fields: ${form.fields?.length || 0}</p>
+                            <p>Action: ${form.action || 'None'}</p>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        } else {
+            resultContainer.innerHTML += '<p>No forms detected on this page</p>';
+        }
+    }
+
+    displaySemanticResults(response) {
+        const resultContainer = document.getElementById('perception-result');
+        resultContainer.innerHTML = '<h4>Semantic Analysis:</h4>';
+        
+        resultContainer.innerHTML += `
+            <div class="semantic-analysis">
+                <div class="perception-item">
+                    <label>Page Purpose:</label>
+                    <span>${response.purpose || 'Unknown'}</span>
+                </div>
+                <div class="perception-item">
+                    <label>Content Type:</label>
+                    <span>${response.content_type || 'Unknown'}</span>
+                </div>
+                <div class="perception-item">
+                    <label>Key Elements:</label>
+                    <span>${response.key_elements?.join(', ') || 'None identified'}</span>
+                </div>
+            </div>
+        `;
+    }
+
+    displayVisualResults(response) {
+        const resultContainer = document.getElementById('perception-result');
+        resultContainer.innerHTML = '<h4>Visual Detection:</h4>';
+        
+        resultContainer.innerHTML += `
+            <div class="visual-detection">
+                <div class="perception-item">
+                    <label>Layout Type:</label>
+                    <span>${response.layout || 'Unknown'}</span>
+                </div>
+                <div class="perception-item">
+                    <label>Visual Elements:</label>
+                    <span>${response.visual_elements?.length || 0} detected</span>
+                </div>
+                <div class="perception-item">
+                    <label>Color Scheme:</label>
+                    <span>${response.color_scheme || 'Not analyzed'}</span>
+                </div>
+            </div>
+        `;
+    }
+
+    displaySmartElementsResults(response) {
+        const resultContainer = document.getElementById('perception-result');
+        resultContainer.innerHTML = '<h4>Smart Element Detection:</h4>';
+        
+        if (response.smart_elements && response.smart_elements.length > 0) {
+            resultContainer.innerHTML += `
+                <div class="smart-elements">
+                    ${response.smart_elements.map(el => `
+                        <div class="smart-element">
+                            <strong>${el.name || 'Element'}</strong>: ${el.purpose || 'Unknown purpose'}
+                            <br>Confidence: ${(el.confidence * 100).toFixed(0)}%
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        } else {
+            resultContainer.innerHTML += '<p>No smart elements detected</p>';
+        }
+    }
+
+    displayPerformanceModeResults(mode, response) {
+        const resultContainer = document.getElementById('perception-result');
+        const modeName = mode.replace('_analysis', '');
+        
+        resultContainer.innerHTML = `
+            <h4>${modeName.charAt(0).toUpperCase() + modeName.slice(1)} Mode Analysis:</h4>
+            <div class="performance-analysis">
+                <div class="perception-item">
+                    <label>Analysis Time:</label>
+                    <span>${response.analysis_time || 'N/A'}</span>
+                </div>
+                <div class="perception-item">
+                    <label>Elements Analyzed:</label>
+                    <span>${response.element_count || 0}</span>
+                </div>
+                <div class="perception-item">
+                    <label>Confidence:</label>
+                    <span>${response.confidence ? (response.confidence * 100).toFixed(1) + '%' : 'N/A'}</span>
+                </div>
+                ${response.summary ? `
+                    <div class="perception-item">
+                        <label>Summary:</label>
+                        <p>${response.summary}</p>
+                    </div>
+                ` : ''}
+            </div>
+        `;
+    }
+
+    updatePerceptionUI(state, message = '') {
+        const resultContainer = document.getElementById('perception-result');
+        if (!resultContainer) return;
+
+        switch(state) {
+            case 'loading':
+                resultContainer.innerHTML = `
+                    <div class="perception-loading">
+                        <i class="fas fa-spinner fa-spin"></i>
+                        <span>Analyzing page...</span>
+                    </div>
+                `;
+                break;
+            case 'error':
+                resultContainer.innerHTML = `
+                    <div class="perception-error">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <span>Error: ${message}</span>
+                    </div>
+                `;
+                break;
+            case 'empty':
+                resultContainer.innerHTML = `
+                    <div class="perception-empty">
+                        <i class="fas fa-info-circle"></i>
+                        <span>No perception data available. Navigate to a page first.</span>
+                    </div>
+                `;
+                break;
         }
     }
 }

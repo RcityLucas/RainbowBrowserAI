@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RainbowBrowserAI Dashboard - Chromiumoxide Edition</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo">
+                <i class="fas fa-rainbow"></i>
+                <h1>RainbowBrowserAI <span class="edition">Chromiumoxide Edition</span></h1>
+            </div>
+            <div class="header-info">
+                <div class="status-indicator" id="status">
+                    <i class="fas fa-circle"></i>
+                    <span>Connecting...</span>
+                </div>
+                <div class="tools-info">
+                    <i class="fas fa-tools"></i>
+                    <span>22 Tools Available</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Sidebar -->
+            <aside class="sidebar">
+                <nav class="nav-menu">
+                    <a href="#" class="nav-item active" data-tab="command">
+                        <i class="fas fa-terminal"></i>
+                        <span>Tools Test</span>
+                    </a>
+                    <a href="#" class="nav-item" data-tab="browse">
+                        <i class="fas fa-globe"></i>
+                        <span>Browse</span>
+                    </a>
+                    <a href="#" class="nav-item" data-tab="workflow">
+                        <i class="fas fa-project-diagram"></i>
+                        <span>Workflows</span>
+                    </a>
+                    <a href="#" class="nav-item" data-tab="sessions">
+                        <i class="fas fa-window-restore"></i>
+                        <span>Sessions</span>
+                    </a>
+                    <a href="#" class="nav-item" data-tab="settings">
+                        <i class="fas fa-cog"></i>
+                        <span>Settings</span>
+                    </a>
+                </nav>
+            </aside>
+
+            <!-- Content Area -->
+            <main class="content">
+                <!-- Tools Test Tab -->
+                <div class="tab-content active" id="command-tab">
+                    <div class="content-header">
+                        <h2><i class="fas fa-vial"></i> Browser Tools Testing Interface</h2>
+                        <p class="header-desc">Test individual browser automation tools or run comprehensive tests</p>
+                    </div>
+
+                    <!-- Quick Test Actions -->
+                    <div class="browser-controls">
+                        <h3>Quick Actions</h3>
+                        <div class="tool-buttons">
+                            <button class="btn btn-primary" onclick="quickTest('navigation')">
+                                <i class="fas fa-compass"></i> Test Navigation
+                            </button>
+                            <button class="btn btn-primary" onclick="quickTest('interaction')">
+                                <i class="fas fa-hand-pointer"></i> Test Interaction
+                            </button>
+                            <button class="btn btn-primary" onclick="quickTest('extraction')">
+                                <i class="fas fa-database"></i> Test Extraction
+                            </button>
+                            <button class="btn btn-success" onclick="testAllTools()">
+                                <i class="fas fa-check-double"></i> Test All Tools
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Individual Tools Testing -->
+                    <div class="tools-section">
+                        <h3>Individual Tool Testing</h3>
+                        
+                        <!-- Navigation Tools -->
+                        <div class="tool-category">
+                            <h4><i class="fas fa-compass"></i> Navigation Tools (5)</h4>
+                            <div class="tools-grid">
+                                <div class="tool-card">
+                                    <h5>Navigate to URL</h5>
+                                    <div class="tool-inputs">
+                                        <input type="text" id="nav-url" placeholder="https://example.com" value="https://example.com">
+                                    </div>
+                                    <button class="btn btn-secondary" onclick="executeNavigateTool()">Execute</button>
+                                </div>
+                                
+                                <div class="tool-card">
+                                    <h5>Scroll Page</h5>
+                                    <div class="tool-inputs">
+                                        <input type="number" id="scroll-x" placeholder="X" value="0">
+                                        <input type="number" id="scroll-y" placeholder="Y" value="300">
+                                    </div>
+                                    <button class="btn btn-secondary" onclick="executeScrollTool()">Execute</button>
+                                </div>
+                                
+                                <div class="tool-card">
+                                    <h5>Browser Controls</h5>
+                                    <div class="tool-buttons">
+                                        <button class="btn btn-sm" onclick="executeTool('refresh', {})">Refresh</button>
+                                        <button class="btn btn-sm" onclick="executeTool('go_back', {})">Back</button>
+                                        <button class="btn btn-sm" onclick="executeTool('go_forward', {})">Forward</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Interaction Tools -->
+                        <div class="tool-category">
+                            <h4><i class="fas fa-hand-pointer"></i> Interaction Tools (5)</h4>
+                            <div class="tools-grid">
+                                <div class="tool-card">
+                                    <h5>Click Element</h5>
+                                    <div class="tool-inputs">
+                                        <input type="text" id="click-selector" placeholder="CSS Selector" value="a">
+                                    </div>
+                                    <button class="btn btn-secondary" onclick="executeClickTool()">Execute</button>
+                                </div>
+                                
+                                <div class="tool-card">
+                                    <h5>Type Text</h5>
+                                    <div class="tool-inputs">
+                                        <input type="text" id="type-selector" placeholder="Input Selector" value="input">
+                                        <input type="text" id="type-text" placeholder="Text" value="Hello World">
+                                    </div>
+                                    <button class="btn btn-secondary" onclick="executeTypeTool()">Execute</button>
+                                </div>
+                                
+                                <div class="tool-card">
+                                    <h5>Mouse Actions</h5>
+                                    <div class="tool-inputs">
+                                        <input type="text" id="hover-selector" placeholder="Selector" value="button">
+                                    </div>
+                                    <div class="tool-buttons">
+                                        <button class="btn btn-sm" onclick="executeHoverTool()">Hover</button>
+                                        <button class="btn btn-sm" onclick="executeFocusTool()">Focus</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Extraction Tools -->
+                        <div class="tool-category">
+                            <h4><i class="fas fa-database"></i> Data Extraction Tools (5)</h4>
+                            <div class="tools-grid">
+                                <div class="tool-card">
+                                    <h5>Extract Text</h5>
+                                    <div class="tool-inputs">
+                                        <input type="text" id="extract-text-selector" placeholder="Selector" value="h1">
+                                    </div>
+                                    <button class="btn btn-secondary" onclick="executeExtractTextTool()">Execute</button>
+                                </div>
+                                
+                                <div class="tool-card">
+                                    <h5>Extract Links</h5>
+                                    <div class="tool-inputs">
+                                        <input type="text" id="extract-links-selector" placeholder="Selector" value="a">
+                                    </div>
+                                    <button class="btn btn-secondary" onclick="executeExtractLinksTool()">Execute</button>
+                                </div>
+                                
+                                <div class="tool-card">
+                                    <h5>Extract Data</h5>
+                                    <div class="tool-inputs">
+                                        <input type="text" id="extract-data-selector" placeholder="Selector" value="img">
+                                        <input type="text" id="extract-data-attributes" placeholder="Attributes" value="src,alt">
+                                    </div>
+                                    <button class="btn btn-secondary" onclick="executeExtractDataTool()">Execute</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Memory & Sync Tools -->
+                        <div class="tool-category">
+                            <h4><i class="fas fa-memory"></i> Memory & Sync Tools (7)</h4>
+                            <div class="tools-grid">
+                                <div class="tool-card">
+                                    <h5>Screenshot</h5>
+                                    <div class="tool-inputs">
+                                        <label class="checkbox">
+                                            <input type="checkbox" id="screenshot-full">
+                                            <span>Full Page</span>
+                                        </label>
+                                    </div>
+                                    <button class="btn btn-secondary" onclick="executeScreenshotTool()">Execute</button>
+                                </div>
+                                
+                                <div class="tool-card">
+                                    <h5>Wait for Element</h5>
+                                    <div class="tool-inputs">
+                                        <input type="text" id="wait-selector" placeholder="Selector" value="body">
+                                        <input type="number" id="wait-timeout" placeholder="Timeout (ms)" value="5000">
+                                    </div>
+                                    <button class="btn btn-secondary" onclick="executeWaitForElementTool()">Execute</button>
+                                </div>
+                                
+                                <div class="tool-card">
+                                    <h5>Element Info</h5>
+                                    <div class="tool-inputs">
+                                        <input type="text" id="element-info-selector" placeholder="Selector" value="body">
+                                    </div>
+                                    <button class="btn btn-secondary" onclick="executeElementInfoTool()">Execute</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Test Results -->
+                    <div class="command-output">
+                        <h3>Test Results</h3>
+                        <div id="command-result" class="result-container">
+                            Ready for testing. Select a tool above or run comprehensive tests.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Browse Tab -->
+                <div class="tab-content" id="browse-tab">
+                    <div class="content-header">
+                        <h2><i class="fas fa-globe"></i> Browse</h2>
+                        <p class="header-desc">Navigate and interact with web pages</p>
+                    </div>
+                    <div class="browser-controls">
+                        <div class="url-bar">
+                            <input type="text" id="url-input" placeholder="Enter URL..." value="https://example.com">
+                            <button id="navigate-btn" class="btn btn-primary">
+                                <i class="fas fa-arrow-right"></i> Go
+                            </button>
+                        </div>
+                        <div class="browser-toolbar">
+                            <button class="btn btn-secondary" onclick="executeTool('go_back', {})">
+                                <i class="fas fa-arrow-left"></i>
+                            </button>
+                            <button class="btn btn-secondary" onclick="executeTool('go_forward', {})">
+                                <i class="fas fa-arrow-right"></i>
+                            </button>
+                            <button class="btn btn-secondary" onclick="executeTool('refresh', {})">
+                                <i class="fas fa-sync"></i>
+                            </button>
+                            <button class="btn btn-info" onclick="takeScreenshot()">
+                                <i class="fas fa-camera"></i> Screenshot
+                            </button>
+                        </div>
+                        <div class="browser-preview">
+                            <h3>Browser Preview</h3>
+                            <div id="browser-preview-container" class="browser-frame">
+                                Browser content will be displayed here via screenshots
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Workflow Tab -->
+                <div class="tab-content" id="workflow-tab">
+                    <div class="content-header">
+                        <h2><i class="fas fa-project-diagram"></i> Workflow</h2>
+                        <p class="header-desc">Create and execute automated workflows</p>
+                    </div>
+                    <div class="workflow-builder">
+                        <div class="workflow-toolbar">
+                            <button class="btn btn-primary" onclick="runWorkflow('demo')">
+                                <i class="fas fa-play"></i> Run Demo Workflow
+                            </button>
+                            <button class="btn btn-success" onclick="runWorkflow('comprehensive')">
+                                <i class="fas fa-check-double"></i> Comprehensive Test
+                            </button>
+                        </div>
+                        <div class="workflow-code">
+                            <h4>Sample Workflow:</h4>
+                            <pre>
+1. Navigate to https://example.com
+2. Wait for page to load
+3. Extract page title
+4. Take screenshot
+5. Extract all links
+6. Generate report
+                            </pre>
+                        </div>
+                        <div class="workflow-output">
+                            <h3>Workflow Results</h3>
+                            <div id="workflow-result" class="result-container"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sessions Tab -->
+                <div class="tab-content" id="sessions-tab">
+                    <div class="content-header">
+                        <h2><i class="fas fa-window-restore"></i> Sessions</h2>
+                        <p class="header-desc">Manage browser sessions</p>
+                    </div>
+                    <div class="sessions-manager">
+                        <div class="session-controls">
+                            <button class="btn btn-primary" onclick="createSession()">
+                                <i class="fas fa-plus"></i> Create Session
+                            </button>
+                            <button class="btn btn-info" onclick="listSessions()">
+                                <i class="fas fa-list"></i> List Sessions
+                            </button>
+                        </div>
+                        <div class="sessions-info">
+                            <div class="info-card">
+                                <h4>Active Sessions</h4>
+                                <p id="session-count">0</p>
+                            </div>
+                            <div class="info-card">
+                                <h4>Current Session</h4>
+                                <p id="current-session">None</p>
+                            </div>
+                        </div>
+                        <div class="session-output">
+                            <h3>Session Information</h3>
+                            <div id="session-result" class="result-container"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Settings Tab -->
+                <div class="tab-content" id="settings-tab">
+                    <div class="content-header">
+                        <h2><i class="fas fa-cog"></i> Settings</h2>
+                        <p class="header-desc">Configure browser automation settings</p>
+                    </div>
+                    <div class="settings-panel">
+                        <div class="settings-section">
+                            <h3>Browser Settings</h3>
+                            <div class="settings-form">
+                                <div class="form-group">
+                                    <label>API Endpoint</label>
+                                    <input type="text" id="api-endpoint" value="http://localhost:3002">
+                                </div>
+                                <div class="form-group">
+                                    <label>Default Timeout (ms)</label>
+                                    <input type="number" id="timeout" value="30000">
+                                </div>
+                                <label class="checkbox">
+                                    <input type="checkbox" id="headless-mode" checked>
+                                    <span>Headless Mode</span>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="settings-actions">
+                            <button class="btn btn-primary" onclick="saveSettings()">
+                                <i class="fas fa-save"></i> Save Settings
+                            </button>
+                            <button class="btn btn-secondary" onclick="loadSettings()">
+                                <i class="fas fa-sync"></i> Load Settings
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+
+        <!-- Notifications Container -->
+        <div class="notifications" id="notifications"></div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

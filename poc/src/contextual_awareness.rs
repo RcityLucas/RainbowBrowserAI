@@ -9,7 +9,7 @@ use chrono::{DateTime, Utc, Local, Timelike, Weekday, Datelike};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
-use tracing::{info, warn};
+use tracing::info;
 use uuid::Uuid;
 
 use crate::llm_service::llm_service_enhanced::TaskType;

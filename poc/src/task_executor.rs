@@ -1,9 +1,9 @@
 // Task Execution Coordinator - Bridge between LLM Understanding and Workflow Execution
 // This module converts TaskPlan into executable workflows and manages execution
 
-use anyhow::{Result, Context};
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use tracing::{info, warn, error};
+use tracing::{info, warn};
 use std::time::{Duration, Instant};
 use chrono::Utc;
 

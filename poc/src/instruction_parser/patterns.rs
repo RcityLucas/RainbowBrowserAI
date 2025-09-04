@@ -2,7 +2,6 @@
 //! 
 //! Fast pattern matching for common instruction patterns
 
-use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -83,7 +82,7 @@ impl PatternMatcher {
     
     fn load_default_patterns(&mut self) {
         use super::intent_recognizer::{
-            Intent, NavigationTarget, ModifierKey, DataType, 
+            Intent, NavigationTarget, DataType, 
             SearchScope, ScrollDirection, ScreenshotArea
         };
         
@@ -349,7 +348,7 @@ impl PatternOptimizer {
                     format!("Try using a more specific selector for '{}'", target_description)
                 }
             }
-            Intent::Type { text, target, .. } => {
+            Intent::Type {  target, .. } => {
                 if target.is_none() {
                     "Specify where to type the text".to_string()
                 } else {

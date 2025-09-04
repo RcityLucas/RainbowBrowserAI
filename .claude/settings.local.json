@@ -283,8 +283,30 @@
       "Bash(env RAINBOW_MOCK_MODE=true timeout 30s cargo check --message-format short --lib)",
       "Bash(env RAINBOW_MOCK_MODE=false timeout 60s cargo build --bin rainbow-poc --message-format short)",
       "Bash(env RAINBOW_MOCK_MODE=false timeout 60s cargo build --release --bin rainbow-poc)",
-      "Bash(env RAINBOW_MOCK_MODE=false timeout 60s cargo build --release --bin rainbow-poc --message-format short)"
+      "Bash(env RAINBOW_MOCK_MODE=false timeout 60s cargo build --release --bin rainbow-poc --message-format short)",
+      "Bash(/mnt/d/github/RainbowBrowserAI/poc/test_perception_ui.sh)",
+      "Read(/mnt/d/腾讯电脑管家截图文件/**)",
+      "Read(/tmp/**)",
+      "Read(/mnt/d/github/RainbrowBrowserAI/poc/src/**)",
+      "Bash(env RAINBOW_MOCK_MODE=true timeout 10s cargo build --release --bin rainbow-poc)",
+      "Read(/mnt/d/github/RainbrowBrowserAI/poc/src/**)",
+      "Bash(env RAINBOW_MOCK_MODE=true timeout 30s cargo build --bin rainbow-poc)",
+      "Bash(./basic_test.sh:*)",
+      "Bash(RUST_LOG=info ./target/release/rainbow-poc-chromiumoxide serve --port 3001 --headless)",
+      "Bash(RUST_LOG=debug cargo run --release -- serve --port 3002 --headless)",
+      "Bash(RUST_LOG=info cargo run --release -- serve --port 3002)",
+      "Bash(cmd.exe:*)",
+      "Bash(start http://localhost:3002)",
+      "Bash(echo:*)",
+      "Read(/D:\\github\\RainbowBrowserAI/**)",
+      "Read(/D:\\github\\RainbowBrowserAI\\poc-chromiumoxide/**)",
+      "Read(/D:\\github\\RainbowBrowserAI\\poc\\.claude/**)",
+      "Read(/D:\\github\\RainbowBrowserAI\\.claude/**)",
+      "Read(/D:\\github\\RainbowBrowserAI\\poc\\.claude/**)"
     ],
-    "deny": []
+    "deny": [],
+    "additionalDirectories": [
+      "/tmp"
+    ]
   }
 }

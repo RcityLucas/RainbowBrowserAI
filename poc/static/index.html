@@ -93,6 +93,65 @@
                             <h3>Output</h3>
                             <div id="command-result" class="result-container"></div>
                         </div>
+                        <!-- Perception Results Section -->
+                        <div class="perception-output" id="perception-section">
+                            <h3><i class="fas fa-eye"></i> Perception Analysis</h3>
+                            <div class="perception-controls">
+                                <!-- Basic Perception -->
+                                <div class="perception-group">
+                                    <h4>Basic Analysis</h4>
+                                    <button id="analyze-page-btn" class="btn btn-secondary">
+                                        <i class="fas fa-search"></i> Analyze Current Page
+                                    </button>
+                                    <button id="extract-data-btn" class="btn btn-secondary">
+                                        <i class="fas fa-database"></i> Extract Page Data
+                                    </button>
+                                    <button id="find-elements-btn" class="btn btn-secondary">
+                                        <i class="fas fa-mouse-pointer"></i> Find Elements
+                                    </button>
+                                </div>
+                                
+                                <!-- Advanced Perception -->
+                                <div class="perception-group">
+                                    <h4>Advanced Analysis</h4>
+                                    <button id="detect-forms-btn" class="btn btn-info">
+                                        <i class="fas fa-wpforms"></i> Detect Forms
+                                    </button>
+                                    <button id="semantic-analysis-btn" class="btn btn-info">
+                                        <i class="fas fa-brain"></i> Semantic Analysis
+                                    </button>
+                                    <button id="visual-detection-btn" class="btn btn-info">
+                                        <i class="fas fa-eye"></i> Visual Detection
+                                    </button>
+                                    <button id="smart-elements-btn" class="btn btn-info">
+                                        <i class="fas fa-magic"></i> Smart Elements
+                                    </button>
+                                </div>
+                                
+                                <!-- Performance Modes -->
+                                <div class="perception-group">
+                                    <h4>Performance Modes</h4>
+                                    <button id="lightning-mode-btn" class="btn btn-warning">
+                                        <i class="fas fa-bolt"></i> Lightning (&lt;50ms)
+                                    </button>
+                                    <button id="quick-mode-btn" class="btn btn-warning">
+                                        <i class="fas fa-tachometer-alt"></i> Quick (&lt;200ms)
+                                    </button>
+                                    <button id="standard-mode-btn" class="btn btn-warning">
+                                        <i class="fas fa-gauge"></i> Standard (&lt;500ms)
+                                    </button>
+                                    <button id="deep-mode-btn" class="btn btn-warning">
+                                        <i class="fas fa-microscope"></i> Deep (&lt;1s)
+                                    </button>
+                                </div>
+                            </div>
+                            <div id="perception-result" class="perception-container">
+                                <div class="perception-empty">
+                                    <i class="fas fa-info-circle"></i>
+                                    <p>Navigate to a webpage first, then use the perception buttons above to analyze it.</p>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 

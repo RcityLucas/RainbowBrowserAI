@@ -1,9 +1,9 @@
 use anyhow::{anyhow, Result, Context};
-use thirtyfour::{WebDriver, ChromeCapabilities, WebElement, By, session::scriptret::ScriptRet, Key};
+use thirtyfour::{WebDriver, ChromeCapabilities, WebElement, By, session::scriptret::ScriptRet};
 use tracing::{info, error, warn};
 use std::time::{Duration, Instant};
 use tokio::time::timeout;
-use serde::{Serialize, Deserialize, de::DeserializeOwned};
+use serde::{Serialize, Deserialize};
 use async_trait::async_trait;
 
 #[cfg(test)]

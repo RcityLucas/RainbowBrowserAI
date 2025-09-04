@@ -6,12 +6,12 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use tracing::{info, debug, warn, error};
+use tracing::{info, warn, error};
 
 use crate::{
     instruction_parser::{InstructionParser, UserInstruction, Feedback, ContextHints, PageType as InstructionPageType, WorkflowParser},
     semantic_analyzer::{SemanticAnalyzer, SemanticPageModel, PageType as SemanticPageType},
-    action_mapper::{ActionMapper, ExecutableAction, ActionExecutor, ActionResult},
+    action_mapper::{ActionMapper, ActionExecutor, ActionResult},
     browser::SimpleBrowser,
     ConversationContext,
     // tool_orchestrator::{ToolOrchestrator, OrchestrationResult}, // Module disabled
@@ -490,7 +490,7 @@ impl EnhancedExecutor {
     
     /// Provide feedback for the last instruction
     pub async fn provide_feedback(&self, feedback: Feedback) -> Result<()> {
-        let mut parser = self.instruction_parser.lock().await;
+        let parser = self.instruction_parser.lock().await;
         // This would need to store the last instruction to work properly
         // For now, just log
         info!("Feedback received: {:?}", feedback);
