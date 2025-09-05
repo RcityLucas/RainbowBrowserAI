@@ -5,6 +5,7 @@ use std::time::{Duration, Instant};
 use std::collections::VecDeque;
 use tracing::{info, warn, debug};
 use crate::SimpleBrowser;
+use crate::config::BrowserConfig;
 
 /// A pooled browser instance with metadata
 struct PooledBrowser {
@@ -24,6 +25,8 @@ pub struct BrowserPool {
     max_lifetime: Duration,
     /// Maximum uses before browser is recycled
     max_usage: usize,
+    /// Browser configuration (headless, etc.)
+    browser_config: BrowserConfig,
     /// Pool of available browsers
     browsers: Arc<Mutex<VecDeque<PooledBrowser>>>,
     /// Semaphore to limit concurrent browser creation
@@ -45,7 +48,27 @@ pub struct PoolStats {
 impl BrowserPool {
     /// Create a new browser pool with default settings
     pub fn new() -> Self {
-        Self::with_config(3, Duration::from_secs(300), Duration::from_secs(3600), 100)
+        let default_browser_config = BrowserConfig {
+            driver_url: "http://localhost:9515".to_string(),
+            default_width: 1920,
+            default_height: 1080,
+            headless: false,
+            screenshot_dir: "screenshots".to_string(),
+            enable_cdp: false,
+            browser_args: vec![
+                "--disable-gpu".to_string(),
+                "--no-sandbox".to_string(),
+                "--disable-dev-shm-usage".to_string(),
+            ],
+            navigation_timeout: 30,
+            script_timeout: 10,
+        };
+        Self::with_config(3, Duration::from_secs(300), Duration::from_secs(3600), 100, default_browser_config)
+    }
+
+    /// Create a new browser pool with browser configuration
+    pub fn with_browser_config(browser_config: BrowserConfig) -> Self {
+        Self::with_config(3, Duration::from_secs(300), Duration::from_secs(3600), 100, browser_config)
     }
 
     /// Create a new browser pool with custom configuration
@@ -54,6 +77,7 @@ impl BrowserPool {
         idle_timeout: Duration,
         max_lifetime: Duration,
         max_usage: usize,
+        browser_config: BrowserConfig,
     ) -> Self {
         info!(
             "Initializing browser pool (max_size: {}, idle_timeout: {:?})",
@@ -65,6 +89,7 @@ impl BrowserPool {
             idle_timeout,
             max_lifetime,
             max_usage,
+            browser_config,
             browsers: Arc::new(Mutex::new(VecDeque::new())),
             create_semaphore: Arc::new(Semaphore::new(max_size)),
             stats: Arc::new(Mutex::new(PoolStats::default())),
@@ -136,8 +161,8 @@ impl BrowserPool {
         // Need to create a new browser
         let permit = self.create_semaphore.acquire().await?;
         
-        info!("Creating new browser for pool");
-        let browser = SimpleBrowser::new().await?;
+        info!("Creating new browser for pool (headless: {})", self.browser_config.headless);
+        let browser = SimpleBrowser::new_with_browser_config(&self.browser_config).await?;
         
         let pooled = PooledBrowser {
             browser: Some(browser),

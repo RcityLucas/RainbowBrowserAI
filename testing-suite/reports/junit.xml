@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="RainbowBrowserAI Tests" tests="19" failures="0" errors="0" time="2.363">
+  <testsuite name="TestUtils" errors="0" failures="0" skipped="0" timestamp="2025-09-04T10:07:16" time="2.065" tests="19">
+    <testcase classname="TestUtils isValidApiResponse should return true for valid API responses" name="TestUtils isValidApiResponse should return true for valid API responses" time="0.004">
+    </testcase>
+    <testcase classname="TestUtils isValidApiResponse should return false for invalid responses" name="TestUtils isValidApiResponse should return false for invalid responses" time="0.001">
+    </testcase>
+    <testcase classname="TestUtils isValidSelector should return true for valid CSS selectors" name="TestUtils isValidSelector should return true for valid CSS selectors" time="0.001">
+    </testcase>
+    <testcase classname="TestUtils isValidSelector should return false for invalid selectors" name="TestUtils isValidSelector should return false for invalid selectors" time="0">
+    </testcase>
+    <testcase classname="TestUtils createMockResponse should create success responses correctly" name="TestUtils createMockResponse should create success responses correctly" time="0.003">
+    </testcase>
+    <testcase classname="TestUtils createMockResponse should create error responses correctly" name="TestUtils createMockResponse should create error responses correctly" time="0">
+    </testcase>
+    <testcase classname="TestUtils delay should wait for specified time" name="TestUtils delay should wait for specified time" time="0.104">
+    </testcase>
+    <testcase classname="TestUtils generateFormData should generate form data for common fields" name="TestUtils generateFormData should generate form data for common fields" time="0">
+    </testcase>
+    <testcase classname="TestUtils generateFormData should generate generic data for unknown fields" name="TestUtils generateFormData should generate generic data for unknown fields" time="0.001">
+    </testcase>
+    <testcase classname="TestUtils generateFormData should handle empty field array" name="TestUtils generateFormData should handle empty field array" time="0">
+    </testcase>
+    <testcase classname="TestUtils measureExecutionTime should measure synchronous function execution time" name="TestUtils measureExecutionTime should measure synchronous function execution time" time="0">
+    </testcase>
+    <testcase classname="TestUtils measureExecutionTime should measure asynchronous function execution time" name="TestUtils measureExecutionTime should measure asynchronous function execution time" time="0.06">
+    </testcase>
+    <testcase classname="TestUtils createTestSelector should create valid selectors" name="TestUtils createTestSelector should create valid selectors" time="0.001">
+    </testcase>
+    <testcase classname="TestUtils createTestSelector should create invalid selectors" name="TestUtils createTestSelector should create invalid selectors" time="0">
+    </testcase>
+    <testcase classname="TestUtils createTestSelector should create complex selectors" name="TestUtils createTestSelector should create complex selectors" time="0">
+    </testcase>
+    <testcase classname="TestUtils createTestSelector should throw for unknown selector type" name="TestUtils createTestSelector should throw for unknown selector type" time="0.008">
+    </testcase>
+    <testcase classname="TestUtils validateTestEnvironment should validate current test environment" name="TestUtils validateTestEnvironment should validate current test environment" time="0">
+    </testcase>
+    <testcase classname="TestUtils validateTestEnvironment should report issues in incomplete environments" name="TestUtils validateTestEnvironment should report issues in incomplete environments" time="0">
+    </testcase>
+    <testcase classname="TestUtils Integration Tests should work together in realistic scenarios" name="TestUtils Integration Tests should work together in realistic scenarios" time="0.021">
+    </testcase>
+  </testsuite>
+</testsuites>

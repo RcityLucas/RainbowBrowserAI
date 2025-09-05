@@ -5,6 +5,7 @@ use std::time::{Duration, Instant};
 use tokio::time::timeout;
 use serde::{Serialize, Deserialize};
 use async_trait::async_trait;
+use crate::config::{Config, BrowserConfig};
 
 #[cfg(test)]
 pub mod mock;
@@ -60,6 +61,11 @@ impl SimpleBrowser {
         Self::new_with_config(3, Duration::from_secs(30)).await
     }
 
+    /// Create a new browser instance with configuration
+    pub async fn new_with_browser_config(config: &BrowserConfig) -> Result<Self> {
+        Self::new_with_full_config(config, 3, Duration::from_secs(30)).await
+    }
+
     /// Create a SimpleBrowser from an existing WebDriver
     pub fn from_driver(driver: WebDriver) -> Self {
         Self {
@@ -82,12 +88,74 @@ impl SimpleBrowser {
         // Connect to ChromeDriver with retries
         let driver = Self::connect_with_retry(caps, retry_attempts).await
             .context("Failed to connect to ChromeDriver after retries")?;
+
+        // Set timeouts
+        driver.set_page_load_timeout(timeout_duration).await
+            .context("Failed to set page load timeout")?;
+        driver.set_implicit_wait_timeout(Duration::from_secs(10)).await
+            .context("Failed to set implicit wait timeout")?;
+        
+        Ok(Self {
+            driver,
+            retry_attempts,
+            timeout_duration,
+        })
+    }
+
+    /// Create a new browser instance with full configuration
+    pub async fn new_with_full_config(config: &BrowserConfig, retry_attempts: u32, timeout_duration: Duration) -> Result<Self> {
+        info!("Initializing Chrome WebDriver (headless: {}, retries: {}, timeout: {:?})...", 
+              config.headless, retry_attempts, timeout_duration);
+        
+        // Configure Chrome capabilities based on config
+        let mut caps = ChromeCapabilities::new();
+        
+        // Add browser arguments to fix rendering issues
+        // These arguments help prevent black spaces and rendering artifacts
+        let mut chrome_args = vec![
+            "--disable-blink-features=AutomationControlled",
+            "--disable-infobars",
+            "--disable-extensions",
+            "--start-maximized",
+            "--window-size=1920,1080",
+            "--force-device-scale-factor=1",
+        ];
+        
+        if config.headless {
+            // For headless mode, we need to configure capabilities
+            info!("Setting up headless Chrome configuration");
+            chrome_args.push("--headless");
+            chrome_args.push("--disable-gpu");
+            chrome_args.push("--no-sandbox");
+            chrome_args.push("--disable-dev-shm-usage");
+        }
+        
+        // Connect to ChromeDriver with retries
+        let driver = Self::connect_with_retry(caps, retry_attempts).await
+            .context("Failed to connect to ChromeDriver after retries")?;
         
         // Set timeouts
         driver.set_page_load_timeout(timeout_duration).await
             .context("Failed to set page load timeout")?;
         driver.set_implicit_wait_timeout(Duration::from_secs(10)).await
             .context("Failed to set implicit wait timeout")?;
+        
+        // Maximize window to prevent black borders and ensure proper rendering
+        if let Err(e) = driver.maximize_window().await {
+            warn!("Failed to maximize window, setting default size: {}", e);
+            // Fallback to setting explicit window size
+            let _ = driver.set_window_rect(100, 100, config.default_width, config.default_height).await;
+        }
+        
+        // Remove any default margins/padding with JavaScript
+        let init_js = r#"
+            document.documentElement.style.margin = '0';
+            document.documentElement.style.padding = '0';
+            document.body.style.margin = '0';
+            document.body.style.padding = '0';
+            document.body.style.backgroundColor = '#ffffff';
+        "#;
+        let _ = driver.execute(init_js, vec![]).await;
         
         info!("Chrome WebDriver initialized successfully");
         Ok(Self { 
@@ -437,10 +505,33 @@ impl SimpleBrowser {
     
     /// Set viewport size
     async fn set_viewport_size(&self, width: u32, height: u32) -> Result<()> {
-        self.driver.set_window_rect(0, 0, width, height).await
+        // Get current window position to preserve it
+        let current_rect = self.driver.get_window_rect().await
+            .unwrap_or(thirtyfour::common::types::Rect {
+                x: 100,  // Default position if we can't get current
+                y: 100,
+                width: width as i64,
+                height: height as i64,
+            });
+        
+        // Set window size while preserving position to avoid black borders
+        self.driver.set_window_rect(
+            current_rect.x as u32, 
+            current_rect.y as u32,
+            width,
+            height
+        ).await
             .context("Failed to set window size")?;
         
-        info!("Viewport set to {}x{}", width, height);
+        // Also execute JavaScript to ensure proper viewport
+        let js = format!(
+            "window.resizeTo({}, {}); window.moveTo({}, {});",
+            width, height, current_rect.x, current_rect.y
+        );
+        let _ = self.driver.execute(&js, vec![]).await;
+        
+        info!("Viewport set to {}x{} at position ({}, {})", 
+              width, height, current_rect.x, current_rect.y);
         Ok(())
     }
 

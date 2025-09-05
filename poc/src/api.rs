@@ -1126,8 +1126,8 @@ pub async fn screenshot_handler(
                 code: 404,
             })?
     } else {
-        // Create new browser
-        Arc::new(SimpleBrowser::new().await?)
+        // Create new browser using headless configuration
+        Arc::new(SimpleBrowser::new_with_browser_config(&state.config.browser).await?)
     };
     
     // Navigate if URL provided
@@ -1165,7 +1165,7 @@ pub async fn session_handler(
     match req.action.as_str() {
         "create" => {
             let session_id = Uuid::new_v4().to_string();
-            let browser = SimpleBrowser::new().await?;
+            let browser = SimpleBrowser::new_with_browser_config(&state.config.browser).await?;
             
             let session = BrowserSession {
                 id: session_id.clone(),
@@ -1846,7 +1846,7 @@ pub async fn perception_test_handler(State(state): State<ApiState>) -> Result<Js
     info!("Testing basic browser functionality (perception bypassed)...");
     
     // Create a test browser
-    let browser = SimpleBrowser::new().await
+    let browser = SimpleBrowser::new_with_browser_config(&state.config.browser).await
         .map_err(|e| ApiError {
             error: "Failed to create browser".to_string(),
             details: Some(e.to_string()),
@@ -1965,7 +1965,7 @@ async fn get_or_create_browser_session(
     }
 
     // No existing valid sessions, create a new one with generated ID
-    let browser = Arc::new(SimpleBrowser::new().await?);
+    let browser = Arc::new(SimpleBrowser::new_with_browser_config(&state.config.browser).await?);
     
     // Navigate to a default page so the browser is properly initialized
     // This ensures commands like current_url() will work
@@ -2293,7 +2293,7 @@ pub async fn start_server(config: Config) -> Result<()> {
     info!("Starting API server on {}", addr);
     
     // Initialize components
-    let browser_pool = Arc::new(BrowserPool::new());
+    let browser_pool = Arc::new(BrowserPool::with_browser_config(config.browser.clone()));
     
     // Get API key based on LLM provider
     let provider = std::env::var("LLM_PROVIDER").unwrap_or_default();

@@ -48,6 +48,10 @@
                         <i class="fas fa-window-restore"></i>
                         <span>Sessions</span>
                     </a>
+                    <a href="#" class="nav-item" data-tab="perception">
+                        <i class="fas fa-brain"></i>
+                        <span>Perception</span>
+                    </a>
                     <a href="#" class="nav-item" data-tab="settings">
                         <i class="fas fa-cog"></i>
                         <span>Settings</span>
@@ -62,6 +66,43 @@
                     <div class="content-header">
                         <h2><i class="fas fa-vial"></i> Browser Tools Testing Interface</h2>
                         <p class="header-desc">Test individual browser automation tools or run comprehensive tests</p>
+                        <div class="quick-help">
+                            <details>
+                                <summary><i class="fas fa-question-circle"></i> Common Element Selectors Guide</summary>
+                                <div class="help-content">
+                                    <div class="help-grid">
+                                        <div class="help-section">
+                                            <h4>GitHub.com</h4>
+                                            <ul>
+                                                <li><code>input[name="q"]</code> - Search box</li>
+                                                <li><code>.Header-link</code> - Header links</li>
+                                                <li><code>.btn</code> - Buttons</li>
+                                                <li><code>a</code> - Any link</li>
+                                            </ul>
+                                        </div>
+                                        <div class="help-section">
+                                            <h4>Common Selectors</h4>
+                                            <ul>
+                                                <li><code>h1, h2, h3</code> - Headings</li>
+                                                <li><code>input</code> - Input fields</li>
+                                                <li><code>button</code> - Buttons</li>
+                                                <li><code>body</code> - Page body</li>
+                                            </ul>
+                                        </div>
+                                        <div class="help-section">
+                                            <h4>CSS Syntax</h4>
+                                            <ul>
+                                                <li><code>#id</code> - By ID</li>
+                                                <li><code>.class</code> - By class</li>
+                                                <li><code>[attr="value"]</code> - By attribute</li>
+                                                <li><code>tag</code> - By tag name</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                    <p><strong>💡 Tip:</strong> Navigate to a page first using the Browse tab, then test tools with elements that exist on that page!</p>
+                                </div>
+                            </details>
+                        </div>
                     </div>
 
                     <!-- Quick Test Actions -->
@@ -127,6 +168,7 @@
                                     <h5>Click Element</h5>
                                     <div class="tool-inputs">
                                         <input type="text" id="click-selector" placeholder="CSS Selector" value="a">
+                                        <small class="helper-text">Examples: a, button, .btn, #submit, [data-action]</small>
                                     </div>
                                     <button class="btn btn-secondary" onclick="executeClickTool()">Execute</button>
                                 </div>
@@ -135,6 +177,7 @@
                                     <h5>Type Text</h5>
                                     <div class="tool-inputs">
                                         <input type="text" id="type-selector" placeholder="Input Selector" value="input">
+                                        <small class="helper-text">Examples: input, textarea, [name='search'], #username</small>
                                         <input type="text" id="type-text" placeholder="Text" value="Hello World">
                                     </div>
                                     <button class="btn btn-secondary" onclick="executeTypeTool()">Execute</button>
@@ -149,6 +192,15 @@
                                         <button class="btn btn-sm" onclick="executeHoverTool()">Hover</button>
                                         <button class="btn btn-sm" onclick="executeFocusTool()">Focus</button>
                                     </div>
+                                </div>
+                                
+                                <div class="tool-card">
+                                    <h5>Select Option</h5>
+                                    <div class="tool-inputs">
+                                        <input type="text" id="select-selector" placeholder="Select Selector" value="select">
+                                        <input type="text" id="select-value" placeholder="Option Value" value="test">
+                                    </div>
+                                    <button class="btn btn-secondary" onclick="executeSelectOptionTool()">Execute</button>
                                 </div>
                             </div>
                         </div>
@@ -325,6 +377,110 @@
                         <div class="session-output">
                             <h3>Session Information</h3>
                             <div id="session-result" class="result-container"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Perception Tab -->
+                <div class="tab-content" id="perception-tab">
+                    <div class="content-header">
+                        <h2><i class="fas fa-brain"></i> Perception</h2>
+                        <p class="header-desc">Advanced AI perception and page understanding</p>
+                    </div>
+                    
+                    <div class="perception-panel">
+                        <!-- Page Analysis Section -->
+                        <div class="perception-section">
+                            <h3><i class="fas fa-search"></i> Page Analysis</h3>
+                            <div class="perception-controls">
+                                <button class="btn btn-primary" onclick="analyzePage()">
+                                    <i class="fas fa-eye"></i> Analyze Current Page
+                                </button>
+                                <button class="btn btn-info" onclick="classifyPage()">
+                                    <i class="fas fa-tag"></i> Classify Page Type
+                                </button>
+                            </div>
+                            <div id="analysis-result" class="result-container"></div>
+                        </div>
+
+                        <!-- Element Detection Section -->
+                        <div class="perception-section">
+                            <h3><i class="fas fa-crosshairs"></i> Smart Element Detection</h3>
+                            <div class="form-group">
+                                <label>Element Description (Natural Language)</label>
+                                <input type="text" id="element-description" 
+                                       placeholder="e.g., 'search button', 'login form', 'submit button'"
+                                       class="form-control">
+                            </div>
+                            <div class="perception-controls">
+                                <button class="btn btn-success" onclick="findElement()">
+                                    <i class="fas fa-crosshairs"></i> Find Element
+                                </button>
+                                <button class="btn btn-warning" onclick="highlightElement()">
+                                    <i class="fas fa-highlighter"></i> Highlight Found Element
+                                </button>
+                            </div>
+                            <div id="element-result" class="result-container"></div>
+                        </div>
+
+                        <!-- Intelligent Commands Section -->
+                        <div class="perception-section">
+                            <h3><i class="fas fa-magic"></i> Intelligent Commands</h3>
+                            <div class="form-group">
+                                <label>Command (Natural Language)</label>
+                                <input type="text" id="intelligent-command" 
+                                       placeholder="e.g., 'click the login button', 'fill the search box with test'"
+                                       class="form-control">
+                            </div>
+                            <div class="perception-controls">
+                                <button class="btn btn-primary" onclick="executeIntelligentCommand()">
+                                    <i class="fas fa-bolt"></i> Execute Command
+                                </button>
+                            </div>
+                            <div id="command-result" class="result-container"></div>
+                        </div>
+
+                        <!-- Form Analysis Section -->
+                        <div class="perception-section">
+                            <h3><i class="fas fa-wpforms"></i> Smart Form Analysis</h3>
+                            <div class="form-group">
+                                <label>Form Selector (Optional)</label>
+                                <input type="text" id="form-selector" 
+                                       placeholder="Leave empty to analyze first form"
+                                       class="form-control">
+                            </div>
+                            <div class="perception-controls">
+                                <button class="btn btn-info" onclick="analyzeForm()">
+                                    <i class="fas fa-search"></i> Analyze Form
+                                </button>
+                                <button class="btn btn-success" onclick="autoFillForm()">
+                                    <i class="fas fa-magic"></i> Auto-Fill Form
+                                </button>
+                            </div>
+                            <div id="form-result" class="result-container"></div>
+                        </div>
+
+                        <!-- Perception Statistics -->
+                        <div class="perception-section">
+                            <h3><i class="fas fa-chart-bar"></i> Perception Statistics</h3>
+                            <div class="stats-grid">
+                                <div class="stat-card">
+                                    <div class="stat-value" id="elements-found">0</div>
+                                    <div class="stat-label">Elements Found</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-value" id="commands-executed">0</div>
+                                    <div class="stat-label">Commands Executed</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-value" id="forms-analyzed">0</div>
+                                    <div class="stat-label">Forms Analyzed</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-value" id="pages-analyzed">0</div>
+                                    <div class="stat-label">Pages Analyzed</div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>

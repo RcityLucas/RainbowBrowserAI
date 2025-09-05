@@ -9,6 +9,21 @@ document.addEventListener('DOMContentLoaded', function() {
     console.log('RainbowBrowserAI Tools Interface Loaded');
     updateStatus('Ready');
     loadAvailableTools();
+    
+    // Setup navigation menu event listeners
+    const navItems = document.querySelectorAll('.nav-item[data-tab]');
+    navItems.forEach(item => {
+        item.addEventListener('click', function(e) {
+            e.preventDefault();
+            const tabName = this.getAttribute('data-tab');
+            switchTab(tabName);
+        });
+    });
+    
+    // Initialize perception statistics on load
+    if (typeof updatePerceptionStats === 'function') {
+        updatePerceptionStats();
+    }
 });
 
 // Update connection status
@@ -106,7 +121,13 @@ async function executeTool(toolName, parameters) {
         // Check if response is ok
         if (!response.ok) {
             const errorText = await response.text();
-            throw new Error(`HTTP ${response.status}: ${errorText || response.statusText}`);
+            let errorData;
+            try {
+                errorData = JSON.parse(errorText);
+                throw new Error(errorData.error || `HTTP ${response.status} error`);
+            } catch (parseError) {
+                throw new Error(`HTTP ${response.status}: ${errorText || response.statusText}`);
+            }
         }
         
         // Try to parse JSON
@@ -124,16 +145,35 @@ async function executeTool(toolName, parameters) {
             displayResult(result.data);
         } else {
             const errorMsg = result?.error || 'Unknown error occurred';
-            showNotification(`Error: ${errorMsg}`, 'error');
-            displayResult(`Error: ${errorMsg}`);
+            let helpMessage = '';
+            
+            // Provide helpful suggestions based on common errors
+            if (errorMsg.includes('Element not found') || errorMsg.includes('Could not find node')) {
+                helpMessage = '\n💡 Tip: Check if the element exists on the current page. Use browser dev tools (F12) to find the correct selector.';
+            } else if (errorMsg.includes('timeout') || errorMsg.includes('Timeout')) {
+                helpMessage = '\n💡 Tip: Try increasing timeout value or wait for page to load completely.';
+            } else if (errorMsg.includes('not visible') || errorMsg.includes('not an HTMLElement')) {
+                helpMessage = '\n💡 Tip: Use a more specific selector or wait for the element to become visible.';
+            }
+            
+            showNotification(`Error: ${errorMsg}${helpMessage}`, 'error');
+            displayResult(`Error: ${errorMsg}${helpMessage}`);
         }
         
         updateStatus('Ready');
         return result;
     } catch (error) {
         console.error('Tool execution failed:', error);
-        showNotification(`Failed to execute ${toolName}: ${error.message}`, 'error');
-        displayResult(`Error: ${error.message}`);
+        
+        let helpMessage = '';
+        if (error.message.includes('Element not found') || error.message.includes('Could not find node')) {
+            helpMessage = '\n💡 Tip: Navigate to a webpage first (use Browse tab), then verify the element exists using F12 dev tools.';
+        } else if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+            helpMessage = '\n💡 Tip: Check if the server is running on the correct port.';
+        }
+        
+        showNotification(`Failed to execute ${toolName}: ${error.message}${helpMessage}`, 'error');
+        displayResult(`Error: ${error.message}${helpMessage}`);
         updateStatus('Error', true);
         throw error;
     }
@@ -216,6 +256,16 @@ function executeFocusTool() {
     executeTool('focus', { selector });
 }
 
+function executeSelectOptionTool() {
+    const selector = document.getElementById('select-selector').value;
+    const value = document.getElementById('select-value').value;
+    if (!selector || !value) {
+        showNotification('Please enter both selector and option value', 'warning');
+        return;
+    }
+    executeTool('select_option', { selector, value });
+}
+
 // Data extraction tools
 function executeExtractTextTool() {
     const selector = document.getElementById('extract-text-selector').value;
@@ -293,7 +343,7 @@ function switchTab(tabName) {
     }
     
     // Add active class to selected nav item
-    const selectedNavItem = document.querySelector(`.nav-item[onclick*="${tabName}"]`);
+    const selectedNavItem = document.querySelector(`.nav-item[data-tab="${tabName}"]`);
     if (selectedNavItem) {
         selectedNavItem.classList.add('active');
     }
@@ -558,6 +608,7 @@ window.executeClickTool = executeClickTool;
 window.executeTypeTool = executeTypeTool;
 window.executeHoverTool = executeHoverTool;
 window.executeFocusTool = executeFocusTool;
+window.executeSelectOptionTool = executeSelectOptionTool;
 window.executeExtractTextTool = executeExtractTextTool;
 window.executeExtractLinksTool = executeExtractLinksTool;
 window.executeExtractDataTool = executeExtractDataTool;
@@ -582,3 +633,293 @@ window.executeCacheTool = executeCacheTool;
 window.clearOutput = clearOutput;
 window.testAllTools = testAllTools;
 window.runScenario = runScenario;
+
+// ========== Perception Functions ==========
+
+// Perception statistics tracking
+let perceptionStats = {
+    elementsFound: 0,
+    commandsExecuted: 0,
+    formsAnalyzed: 0,
+    pagesAnalyzed: 0
+};
+
+// Update perception statistics display
+function updatePerceptionStats() {
+    document.getElementById('elements-found').textContent = perceptionStats.elementsFound;
+    document.getElementById('commands-executed').textContent = perceptionStats.commandsExecuted;
+    document.getElementById('forms-analyzed').textContent = perceptionStats.formsAnalyzed;
+    document.getElementById('pages-analyzed').textContent = perceptionStats.pagesAnalyzed;
+}
+
+// Analyze current page using perception
+async function analyzePage() {
+    const resultDiv = document.getElementById('analysis-result');
+    resultDiv.innerHTML = '<div class="loading">Analyzing page...</div>';
+    
+    try {
+        const response = await fetch(`${API_BASE}/api/perception/analyze`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({})
+        });
+        
+        const data = await response.json();
+        
+        if (data.success && data.data) {
+            perceptionStats.pagesAnalyzed++;
+            updatePerceptionStats();
+            
+            resultDiv.innerHTML = `
+                <div class="success-result">
+                    <h4>Page Analysis Complete</h4>
+                    <div class="analysis-details">
+                        <div class="detail-item">
+                            <strong>URL:</strong> ${data.data.url || 'Unknown'}
+                        </div>
+                        <div class="detail-item">
+                            <strong>Title:</strong> ${data.data.title || 'Unknown'}
+                        </div>
+                        <div class="detail-item">
+                            <strong>Page Type:</strong> <span class="tag">${data.data.page_type || 'Unknown'}</span>
+                        </div>
+                        <div class="detail-item">
+                            <strong>Analysis Time:</strong> ${data.data.timestamp ? new Date(data.data.timestamp).toLocaleString() : 'Unknown'}
+                        </div>
+                        <div class="detail-item">
+                            <strong>Semantic Intent:</strong> <span class="tag">${data.data.semantic_analysis?.intent || 'Unknown'}</span>
+                        </div>
+                        <div class="detail-item">
+                            <strong>Entities Found:</strong> ${data.data.semantic_analysis?.entities?.length || 0}
+                        </div>
+                    </div>
+                </div>
+            `;
+            showNotification('Page analysis completed successfully', 'success');
+        } else {
+            resultDiv.innerHTML = `<div class="error-result">Error: ${data.error || 'Analysis failed'}</div>`;
+            showNotification('Page analysis failed', 'error');
+        }
+    } catch (error) {
+        resultDiv.innerHTML = `<div class="error-result">Network error: ${error.message}</div>`;
+        showNotification('Network error during page analysis', 'error');
+    }
+}
+
+// Classify page type
+async function classifyPage() {
+    // This is part of analyzePage, so we'll just call that
+    await analyzePage();
+}
+
+// Find element using natural language description
+async function findElement() {
+    const description = document.getElementById('element-description').value.trim();
+    const resultDiv = document.getElementById('element-result');
+    
+    if (!description) {
+        showNotification('Please enter an element description', 'warning');
+        return;
+    }
+    
+    resultDiv.innerHTML = '<div class="loading">Finding element...</div>';
+    
+    try {
+        const response = await fetch(`${API_BASE}/api/perception/find`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ description })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success && data.data) {
+            perceptionStats.elementsFound++;
+            updatePerceptionStats();
+            
+            resultDiv.innerHTML = `
+                <div class="success-result">
+                    <h4>Element Found</h4>
+                    <div class="element-details">
+                        <div class="detail-item">
+                            <strong>Selector:</strong> <code>${data.data.selector}</code>
+                        </div>
+                        <div class="detail-item">
+                            <strong>Text:</strong> "${data.data.text || 'N/A'}"
+                        </div>
+                        <div class="detail-item">
+                            <strong>Element Type:</strong> <span class="tag">${data.data.element_type || 'Unknown'}</span>
+                        </div>
+                        <div class="detail-item">
+                            <strong>Confidence:</strong> <span class="confidence">${Math.round(data.data.confidence * 100)}%</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+            showNotification('Element found successfully', 'success');
+        } else {
+            resultDiv.innerHTML = `<div class="error-result">Element not found: ${data.error || 'No matching element'}</div>`;
+            showNotification('Element not found', 'warning');
+        }
+    } catch (error) {
+        resultDiv.innerHTML = `<div class="error-result">Network error: ${error.message}</div>`;
+        showNotification('Network error during element search', 'error');
+    }
+}
+
+// Highlight found element (placeholder - would need browser integration)
+function highlightElement() {
+    showNotification('Element highlighting would be implemented with browser integration', 'info');
+}
+
+// Execute intelligent command
+async function executeIntelligentCommand() {
+    const command = document.getElementById('intelligent-command').value.trim();
+    const resultDiv = document.getElementById('command-result');
+    
+    if (!command) {
+        showNotification('Please enter a command', 'warning');
+        return;
+    }
+    
+    resultDiv.innerHTML = '<div class="loading">Executing command...</div>';
+    
+    try {
+        const response = await fetch(`${API_BASE}/api/perception/command`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                command: {
+                    action: 'execute',
+                    description: command,
+                    parameters: {}
+                }
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success && data.data) {
+            perceptionStats.commandsExecuted++;
+            updatePerceptionStats();
+            
+            resultDiv.innerHTML = `
+                <div class="success-result">
+                    <h4>Command Executed</h4>
+                    <div class="command-details">
+                        <div class="detail-item">
+                            <strong>Command:</strong> "${command}"
+                        </div>
+                        <div class="detail-item">
+                            <strong>Status:</strong> <span class="tag success">${data.data.status || 'Completed'}</span>
+                        </div>
+                        <div class="detail-item">
+                            <strong>Result:</strong> ${data.data.result || 'Success'}
+                        </div>
+                    </div>
+                </div>
+            `;
+            showNotification('Command executed successfully', 'success');
+        } else {
+            resultDiv.innerHTML = `<div class="error-result">Command failed: ${data.error || 'Execution error'}</div>`;
+            showNotification('Command execution failed', 'error');
+        }
+    } catch (error) {
+        resultDiv.innerHTML = `<div class="error-result">Network error: ${error.message}</div>`;
+        showNotification('Network error during command execution', 'error');
+    }
+}
+
+// Analyze form
+async function analyzeForm() {
+    const formSelector = document.getElementById('form-selector').value.trim();
+    const resultDiv = document.getElementById('form-result');
+    
+    resultDiv.innerHTML = '<div class="loading">Analyzing form...</div>';
+    
+    try {
+        const response = await fetch(`${API_BASE}/api/perception/forms/analyze`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                form_selector: formSelector || null 
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success && data.data) {
+            perceptionStats.formsAnalyzed++;
+            updatePerceptionStats();
+            
+            resultDiv.innerHTML = `
+                <div class="success-result">
+                    <h4>Form Analysis Complete</h4>
+                    <div class="form-details">
+                        <div class="detail-item">
+                            <strong>Form Type:</strong> <span class="tag">${data.data.form_type || 'Unknown'}</span>
+                        </div>
+                        <div class="detail-item">
+                            <strong>Fields Found:</strong> ${data.data.fields?.length || 0}
+                        </div>
+                        <div class="detail-item">
+                            <strong>Required Fields:</strong> ${data.data.required_fields?.length || 0}
+                        </div>
+                        <div class="detail-item">
+                            <strong>Submit Elements:</strong> ${data.data.submit_elements?.length || 0}
+                        </div>
+                        <div class="detail-item">
+                            <strong>Confidence:</strong> <span class="confidence">${Math.round((data.data.confidence || 0) * 100)}%</span>
+                        </div>
+                    </div>
+                    ${data.data.fields && data.data.fields.length > 0 ? `
+                        <div class="fields-list">
+                            <h5>Form Fields:</h5>
+                            ${data.data.fields.map(field => `
+                                <div class="field-item">
+                                    <code>${field.selector}</code> - ${field.field_type} 
+                                    ${field.required ? '<span class="required">*</span>' : ''}
+                                    ${field.label ? `(${field.label})` : ''}
+                                </div>
+                            `).join('')}
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+            showNotification('Form analysis completed successfully', 'success');
+        } else {
+            resultDiv.innerHTML = `<div class="error-result">Form analysis failed: ${data.error || 'No form found'}</div>`;
+            showNotification('Form analysis failed', 'error');
+        }
+    } catch (error) {
+        resultDiv.innerHTML = `<div class="error-result">Network error: ${error.message}</div>`;
+        showNotification('Network error during form analysis', 'error');
+    }
+}
+
+// Auto-fill form (placeholder implementation)
+async function autoFillForm() {
+    showNotification('Auto-fill functionality requires user profile configuration', 'info');
+    const resultDiv = document.getElementById('form-result');
+    resultDiv.innerHTML = `
+        <div class="info-result">
+            <h4>Auto-Fill Configuration Needed</h4>
+            <p>To use auto-fill functionality, you need to:</p>
+            <ul>
+                <li>Configure user profiles with personal information</li>
+                <li>Specify which profile to use for filling</li>
+                <li>Analyze the form first to understand its structure</li>
+            </ul>
+            <p>This feature is available through the API with proper configuration.</p>
+        </div>
+    `;
+}
+
+// Make perception functions available globally
+window.analyzePage = analyzePage;
+window.classifyPage = classifyPage;
+window.findElement = findElement;
+window.highlightElement = highlightElement;
+window.executeIntelligentCommand = executeIntelligentCommand;
+window.analyzeForm = analyzeForm;
+window.autoFillForm = autoFillForm;

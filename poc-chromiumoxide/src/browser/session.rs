@@ -1,4 +1,4 @@
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 use chromiumoxide::BrowserConfig;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -6,7 +6,7 @@ use tokio::sync::RwLock;
 use uuid::Uuid;
 use chrono::{DateTime, Utc};
 use tracing::info;
-use super::core::{Browser, BrowserOps};
+use super::core::Browser;
 
 /// Browser session for stateful operations
 #[derive(Clone)]

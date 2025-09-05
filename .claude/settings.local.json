@@ -302,7 +302,17 @@
       "Read(/D:\\github\\RainbowBrowserAI\\poc-chromiumoxide/**)",
       "Read(/D:\\github\\RainbowBrowserAI\\poc\\.claude/**)",
       "Read(/D:\\github\\RainbowBrowserAI\\.claude/**)",
-      "Read(/D:\\github\\RainbowBrowserAI\\poc\\.claude/**)"
+      "Read(/D:\\github\\RainbowBrowserAI\\poc\\.claude/**)",
+      "Bash(env RAINBOW_MOCK_MODE=true timeout 60s cargo check --message-format short)",
+      "Bash(npm install)",
+      "Bash(npm run lint)",
+      "Bash(npm install:*)",
+      "Bash(npm test:*)",
+      "Bash(npx jest:*)",
+      "Bash(RUST_LOG=info cargo run --release --bin rainbow-poc -- serve --port 3002)",
+      "Bash(tasklist)",
+      "Bash(./target/release/rainbow-poc-chromiumoxide serve:*)",
+      "Bash(netstat:*)"
     ],
     "deny": [],
     "additionalDirectories": [

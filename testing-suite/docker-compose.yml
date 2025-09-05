@@ -1,0 +1,217 @@
+version: '3.8'
+
+services:
+  # Main testing service
+  rainbowbrowserai-tests:
+    build:
+      context: .
+      target: development
+    volumes:
+      - ./src:/app/src:ro
+      - ./reports:/app/reports
+      - ./coverage:/app/coverage
+      - ./test-results:/app/test-results
+      - ../poc-chromiumoxide:/poc-chromiumoxide:ro
+    environment:
+      - NODE_ENV=test
+      - RAINBOW_MOCK_MODE=true
+      - HEADLESS=true
+      - TEST_SERVER_URL=http://localhost:3002
+    ports:
+      - "3002:3002"
+    command: npm run test:watch
+    networks:
+      - testing-network
+
+  # Production-like testing environment
+  production-tests:
+    build:
+      context: .
+      target: production
+    volumes:
+      - ./reports:/app/reports
+      - ./coverage:/app/coverage
+      - ../poc-chromiumoxide:/poc-chromiumoxide:ro
+    environment:
+      - NODE_ENV=production
+      - RAINBOW_MOCK_MODE=true
+      - HEADLESS=true
+    networks:
+      - testing-network
+
+  # Performance testing service
+  performance-tests:
+    build:
+      context: .
+      target: performance
+    volumes:
+      - ./reports/performance:/app/reports
+      - ../poc-chromiumoxide:/poc-chromiumoxide:ro
+    environment:
+      - NODE_ENV=performance
+      - RAINBOW_MOCK_MODE=true
+      - HEADLESS=true
+    networks:
+      - testing-network
+    depends_on:
+      - test-db
+      - test-redis
+
+  # CI/CD testing service
+  ci-tests:
+    build:
+      context: .
+      target: ci
+    volumes:
+      - ./reports:/app/reports
+      - ./coverage:/app/coverage
+      - ./test-results:/app/test-results
+      - ../poc-chromiumoxide:/poc-chromiumoxide:ro
+    environment:
+      - CI=true
+      - NODE_ENV=test
+      - RAINBOW_MOCK_MODE=true
+      - HEADLESS=true
+    networks:
+      - testing-network
+
+  # Debug environment for troubleshooting
+  debug:
+    build:
+      context: .
+      target: debug
+    volumes:
+      - ./src:/app/src
+      - ./reports:/app/reports
+      - ../poc-chromiumoxide:/poc-chromiumoxide
+    environment:
+      - NODE_ENV=development
+      - DEBUG=*
+      - RUST_LOG=debug
+      - VERBOSE_TESTS=true
+    ports:
+      - "3002:3002"
+      - "9229:9229" # Node.js debug port
+    networks:
+      - testing-network
+    stdin_open: true
+    tty: true
+
+  # Test database for integration tests
+  test-db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=rainbowbrowserai_test
+      - POSTGRES_USER=testuser
+      - POSTGRES_PASSWORD=testpass
+    volumes:
+      - test-db-data:/var/lib/postgresql/data
+      - ./scripts/db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "5433:5432"
+    networks:
+      - testing-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U testuser -d rainbowbrowserai_test"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis for session testing
+  test-redis:
+    image: redis:7-alpine
+    ports:
+      - "6380:6379"
+    networks:
+      - testing-network
+    command: redis-server --appendonly yes
+    volumes:
+      - test-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Test report server
+  test-reports:
+    image: nginx:alpine
+    volumes:
+      - ./reports:/usr/share/nginx/html:ro
+      - ./docker/nginx.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "8080:80"
+    networks:
+      - testing-network
+    depends_on:
+      - rainbowbrowserai-tests
+
+  # Selenium Grid Hub for cross-browser testing
+  selenium-hub:
+    image: selenium/hub:4.15.0
+    container_name: selenium-hub
+    ports:
+      - "4442:4442"
+      - "4443:4443"
+      - "4444:4444"
+    networks:
+      - testing-network
+    environment:
+      - GRID_MAX_SESSION=4
+
+  # Chrome Node for Selenium Grid
+  selenium-chrome:
+    image: selenium/node-chrome:4.15.0
+    shm_size: 2gb
+    depends_on:
+      - selenium-hub
+    environment:
+      - HUB_HOST=selenium-hub
+      - HUB_PORT=4444
+      - NODE_MAX_INSTANCES=2
+      - NODE_MAX_SESSION=2
+    networks:
+      - testing-network
+
+  # Firefox Node for Selenium Grid
+  selenium-firefox:
+    image: selenium/node-firefox:4.15.0
+    shm_size: 2gb
+    depends_on:
+      - selenium-hub
+    environment:
+      - HUB_HOST=selenium-hub
+      - HUB_PORT=4444
+      - NODE_MAX_INSTANCES=2
+      - NODE_MAX_SESSION=2
+    networks:
+      - testing-network
+
+  # Monitoring service for test metrics
+  test-metrics:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./docker/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    networks:
+      - testing-network
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+
+networks:
+  testing-network:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  test-db-data:
+  test-redis-data:
+  prometheus-data:

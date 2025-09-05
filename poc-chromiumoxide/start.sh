@@ -12,6 +12,22 @@ echo -e "${GREEN}     Starting RainbowBrowserAI (Chromiumoxide Edition)${NC}"
 echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
 echo ""
 
+# Show usage if --help is passed
+if [[ "$1" == "--help" ]] || [[ "$1" == "-h" ]]; then
+    echo -e "${GREEN}Usage:${NC}"
+    echo -e "  ./start.sh                    # Start with browser window and open dashboard"
+    echo -e "  ./start.sh --headless         # Start in headless mode (no browser window)"
+    echo -e "  ./start.sh --no-browser       # Start but don't auto-open dashboard"
+    echo -e "  ./start.sh --headless --no-browser  # Headless mode and don't open dashboard"
+    echo ""
+    echo -e "${GREEN}Features:${NC}"
+    echo -e "  • Integrated visualization dashboard"
+    echo -e "  • No ChromeDriver needed (uses Chrome DevTools Protocol)"
+    echo -e "  • Automatic browser pool management"
+    echo -e "  • Real-time operation monitoring"
+    exit 0
+fi
+
 # Configuration
 SERVER_PORT=3001
 BUILD_MODE="release"
@@ -92,8 +108,11 @@ echo -e "\n${BLUE}════════════════════�
 echo -e "${GREEN}🚀 Starting RainbowBrowserAI Server (Chromiumoxide)${NC}"
 echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
 echo -e "${GREEN}📍 Dashboard: ${BLUE}http://localhost:$SERVER_PORT${NC}"
-echo -e "${GREEN}📊 Health: ${BLUE}http://localhost:$SERVER_PORT/api/health${NC}"
+echo -e "${GREEN}🎨 Visualization: ${BLUE}http://localhost:$SERVER_PORT${NC}"
+echo -e "${GREEN}📊 Health API: ${BLUE}http://localhost:$SERVER_PORT/api/health${NC}"
+echo -e "${GREEN}🔧 Tools API: ${BLUE}http://localhost:$SERVER_PORT/api/tools${NC}"
 echo -e "${YELLOW}🎯 No ChromeDriver needed! Using Chrome DevTools Protocol${NC}"
+echo -e "${YELLOW}📈 Real-time monitoring and visualization included!${NC}"
 echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
 echo ""
 
@@ -106,17 +125,18 @@ else
 fi
 
 # Determine mode (headless or headed)
-HEADLESS_ARG=""
 if [ "$1" == "--headless" ] || [ "$2" == "--headless" ] || [ "$3" == "--headless" ]; then
     HEADLESS_ARG="--headless"
     echo -e "${YELLOW}  Running in headless mode (no browser window)${NC}"
+    # Start server with headless flag
+    echo -e "\n${BLUE}Starting API server...${NC}"
+    $BINARY serve --port $SERVER_PORT --headless &
 else
     echo -e "${GREEN}  Running in headed mode (browser window visible)${NC}"
+    # Start server without headless flag
+    echo -e "\n${BLUE}Starting API server...${NC}"
+    $BINARY serve --port $SERVER_PORT &
 fi
-
-# Start server
-echo -e "\n${BLUE}Starting API server...${NC}"
-$BINARY serve --port $SERVER_PORT $HEADLESS_ARG &
 SERVER_PID=$!
 
 # Wait for server to start
@@ -124,7 +144,32 @@ echo -e "${BLUE}⏳ Waiting for server to start...${NC}"
 for i in {1..15}; do
     if curl -s http://localhost:$SERVER_PORT/api/health > /dev/null 2>&1; then
         echo -e "${GREEN}✅ Service started successfully!${NC}"
+        echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
         echo -e "${GREEN}🌐 Dashboard: ${BLUE}http://localhost:$SERVER_PORT${NC}"
+        echo -e "${GREEN}📊 Health API: ${BLUE}http://localhost:$SERVER_PORT/api/health${NC}"
+        echo -e "${GREEN}🎨 Visualization: ${BLUE}http://localhost:$SERVER_PORT${NC}"
+        echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
+        
+        # Open browser to dashboard if not in headless mode and if --no-browser flag is not set
+        HEADLESS_MODE=false
+        if [[ "$1" == "--headless" ]] || [[ "$2" == "--headless" ]] || [[ "$3" == "--headless" ]]; then
+            HEADLESS_MODE=true
+        fi
+        
+        if [[ "$HEADLESS_MODE" != true ]] && [[ "$1" != "--no-browser" ]] && [[ "$2" != "--no-browser" ]]; then
+            echo -e "${YELLOW}🚀 Opening dashboard in browser...${NC}"
+            # Try different methods to open browser based on OS
+            if command -v xdg-open > /dev/null 2>&1; then
+                xdg-open "http://localhost:$SERVER_PORT" 2>/dev/null &
+            elif command -v open > /dev/null 2>&1; then
+                open "http://localhost:$SERVER_PORT" 2>/dev/null &
+            elif command -v start > /dev/null 2>&1; then
+                start "http://localhost:$SERVER_PORT" 2>/dev/null &
+            else
+                echo -e "${YELLOW}  ℹ️  Could not auto-open browser. Please manually visit: ${BLUE}http://localhost:$SERVER_PORT${NC}"
+            fi
+        fi
+        
         echo -e "${YELLOW}Press Ctrl+C to stop${NC}"
         echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
         break

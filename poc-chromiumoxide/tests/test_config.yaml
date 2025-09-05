@@ -1,0 +1,74 @@
+# Test Configuration for RainbowBrowserAI Chromiumoxide Edition
+test_config:
+  server:
+    host: "localhost"
+    port: 3002
+    startup_timeout: 30
+    health_endpoint: "/api/health"
+    
+  browser:
+    headless: true
+    viewport:
+      width: 1920
+      height: 1080
+    timeout: 30000
+    user_agent: "RainbowBrowserAI-Test/1.0"
+    
+  test_sites:
+    example: "https://example.com"
+    github: "https://github.com"
+    httpbin: "https://httpbin.org"
+    local_test: "http://localhost:3002"
+    
+  timeouts:
+    short: 5000
+    medium: 15000
+    long: 30000
+    
+  test_data:
+    selectors:
+      common:
+        - "body"
+        - "h1"
+        - "a"
+        - "input"
+        - "button"
+      github:
+        - "input[name='q']"
+        - ".Header-link"
+        - ".btn"
+      example:
+        - "h1"
+        - "p"
+        - "a[href]"
+        
+  perception:
+    test_commands:
+      - "click the first link"
+      - "find the search button" 
+      - "extract page title"
+      - "analyze page type"
+      
+  tools:
+    navigation:
+      - "navigate_to_url"
+      - "go_back"
+      - "go_forward"
+      - "refresh"
+    interaction:
+      - "click"
+      - "type_text"
+      - "hover"
+      - "focus"
+      - "select_option"
+    extraction:
+      - "extract_text"
+      - "extract_links"
+      - "extract_data"
+      - "get_element_info"
+      
+  reports:
+    format: "json"
+    output_dir: "tests/reports"
+    include_screenshots: true
+    detailed_logs: true

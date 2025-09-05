@@ -7,6 +7,7 @@ use std::time::Duration;
 mod browser;
 mod api;
 mod tools;
+mod perception;
 
 use browser::Browser;
 
@@ -105,8 +106,8 @@ async fn serve_api(port: u16, headless: bool) -> Result<()> {
     info!("Starting API server on port {}", port);
     info!("Browser mode: {}", if headless { "headless" } else { "headed" });
     
-    // Initialize browser pool
-    let pool = browser::pool::BrowserPool::new(5)?;
+    // Initialize browser pool with headless mode (single browser for session consistency)
+    let pool = browser::pool::BrowserPool::new_with_headless(1, headless)?;
     
     // Preload one browser
     pool.preload(1).await?;

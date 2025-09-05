@@ -1,6 +1,6 @@
 use anyhow::Result;
 use axum::{
-    extract::{State, Json, Query},
+    extract::{State, Json},
     response::{IntoResponse, Response},
     routing::{get, post},
     Router,
@@ -8,11 +8,13 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+
+mod perception_handlers;
 use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
 use tower_http::services::ServeDir;
 use tracing::{info, error};
-use crate::browser::{Browser, BrowserOps, pool::BrowserPool, SessionManager};
+use crate::browser::{BrowserOps, pool::BrowserPool, SessionManager};
 
 #[derive(Clone)]
 struct AppState {
@@ -46,6 +48,9 @@ pub async fn serve(port: u16, browser_pool: BrowserPool) -> Result<()> {
         .route("/api/find", post(find_elements))
         .route("/api/get_text", post(get_text))
         .route("/api/scroll", post(scroll))
+        .route("/api/zoom", post(set_zoom_level))
+        .route("/api/fix_scaling", post(fix_content_scaling))
+        .route("/api/fix_window", post(fix_window_completely))
         
         // Workflow
         .route("/api/workflow", post(execute_workflow))
@@ -53,6 +58,13 @@ pub async fn serve(port: u16, browser_pool: BrowserPool) -> Result<()> {
         // Tools API endpoints
         .route("/api/tools", get(list_tools))
         .route("/api/tools/execute", post(execute_tool))
+        
+        // Perception API endpoints
+        .route("/api/perception/analyze", post(perception_handlers::analyze_page))
+        .route("/api/perception/find", post(perception_handlers::intelligent_find_element))
+        .route("/api/perception/command", post(perception_handlers::execute_intelligent_command))
+        .route("/api/perception/forms/analyze", post(perception_handlers::analyze_form))
+        .route("/api/perception/forms/fill", post(perception_handlers::auto_fill_form))
         
         // Static files (serve our migrated interface)
         .nest_service("/static", ServeDir::new("static"))
@@ -151,6 +163,11 @@ struct GetTextRequest {
 struct ScrollRequest {
     x: i32,
     y: i32,
+}
+
+#[derive(Deserialize)]
+struct ZoomRequest {
+    zoom_factor: f64,
 }
 
 #[derive(Serialize)]
@@ -404,6 +421,88 @@ async fn scroll(
                 }
                 Err(e) => {
                     error!("Scroll failed: {}", e);
+                    (StatusCode::INTERNAL_SERVER_ERROR,
+                     Json(ApiResponse::<()>::error(e.to_string()))).into_response()
+                }
+            }
+        }
+        Err(e) => {
+            error!("Failed to acquire browser: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR,
+             Json(ApiResponse::<()>::error(e.to_string()))).into_response()
+        }
+    }
+}
+
+async fn set_zoom_level(
+    State(state): State<AppState>,
+    Json(req): Json<ZoomRequest>,
+) -> Response {
+    match state.browser_pool.acquire().await {
+        Ok(browser) => {
+            match browser.set_zoom_level(req.zoom_factor).await {
+                Ok(_) => {
+                    Json(ApiResponse::success(serde_json::json!({
+                        "zoom_factor": req.zoom_factor,
+                        "action": "zoom_set"
+                    }))).into_response()
+                }
+                Err(e) => {
+                    error!("Set zoom level failed: {}", e);
+                    (StatusCode::INTERNAL_SERVER_ERROR,
+                     Json(ApiResponse::<()>::error(e.to_string()))).into_response()
+                }
+            }
+        }
+        Err(e) => {
+            error!("Failed to acquire browser: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR,
+             Json(ApiResponse::<()>::error(e.to_string()))).into_response()
+        }
+    }
+}
+
+async fn fix_content_scaling(
+    State(state): State<AppState>,
+) -> Response {
+    match state.browser_pool.acquire().await {
+        Ok(browser) => {
+            match browser.fix_content_scaling().await {
+                Ok(_) => {
+                    Json(ApiResponse::success(serde_json::json!({
+                        "action": "content_scaling_fixed",
+                        "message": "Viewport and content scaling fixed"
+                    }))).into_response()
+                }
+                Err(e) => {
+                    error!("Fix content scaling failed: {}", e);
+                    (StatusCode::INTERNAL_SERVER_ERROR,
+                     Json(ApiResponse::<()>::error(e.to_string()))).into_response()
+                }
+            }
+        }
+        Err(e) => {
+            error!("Failed to acquire browser: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR,
+             Json(ApiResponse::<()>::error(e.to_string()))).into_response()
+        }
+    }
+}
+
+async fn fix_window_completely(
+    State(state): State<AppState>,
+) -> Response {
+    match state.browser_pool.acquire().await {
+        Ok(browser) => {
+            match browser.fix_window_completely().await {
+                Ok(_) => {
+                    Json(ApiResponse::success(serde_json::json!({
+                        "action": "window_completely_fixed",
+                        "message": "Screenshot trigger + content scaling applied"
+                    }))).into_response()
+                }
+                Err(e) => {
+                    error!("Complete window fix failed: {}", e);
                     (StatusCode::INTERNAL_SERVER_ERROR,
                      Json(ApiResponse::<()>::error(e.to_string()))).into_response()
                 }

@@ -2,7 +2,7 @@ use anyhow::{Result, anyhow};
 use chromiumoxide::cdp::browser_protocol::network::{Cookie, CookieParam};
 use std::time::Duration;
 use tracing::{info, warn, debug};
-use super::core::{Browser, BrowserOps};
+use super::core::Browser;
 
 /// Advanced navigation options
 #[derive(Debug, Clone, Default)]
