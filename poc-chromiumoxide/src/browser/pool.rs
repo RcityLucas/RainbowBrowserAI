@@ -28,8 +28,6 @@ impl BrowserPool {
         } else {
             BrowserConfig::builder()
                 .with_head()
-                .arg("--window-size=1200,800")
-                .arg("--window-position=0,0")
                 .arg("--force-device-scale-factor=1")
                 .arg("--high-dpi-support=1")
                 .arg("--force-color-profile=srgb")
@@ -53,8 +51,6 @@ impl BrowserPool {
                 .arg("--disable-background-networking")
                 .arg("--disable-blink-features=AutomationControlled")
                 .arg("--enable-use-zoom-for-dsf")
-                .arg("--app-shell-host-window-size=1200x800")
-                .arg("--force-app-mode")
                 .arg("--disable-session-crashed-bubble")
                 .build()
                 .map_err(|e| anyhow::anyhow!("Failed to build headed config: {}", e))?
