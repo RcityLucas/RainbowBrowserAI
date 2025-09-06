@@ -4,7 +4,6 @@
 
 use rainbow_poc_chromiumoxide::browser::{Browser, BrowserOps};
 use tokio;
-use serde_json::json;
 
 /// Helper to setup a test browser
 async fn setup_browser() -> Browser {

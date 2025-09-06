@@ -403,7 +403,7 @@ impl PerceptionEngine {
 
         // Login patterns
         if description.contains("login") || description.contains("sign in") {
-            let login_selectors = vec![
+            let _login_selectors = vec![
                 "button:contains('Login')",
                 "a[href*='login']",
                 "#login",
@@ -805,8 +805,3 @@ impl PerceptionEngine {
 }
 
 // Re-export key types
-pub use visual::*;
-pub use semantic::*;
-pub use context_aware::*;
-pub use smart_forms::*;
-pub use integration::*;

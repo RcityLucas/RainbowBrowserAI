@@ -312,7 +312,13 @@
       "Bash(RUST_LOG=info cargo run --release --bin rainbow-poc -- serve --port 3002)",
       "Bash(tasklist)",
       "Bash(./target/release/rainbow-poc-chromiumoxide serve:*)",
-      "Bash(netstat:*)"
+      "Bash(netstat:*)",
+      "Read(\\/**)",
+      "Bash(for file in src/tools/interaction.rs src/tools/synchronization.rs src/tools/memory.rs)",
+      "Bash(do sed -i 's/use crate::browser::{Browser, BrowserOps};/use crate::browser::Browser;/' \"$file\")",
+      "Bash(done)",
+      "Bash(./target/release/rainbow-poc-chromiumoxide.exe serve:*)",
+      "Bash(./target/release/rainbow-poc-chromiumoxide.exe --help)"
     ],
     "deny": [],
     "additionalDirectories": [

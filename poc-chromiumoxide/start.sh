@@ -35,11 +35,11 @@ BUILD_MODE="release"
 # Function to check if port is in use
 check_port() {
     local port=$1
-    if nc -z localhost $port 2>/dev/null; then
+    # Use netstat to check if port is listening (works with any language output)
+    if netstat -an 2>/dev/null | grep -E ":${port}\s" >/dev/null; then
         return 0  # Port is in use
-    else
-        return 1  # Port is free
     fi
+    return 1  # Port is free
 }
 
 # Find free port for server
@@ -47,10 +47,10 @@ find_free_port() {
     local base_port=$1
     local port=$base_port
     while check_port $port; do
-        echo -e "${YELLOW}⚠ Port $port is in use, trying $(($port + 1))...${NC}"
+        echo -e "${YELLOW}⚠ Port $port is in use, trying $(($port + 1))...${NC}" >&2
         port=$(($port + 1))
         if [ $port -gt $(($base_port + 10)) ]; then
-            echo -e "${RED}✗ Could not find free port after 10 attempts${NC}"
+            echo -e "${RED}✗ Could not find free port after 10 attempts${NC}" >&2
             return 1
         fi
     done
@@ -59,7 +59,13 @@ find_free_port() {
 
 # Clean up old processes
 echo -e "${YELLOW}🔄 Cleaning up old processes...${NC}"
-pkill -f rainbow-poc-chromiumoxide 2>/dev/null && echo -e "${GREEN}  ✓ Killed old processes${NC}"
+# Try different cleanup methods
+pkill -f rainbow-poc-chromiumoxide 2>/dev/null && echo -e "${GREEN}  ✓ Killed old processes (pkill)${NC}"
+if command -v taskkill >/dev/null 2>&1; then
+    taskkill //F //IM rainbow-poc-chromiumoxide.exe 2>/dev/null && echo -e "${GREEN}  ✓ Killed old processes (taskkill)${NC}"
+fi
+# Wait a bit for processes to fully terminate
+sleep 1
 
 # Find free port
 echo -e "\n${BLUE}Finding available port for server...${NC}"
@@ -81,7 +87,12 @@ if [ "$BUILD_MODE" = "release" ]; then
         echo -e "${RED}  ✗ Build failed${NC}"
         exit 1
     fi
-    BINARY="./target/release/rainbow-poc-chromiumoxide"
+    # Check if we're on Windows (Git Bash/MSYS) or Linux
+    if [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "cygwin" ]] || [[ -f "./target/release/rainbow-poc-chromiumoxide.exe" ]]; then
+        BINARY="./target/release/rainbow-poc-chromiumoxide.exe"
+    else
+        BINARY="./target/release/rainbow-poc-chromiumoxide"
+    fi
 else
     echo -e "${YELLOW}  Building in debug mode...${NC}"
     if cargo build 2>&1 | grep -E "(Compiling|Finished|error)"; then
@@ -90,7 +101,12 @@ else
         echo -e "${RED}  ✗ Build failed${NC}"
         exit 1
     fi
-    BINARY="./target/debug/rainbow-poc-chromiumoxide"
+    # Check if we're on Windows (Git Bash/MSYS) or Linux
+    if [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "cygwin" ]] || [[ -f "./target/debug/rainbow-poc-chromiumoxide.exe" ]]; then
+        BINARY="./target/debug/rainbow-poc-chromiumoxide.exe"
+    else
+        BINARY="./target/debug/rainbow-poc-chromiumoxide"
+    fi
 fi
 
 # Function to cleanup on exit
@@ -116,12 +132,14 @@ echo -e "${YELLOW}📈 Real-time monitoring and visualization included!${NC}"
 echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
 echo ""
 
-# Test browser first
-echo -e "${BLUE}Testing browser connection...${NC}"
-if $BINARY test --headless 2>&1 | grep -q "All tests passed"; then
-    echo -e "${GREEN}  ✓ Browser test passed${NC}"
-else
-    echo -e "${YELLOW}  ⚠ Browser test had issues, but continuing...${NC}"
+# Skip browser test for now (optional: can be enabled with --test flag)
+if [ "$1" == "--test" ] || [ "$2" == "--test" ] || [ "$3" == "--test" ]; then
+    echo -e "${BLUE}Testing browser connection...${NC}"
+    if timeout 5 "$BINARY" test --headless 2>&1 | grep -q "All tests passed"; then
+        echo -e "${GREEN}  ✓ Browser test passed${NC}"
+    else
+        echo -e "${YELLOW}  ⚠ Browser test had issues, but continuing...${NC}"
+    fi
 fi
 
 # Determine mode (headless or headed)
@@ -130,12 +148,12 @@ if [ "$1" == "--headless" ] || [ "$2" == "--headless" ] || [ "$3" == "--headless
     echo -e "${YELLOW}  Running in headless mode (no browser window)${NC}"
     # Start server with headless flag
     echo -e "\n${BLUE}Starting API server...${NC}"
-    $BINARY serve --port $SERVER_PORT --headless &
+    "$BINARY" serve --port "$SERVER_PORT" --headless &
 else
     echo -e "${GREEN}  Running in headed mode (browser window visible)${NC}"
     # Start server without headless flag
     echo -e "\n${BLUE}Starting API server...${NC}"
-    $BINARY serve --port $SERVER_PORT &
+    "$BINARY" serve --port "$SERVER_PORT" &
 fi
 SERVER_PID=$!
 

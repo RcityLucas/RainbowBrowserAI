@@ -50,7 +50,7 @@ impl VisualPerception {
     }
 
     /// Analyze screenshot for visual elements
-    pub async fn analyze_screenshot(&self, screenshot_data: &[u8]) -> Result<Vec<VisualElement>> {
+    pub async fn analyze_screenshot(&self, _screenshot_data: &[u8]) -> Result<Vec<VisualElement>> {
         // TODO: Implement computer vision analysis
         // This would use ML models to detect UI elements visually
         // For now, return empty - this is a future enhancement

@@ -76,7 +76,7 @@ impl PerceptionAwareBrowser {
         // Take screenshot if requested
         let screenshot = if command.options.take_screenshot {
             let screenshot_data = self.browser.screenshot(crate::browser::ScreenshotOptions::default()).await?;
-            Some(base64::encode(&screenshot_data))
+            Some(base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &screenshot_data))
         } else {
             None
         };
@@ -245,7 +245,7 @@ impl PerceptionAwareBrowser {
     }
 
     /// Intelligent data extraction based on page type
-    async fn intelligent_extract(&mut self, command: IntelligentCommand) -> Result<IntelligentCommandResult> {
+    async fn intelligent_extract(&mut self, _command: IntelligentCommand) -> Result<IntelligentCommandResult> {
         // Extract data based on page classification
         let extracted_data = self.perception.extract_page_data().await?;
 
@@ -494,7 +494,6 @@ pub struct PageAnalysis {
 }
 
 /// Convenience functions for creating common intelligent commands
-
 impl IntelligentCommand {
     pub fn click(description: &str) -> Self {
         Self {

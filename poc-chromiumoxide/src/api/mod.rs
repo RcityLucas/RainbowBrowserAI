@@ -518,9 +518,10 @@ async fn fix_window_completely(
 
 async fn execute_workflow(
     State(state): State<AppState>,
-    Json(workflow): Json<serde_json::Value>,
+    Json(_workflow): Json<serde_json::Value>,
 ) -> Response {
     // TODO: Implement workflow execution
+    let _ = state; // Suppress unused warning
     Json(ApiResponse::<()>::error("Workflow execution not yet implemented".to_string())).into_response()
 }
 
@@ -645,18 +646,20 @@ async fn execute_tool(
             let result = match req.tool_name.as_str() {
                 "navigate_to_url" => {
                     if let Some(url) = req.parameters.get("url").and_then(|v| v.as_str()) {
-                        browser.navigate_to(url).await
-                            .map(|_| serde_json::json!({"status": "navigated", "url": url}))
-                            .map_err(|e| anyhow::anyhow!(e))
+                        match browser.navigate_to(url).await {
+                            Ok(_) => Ok(serde_json::json!({"status": "navigated", "url": url})),
+                            Err(e) => Err(anyhow::anyhow!(e))
+                        }
                     } else {
                         Err(anyhow::anyhow!("Missing required parameter: url"))
                     }
                 }
                 "click" => {
                     if let Some(selector) = req.parameters.get("selector").and_then(|v| v.as_str()) {
-                        browser.click(selector).await
-                            .map(|_| serde_json::json!({"status": "clicked", "selector": selector}))
-                            .map_err(|e| anyhow::anyhow!(e))
+                        match browser.click(selector).await {
+                            Ok(_) => Ok(serde_json::json!({"status": "clicked", "selector": selector})),
+                            Err(e) => Err(anyhow::anyhow!(e))
+                        }
                     } else {
                         Err(anyhow::anyhow!("Missing required parameter: selector"))
                     }
@@ -666,9 +669,10 @@ async fn execute_tool(
                         req.parameters.get("selector").and_then(|v| v.as_str()),
                         req.parameters.get("text").and_then(|v| v.as_str())
                     ) {
-                        browser.type_text(selector, text).await
-                            .map(|_| serde_json::json!({"status": "typed", "selector": selector, "text": text}))
-                            .map_err(|e| anyhow::anyhow!(e))
+                        match browser.type_text(selector, text).await {
+                            Ok(_) => Ok(serde_json::json!({"status": "typed", "selector": selector, "text": text})),
+                            Err(e) => Err(anyhow::anyhow!(e))
+                        }
                     } else {
                         Err(anyhow::anyhow!("Missing required parameters: selector, text"))
                     }
@@ -839,7 +843,7 @@ async fn execute_tool(
                             }
                         }
                         "set" => {
-                            if let (Some(key), Some(value)) = (
+                            if let (Some(key), Some(_value)) = (
                                 req.parameters.get("key").and_then(|v| v.as_str()),
                                 req.parameters.get("value")
                             ) {
@@ -888,7 +892,7 @@ async fn execute_tool(
                             }
                         }
                         "set" => {
-                            if let (Some(key), Some(value)) = (
+                            if let (Some(key), Some(_value)) = (
                                 req.parameters.get("key").and_then(|v| v.as_str()),
                                 req.parameters.get("value")
                             ) {

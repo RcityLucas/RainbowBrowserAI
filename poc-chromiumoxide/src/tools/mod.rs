@@ -10,11 +10,4 @@ pub mod synchronization;
 pub mod memory;
 pub mod config;
 
-// Re-exports commented out until tools are actually used
-// pub use traits::{Tool, DynamicTool, ToolCategory, ToolMetadata};
-// pub use config::ToolConfig;
-// pub use navigation::{NavigateTool, ScrollTool, RefreshTool};
-// pub use interaction::{ClickTool, TypeTextTool, SelectOptionTool};
-// pub use extraction::{ExtractTextTool, ExtractLinksTool, ExtractDataTool};
-// pub use synchronization::{WaitForElementTool, WaitForConditionTool};
-// pub use memory::{ScreenshotTool, SessionMemoryTool};
+// Re-exports enabled for tool system

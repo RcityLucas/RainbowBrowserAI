@@ -59,6 +59,9 @@ lru = "0.12"
 
 # Perception module dependencies (using existing dependencies above)
 
+# LLM integration dependencies (reusing existing reqwest, serde, chrono, uuid, tokio)
+# Additional LLM-specific dependencies would be added here if needed
+
 # System information
 sys-info = "0.9"
 sysinfo = "0.29"

@@ -2,7 +2,6 @@
 
 use anyhow::Result;
 use serde::{Serialize, Deserialize};
-use std::collections::HashMap;
 
 /// Semantic analysis of page content
 #[derive(Debug, Clone, Serialize, Deserialize)]

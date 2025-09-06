@@ -188,7 +188,7 @@ impl SessionManager {
     /// Clean up expired sessions
     pub async fn cleanup_expired(&self) -> usize {
         let mut sessions = self.sessions.write().await;
-        let initial_count = sessions.len();
+        let _initial_count = sessions.len();
         
         let expired_ids: Vec<String> = {
             let mut expired = Vec::new();

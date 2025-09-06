@@ -2,6 +2,8 @@ pub mod browser;
 pub mod api;
 pub mod tools;
 pub mod perception;
+pub mod llm;
+pub mod intelligence;
 
 // Re-export commonly used types
 pub use browser::{Browser, BrowserOps, ElementInfo, ScreenshotOptions};

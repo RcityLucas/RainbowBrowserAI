@@ -3,7 +3,7 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde::de::DeserializeOwned;
 use serde_json::Value;
-use futures::future::BoxFuture;
+// use futures::future::BoxFuture; // Unused import
 use std::sync::Arc;
 
 /// Tool categories for organization
@@ -50,7 +50,7 @@ pub trait Tool: Send + Sync {
     async fn execute(&self, input: Self::Input) -> Result<Self::Output>;
     
     /// Validate the input before execution
-    async fn validate_input(&self, input: &Self::Input) -> Result<()> {
+    async fn validate_input(&self, _input: &Self::Input) -> Result<()> {
         // Default implementation - override for custom validation
         Ok(())
     }

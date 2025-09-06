@@ -1,11 +1,11 @@
 use super::traits::{Tool, ToolCategory};
-use crate::browser::{Browser, BrowserOps};
+use crate::browser::Browser;
 use anyhow::{Result, anyhow};
 use serde::{Deserialize, Serialize};
 use async_trait::async_trait;
 use std::sync::Arc;
 use std::collections::HashMap;
-use tracing::{info, debug};
+use tracing::info;
 
 // ============================================================================
 // Extract Text Tool
