@@ -43,6 +43,7 @@ pub struct ElementPattern {
 #[derive(Debug, Clone)]
 pub struct ContextMemory {
     site_contexts: HashMap<String, SiteContext>,
+    #[allow(dead_code)] // Reserved for pattern learning
     global_patterns: Vec<GlobalPattern>,
     max_memory_entries: usize,
 }
@@ -431,7 +432,7 @@ impl OrganicPerceptionEngine {
         "#;
         
         let result = browser.execute_script(js_code).await
-            .unwrap_or_else(|_| serde_json::Value::Null);
+            .unwrap_or(serde_json::Value::Null);
             
         // Parse JavaScript result or use defaults
         if let Ok(characteristics) = serde_json::from_value::<PageCharacteristics>(result) {
@@ -663,7 +664,7 @@ impl OrganicPerceptionEngine {
         let mut risks = Vec::new();
         
         // Check for dynamic content indicators
-        for (key, _value) in &element.attributes {
+        for key in element.attributes.keys() {
             if key.to_lowercase().contains("data-") || key.to_lowercase().contains("ng-") {
                 risks.push("Dynamic content - may change".to_string());
                 break;

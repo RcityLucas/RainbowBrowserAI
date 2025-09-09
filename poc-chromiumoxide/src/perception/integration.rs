@@ -58,12 +58,12 @@ pub struct IntelligentCommandResult {
 
 impl PerceptionAwareBrowser {
     /// Create a new perception-aware browser
-    pub fn new(browser: Arc<Browser>) -> Self {
-        let perception = PerceptionEngine::new(browser.clone());
-        Self {
+    pub async fn new(browser: Arc<Browser>) -> Result<Self> {
+        let perception = PerceptionEngine::new(browser.clone()).await?;
+        Ok(Self {
             perception,
             browser,
-        }
+        })
     }
 
     /// Execute an intelligent command using natural language

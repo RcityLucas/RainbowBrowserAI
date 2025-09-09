@@ -225,6 +225,12 @@ impl MockProvider {
     }
 }
 
+impl Default for MockProvider {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[async_trait]
 impl LLMProvider for MockProvider {
     async fn query(&mut self, _prompt: &str, _config: &LLMConfig) -> Result<LLMResponse, LLMError> {
@@ -331,7 +337,7 @@ mod tests {
     
     #[test]
     fn test_mock_provider() {
-        let mut provider = MockProvider::new();
+        let provider = MockProvider::new();
         assert_eq!(provider.provider_name(), "mock");
         assert!(provider.is_available());
     }

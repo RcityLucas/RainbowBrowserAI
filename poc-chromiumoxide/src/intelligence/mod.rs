@@ -116,7 +116,7 @@ impl IntelligenceService {
     }
     
     /// Create with default configuration
-    pub fn default() -> Self {
+    pub fn with_default_config() -> Self {
         Self::new(IntelligenceConfig::default())
     }
     
@@ -203,7 +203,7 @@ impl IntelligenceService {
         
         // Add alternatives from learned patterns
         for pattern in &analysis.learned_patterns {
-            if pattern.confidence > 0.6 && pattern.action_sequence.len() > 0 {
+            if pattern.confidence > 0.6 && !pattern.action_sequence.is_empty() {
                 let alt_action = &pattern.action_sequence[0];
                 alternative_actions.push(AlternativeAction {
                     action_type: alt_action.action_type.clone(),
@@ -362,6 +362,12 @@ impl IntelligenceService {
         
         // Update sub-components with new config
         // This could be expanded to pass specific config to each component
+    }
+}
+
+impl Default for IntelligenceService {
+    fn default() -> Self {
+        Self::new(IntelligenceConfig::default())
     }
 }
 

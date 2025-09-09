@@ -37,6 +37,7 @@ pub struct ContextAwarePrompt {
 /// Builds context information for prompts
 #[derive(Debug, Clone)]
 pub struct ContextBuilder {
+    #[allow(dead_code)] // Used for context identification
     name: String,
     builder_fn: fn(&HashMap<String, serde_json::Value>) -> Result<String, LLMError>,
 }
@@ -565,7 +566,7 @@ mod tests {
         let estimated = engine.estimate_tokens(text);
         
         // Rough estimate: 44 characters / 4 = 11 tokens
-        assert!(estimated >= 10 && estimated <= 15);
+        assert!((10..=15).contains(&estimated));
     }
     
     #[test]

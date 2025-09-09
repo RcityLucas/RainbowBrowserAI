@@ -66,6 +66,11 @@ pub async fn serve(port: u16, browser_pool: BrowserPool) -> Result<()> {
         .route("/api/perception/forms/analyze", post(perception_handlers::analyze_form))
         .route("/api/perception/forms/fill", post(perception_handlers::auto_fill_form))
         
+        // NEW: Layered perception endpoints
+        .route("/api/perceive-mode", post(perception_handlers::perceive_with_mode))
+        .route("/api/quick-scan", post(perception_handlers::quick_scan))
+        .route("/api/smart-element-search", post(perception_handlers::smart_element_search))
+        
         // Static files (serve our migrated interface)
         .nest_service("/static", ServeDir::new("static"))
         .route("/", get(dashboard))

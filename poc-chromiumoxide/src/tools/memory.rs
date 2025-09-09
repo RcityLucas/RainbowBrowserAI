@@ -134,6 +134,7 @@ pub struct SessionMemoryOutput {
 }
 
 pub struct SessionMemoryTool {
+    #[allow(dead_code)] // Reserved for future browser integration
     browser: Arc<Browser>,
     memory: Arc<tokio::sync::RwLock<HashMap<String, serde_json::Value>>>,
 }
@@ -545,6 +546,7 @@ struct CacheEntry {
 }
 
 pub struct PersistentCacheTool {
+    #[allow(dead_code)] // Reserved for future browser integration
     browser: Arc<Browser>,
     cache: Arc<tokio::sync::RwLock<HashMap<String, CacheEntry>>>,
 }

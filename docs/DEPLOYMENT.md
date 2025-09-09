@@ -1,4 +1,4 @@
-# 彩虹城浏览器 V8.0 部署指南
+# RainbowBrowserAI Deployment Guide
 
 ## 📋 部署概述
 

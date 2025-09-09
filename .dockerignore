@@ -1,0 +1,43 @@
+# Build artifacts
+target/
+Cargo.lock
+
+# Development files
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+logs/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Documentation (not needed in container)
+docs/
+*.md
+!README.md
+
+# Test files
+scripts/test/
+tests/
+
+# Development scripts
+scripts/dev/
+
+# Temporary files
+tmp/
+temp/
+nul

@@ -830,6 +830,266 @@ async function executeIntelligentCommand() {
     }
 }
 
+// NEW: Layered Perception Functions
+async function perceiveWithMode(mode) {
+    const resultDiv = document.getElementById('layered-perception-result');
+    resultDiv.innerHTML = `<div class="loading">Running ${mode} perception...</div>`;
+    
+    try {
+        const response = await fetch(`${API_BASE}/api/perceive-mode`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ mode: mode })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success && data.data) {
+            const result = data.data;
+            let html = `
+                <div class="success-result">
+                    <h4>${mode.charAt(0).toUpperCase() + mode.slice(1)} Perception Results</h4>
+            `;
+            
+            // Display results based on mode
+            if (mode === 'lightning' || result.lightning) {
+                const lightning = result.lightning || result;
+                html += `
+                    <div class="perception-layer">
+                        <h5><i class="fas fa-bolt"></i> Lightning Layer (${lightning.perception_time_ms || 0}ms)</h5>
+                        <div class="detail-grid">
+                            <div class="detail-item"><strong>URL:</strong> ${lightning.url}</div>
+                            <div class="detail-item"><strong>Title:</strong> ${lightning.title}</div>
+                            <div class="detail-item"><strong>Ready State:</strong> ${lightning.ready_state}</div>
+                            <div class="detail-item"><strong>Clickable:</strong> ${lightning.clickable_count}</div>
+                            <div class="detail-item"><strong>Inputs:</strong> ${lightning.input_count}</div>
+                            <div class="detail-item"><strong>Links:</strong> ${lightning.link_count}</div>
+                            <div class="detail-item"><strong>Forms:</strong> ${lightning.form_count}</div>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            if (result.quick || result.interactive_elements) {
+                html += `
+                    <div class="perception-layer">
+                        <h5><i class="fas fa-tachometer-alt"></i> Quick Layer</h5>
+                        <div class="detail-item">
+                            <strong>Interactive Elements:</strong> ${result.interactive_elements?.length || 0}
+                        </div>
+                        <div class="detail-item">
+                            <strong>Text Blocks:</strong> ${result.visible_text_blocks?.length || 0}
+                        </div>
+                        <div class="detail-item">
+                            <strong>Form Fields:</strong> ${result.form_fields?.length || 0}
+                        </div>
+                    </div>
+                `;
+            }
+            
+            if (result.standard || result.semantic_structure) {
+                html += `
+                    <div class="perception-layer">
+                        <h5><i class="fas fa-brain"></i> Standard Layer</h5>
+                        <div class="detail-item">
+                            <strong>Semantic Analysis:</strong> Complete
+                        </div>
+                        <div class="detail-item">
+                            <strong>Accessibility Info:</strong> Available
+                        </div>
+                        <div class="detail-item">
+                            <strong>Performance Metrics:</strong> Collected
+                        </div>
+                    </div>
+                `;
+            }
+            
+            if (result.deep || result.ai_insights) {
+                html += `
+                    <div class="perception-layer">
+                        <h5><i class="fas fa-microscope"></i> Deep Layer</h5>
+                        <div class="detail-item">
+                            <strong>DOM Analysis:</strong> Complete
+                        </div>
+                        <div class="detail-item">
+                            <strong>Visual Analysis:</strong> Complete
+                        </div>
+                        <div class="detail-item">
+                            <strong>AI Insights:</strong> Generated
+                        </div>
+                    </div>
+                `;
+            }
+            
+            html += '</div>';
+            resultDiv.innerHTML = html;
+            showNotification(`${mode} perception completed`, 'success');
+        } else {
+            resultDiv.innerHTML = `<div class="error-result">Perception failed: ${data.error || 'Unknown error'}</div>`;
+            showNotification('Perception failed', 'error');
+        }
+    } catch (error) {
+        resultDiv.innerHTML = `<div class="error-result">Network error: ${error.message}</div>`;
+        showNotification('Network error during perception', 'error');
+    }
+}
+
+// Quick Scan function
+async function quickScan() {
+    const resultDiv = document.getElementById('quick-scan-result');
+    resultDiv.innerHTML = '<div class="loading">Performing quick scan...</div>';
+    
+    try {
+        const response = await fetch(`${API_BASE}/api/quick-scan`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({})
+        });
+        
+        const data = await response.json();
+        
+        if (data.success && data.data) {
+            const scan = data.data;
+            resultDiv.innerHTML = `
+                <div class="success-result">
+                    <h4>Quick Scan Results</h4>
+                    <div class="scan-summary">
+                        <div class="summary-item">
+                            <i class="fas fa-mouse-pointer"></i>
+                            <span>${scan.interactive_count || 0} Interactive Elements</span>
+                        </div>
+                        <div class="summary-item">
+                            <i class="fas fa-font"></i>
+                            <span>${scan.text_blocks || 0} Text Blocks</span>
+                        </div>
+                        <div class="summary-item">
+                            <i class="fas fa-wpforms"></i>
+                            <span>${scan.forms || 0} Forms</span>
+                        </div>
+                        <div class="summary-item">
+                            <i class="fas fa-images"></i>
+                            <span>${scan.images || 0} Images</span>
+                        </div>
+                    </div>
+                    ${scan.key_elements ? `
+                        <div class="key-elements">
+                            <h5>Key Elements Found:</h5>
+                            ${scan.key_elements.map(el => `
+                                <div class="element-item">
+                                    <code>${el.selector}</code> - ${el.type}
+                                </div>
+                            `).join('')}
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+            showNotification('Quick scan completed', 'success');
+        } else {
+            resultDiv.innerHTML = `<div class="error-result">Scan failed: ${data.error || 'Unknown error'}</div>`;
+            showNotification('Quick scan failed', 'error');
+        }
+    } catch (error) {
+        resultDiv.innerHTML = `<div class="error-result">Network error: ${error.message}</div>`;
+        showNotification('Network error during scan', 'error');
+    }
+}
+
+// Deep Analysis function
+async function deepAnalysis() {
+    const resultDiv = document.getElementById('quick-scan-result');
+    resultDiv.innerHTML = '<div class="loading">Performing deep analysis (this may take a few seconds)...</div>';
+    
+    // Use the deep perception mode
+    await perceiveWithMode('deep');
+    // Copy results to quick-scan-result div
+    const deepResults = document.getElementById('layered-perception-result').innerHTML;
+    resultDiv.innerHTML = deepResults;
+}
+
+// Smart Element Search function
+async function smartElementSearch() {
+    const query = document.getElementById('smart-search-query').value.trim();
+    const maxResults = parseInt(document.getElementById('smart-search-max').value) || 5;
+    const resultDiv = document.getElementById('smart-search-result');
+    
+    if (!query) {
+        showNotification('Please enter a search query', 'warning');
+        return;
+    }
+    
+    resultDiv.innerHTML = '<div class="loading">Searching for elements...</div>';
+    
+    try {
+        const response = await fetch(`${API_BASE}/api/smart-element-search`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                query: query,
+                max_results: maxResults
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success && data.data) {
+            const results = data.data.elements || [];
+            resultDiv.innerHTML = `
+                <div class="success-result">
+                    <h4>Smart Search Results</h4>
+                    <div class="search-summary">
+                        Found ${results.length} element(s) matching "${query}"
+                    </div>
+                    ${results.length > 0 ? `
+                        <div class="search-results">
+                            ${results.map((el, idx) => `
+                                <div class="search-result-item">
+                                    <div class="result-header">
+                                        <span class="result-number">#${idx + 1}</span>
+                                        <span class="confidence">Confidence: ${Math.round((el.confidence || 0) * 100)}%</span>
+                                    </div>
+                                    <div class="result-details">
+                                        <div class="detail-item">
+                                            <strong>Selector:</strong> <code>${el.selector}</code>
+                                        </div>
+                                        <div class="detail-item">
+                                            <strong>Type:</strong> ${el.element_type || 'unknown'}
+                                        </div>
+                                        <div class="detail-item">
+                                            <strong>Text:</strong> ${el.text || '(no text)'}
+                                        </div>
+                                        ${el.attributes ? `
+                                            <div class="detail-item">
+                                                <strong>Attributes:</strong> ${JSON.stringify(el.attributes)}
+                                            </div>
+                                        ` : ''}
+                                    </div>
+                                    <button class="btn btn-sm btn-secondary" onclick="highlightElement('${el.selector}')">
+                                        <i class="fas fa-highlighter"></i> Highlight
+                                    </button>
+                                </div>
+                            `).join('')}
+                        </div>
+                    ` : '<p>No elements found matching your query.</p>'}
+                </div>
+            `;
+            
+            if (results.length > 0) {
+                perceptionStats.elementsFound += results.length;
+                updatePerceptionStats();
+                showNotification(`Found ${results.length} element(s)`, 'success');
+            } else {
+                showNotification('No elements found', 'info');
+            }
+        } else {
+            resultDiv.innerHTML = `<div class="error-result">Search failed: ${data.error || 'Unknown error'}</div>`;
+            showNotification('Smart search failed', 'error');
+        }
+    } catch (error) {
+        resultDiv.innerHTML = `<div class="error-result">Network error: ${error.message}</div>`;
+        showNotification('Network error during search', 'error');
+    }
+}
+
 // Analyze form
 async function analyzeForm() {
     const formSelector = document.getElementById('form-selector').value.trim();

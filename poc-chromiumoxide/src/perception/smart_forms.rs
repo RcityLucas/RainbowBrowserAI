@@ -304,39 +304,46 @@ impl SmartFormHandler {
     // Private helper methods
 
     fn initialize_field_patterns(&mut self) {
+        // Helper macro to convert string literals to Vec<String>
+        macro_rules! string_vec {
+            ($($s:expr),*) => {
+                vec![$($s.to_string()),*]
+            };
+        }
+
         // Email patterns
         self.field_patterns.insert("email".to_string(), FieldPattern {
-            labels: vec!["email", "e-mail", "email address"].iter().map(|s| s.to_string()).collect(),
-            names: vec!["email", "emailAddress", "user_email", "mail"].iter().map(|s| s.to_string()).collect(),
-            placeholders: vec!["email", "your email", "email address"].iter().map(|s| s.to_string()).collect(),
-            types: vec!["email"].iter().map(|s| s.to_string()).collect(),
+            labels: string_vec!["email", "e-mail", "email address"],
+            names: string_vec!["email", "emailAddress", "user_email", "mail"],
+            placeholders: string_vec!["email", "your email", "email address"],
+            types: string_vec!["email"],
             field_type: FieldType::Email,
         });
 
         // Password patterns
         self.field_patterns.insert("password".to_string(), FieldPattern {
-            labels: vec!["password", "pass", "pwd"].iter().map(|s| s.to_string()).collect(),
-            names: vec!["password", "pass", "pwd", "passwd"].iter().map(|s| s.to_string()).collect(),
-            placeholders: vec!["password", "enter password"].iter().map(|s| s.to_string()).collect(),
-            types: vec!["password"].iter().map(|s| s.to_string()).collect(),
+            labels: string_vec!["password", "pass", "pwd"],
+            names: string_vec!["password", "pass", "pwd", "passwd"],
+            placeholders: string_vec!["password", "enter password"],
+            types: string_vec!["password"],
             field_type: FieldType::Password,
         });
 
         // Name patterns
         self.field_patterns.insert("name".to_string(), FieldPattern {
-            labels: vec!["name", "full name", "your name", "first name", "last name"].iter().map(|s| s.to_string()).collect(),
-            names: vec!["name", "fullName", "firstName", "lastName", "fname", "lname"].iter().map(|s| s.to_string()).collect(),
-            placeholders: vec!["name", "your name", "full name"].iter().map(|s| s.to_string()).collect(),
-            types: vec!["text"].iter().map(|s| s.to_string()).collect(),
+            labels: string_vec!["name", "full name", "your name", "first name", "last name"],
+            names: string_vec!["name", "fullName", "firstName", "lastName", "fname", "lname"],
+            placeholders: string_vec!["name", "your name", "full name"],
+            types: string_vec!["text"],
             field_type: FieldType::Name,
         });
 
         // Phone patterns
         self.field_patterns.insert("phone".to_string(), FieldPattern {
-            labels: vec!["phone", "telephone", "phone number", "mobile"].iter().map(|s| s.to_string()).collect(),
-            names: vec!["phone", "phoneNumber", "telephone", "mobile", "tel"].iter().map(|s| s.to_string()).collect(),
-            placeholders: vec!["phone", "phone number", "mobile number"].iter().map(|s| s.to_string()).collect(),
-            types: vec!["tel", "phone"].iter().map(|s| s.to_string()).collect(),
+            labels: string_vec!["phone", "telephone", "phone number", "mobile"],
+            names: string_vec!["phone", "phoneNumber", "telephone", "mobile", "tel"],
+            placeholders: string_vec!["phone", "phone number", "mobile number"],
+            types: string_vec!["tel", "phone"],
             field_type: FieldType::Phone,
         });
 

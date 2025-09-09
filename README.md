@@ -1,322 +1,277 @@
-# 🌈 RainbowBrowserAI 
+# 🌈 RainbowBrowserAI
 
-AI-Powered Browser Automation System - Six-Organ Architecture for Digital Life Forms
+**AI-Powered Browser Automation with Session-Aware Layered Perception**
 
-**Current Status**: 🚧 POC-to-Architecture Bridge Phase  
-**Working Version**: [POC Demo](poc/) (Ready for use)  
-**Development**: [Bridging Plan](BRIDGING_DEVELOPMENT_PLAN.md) | [Module Roadmap](MODULAR_ROADMAP.md)
+[![Status](https://img.shields.io/badge/Status-Active%20Development-green)](#status)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](#license)
+[![Rust](https://img.shields.io/badge/Rust-1.75+-orange.svg)](#requirements)
 
-## ✨ 核心特性
+## 🚀 Overview
 
-- **🧠 LLM智能分析** - 深度理解用户自然语言需求
-- **🚀 动态任务规划** - AI自动制定和执行计划  
-- **🌐 浏览器自动化** - 真实网页操作和智能控制
-- **🎯 实际应用场景** - 旅游、购物、信息查询等真实需求
-- **📱 独立可执行文件** - 单文件分发，无需安装依赖
-- **🔧 浏览器扩展支持** - Chrome/Edge扩展，一键AI控制
+RainbowBrowserAI is an advanced browser automation system that combines AI-powered perception with intelligent session management. It features a layered perception architecture that can analyze web pages at different speeds and depths, making it ideal for both rapid automation and detailed analysis.
 
-## 🏗️ 六大引擎架构
+### ✨ Key Features
 
-RainbowBrowserAI  采用六大生命器官架构，实现AI在数字世界的感知、行动和记忆：
+- **🧠 Session-Aware Perception**: Intelligent browser session management with state tracking
+- **⚡ Layered Analysis**: Four perception modes (Lightning <50ms, Quick <200ms, Standard <1000ms, Deep <5000ms)
+- **🎯 Smart Element Detection**: AI-powered element location and interaction
+- **🔧 REST API**: Complete HTTP API for external integration
+- **📱 Web Dashboard**: Interactive UI for real-time browser control
+- **🤖 Form Automation**: Intelligent form detection and auto-fill capabilities
+
+## 📁 Project Structure
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    🌈 RainbowBrowserAI                │
-│                      AI生命体数字器官                        │
-└─────────────────────────────────────────────────────────────┘
-┌─────────────────────────────────────────────────────────────┐
-│  🧠 统一内核        📡 分层感知        🎯 智能行动           │
-│  UnifiedKernel     LayeredPerception  IntelligentAction    │
-│  会话·资源·健康      快速·标准·深度      工具·执行·驱动       │
-└─────────────────────────────────────────────────────────────┘
-┌─────────────────────────────────────────────────────────────┐
-│  💾 优化持久化      ⚡ 性能引擎        🛡️ 稳定引擎          │
-│  OptimizedPersistence PerformanceEngine StabilityEngine   │
-│  向量·图·时序·语义    监控·分析·优化     健康·容错·恢复       │
-└─────────────────────────────────────────────────────────────┘
-┌─────────────────────────────────────────────────────────────┐
-│                        应用生态层                            │
-│  🤖 智能助手  ✈️ 旅游助手  🛒 购物助手  📱 独立应用  🔧 扩展   │
-└─────────────────────────────────────────────────────────────┘
+RainbowBrowserAI/
+├── 🏭 poc-chromiumoxide/     # Main chromiumoxide-based implementation
+│   ├── src/
+│   │   ├── api/              # REST API endpoints
+│   │   ├── browser/          # Browser automation core
+│   │   ├── perception/       # Layered perception system
+│   │   ├── tools/            # Browser interaction tools
+│   │   └── main.rs           # Application entry point
+│   ├── static/               # Web dashboard UI
+│   └── Cargo.toml
+├── 📚 docs/                  # Comprehensive documentation
+├── 🧪 poc/                   # Legacy POC (thirtyfour-based)
+├── 🔧 examples/              # Usage examples and demos
+└── 🧰 scripts/               # Development and deployment scripts
 ```
 
-## 🚀 Quick Start
+## 🎯 Quick Start
 
-### For Users (Working System)
-> **📦 Production-Ready POC**: Use the [PoC implementation](poc/) with REST API and Web Dashboard.  
-> See [Quick Start Guide](poc/QUICKSTART.md) for setup in 5 minutes!
+### Prerequisites
 
-### For Developers (Architecture Evolution)
-> **🏗️ Development Phase**: We're bridging the working POC with the six-organ architecture.  
-> See [Bridging Plan](BRIDGING_DEVELOPMENT_PLAN.md) for development roadmap.
+- **Rust 1.75+**
+- **Chrome/Chromium Browser**
+- **ChromeDriver** (auto-managed)
 
-### 方式一：独立可执行文件 (推荐)
-
-无需安装任何依赖，直接下载运行：
+### Installation & Run
 
 ```bash
-# 下载项目
-git clone git@github.com:RcityLucas/RainbowBrowserAI.git
+# Clone the repository
+git clone https://github.com/your-org/RainbowBrowserAI.git
 cd RainbowBrowserAI
 
-# 构建独立可执行文件
-./build_standalone.sh
+# Run the chromiumoxide version (recommended)
+cd poc-chromiumoxide
+cargo run --release -- serve --port 3001
 
-# 直接运行 (无需Rust环境)
-./target/standalone/rainbow-browser-standalone
+# Open the web dashboard
+# Visit: http://localhost:3001
 ```
 
-### 方式二：源码编译
+### Docker Quick Start
 
 ```bash
-# 安装 Rust (如果还没有)
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-
-# 克隆项目
-git clone git@github.com:RcityLucas/RainbowBrowserAI.git
-cd RainbowBrowserAI
-
-# 编译项目
-cargo build --release
+# Build and run with Docker
+docker build -t rainbow-browser-ai .
+docker run -p 3001:3001 rainbow-browser-ai
 ```
 
-### 方式三：浏览器扩展
+## 🔥 Core Capabilities
+
+### 1. **Session-Aware Browser Control**
+```bash
+# Create a browser session
+curl -X POST http://localhost:3001/api/session/create
+# {"session_id": "abc-123", "status": "created"}
+
+# Navigate with session tracking
+curl -X POST http://localhost:3001/api/navigate \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://example.com", "session_id": "abc-123"}'
+```
+
+### 2. **Layered Perception System**
+```bash
+# Lightning-fast analysis (<50ms)
+curl -X POST http://localhost:3001/api/perceive-mode \
+  -H "Content-Type: application/json" \
+  -d '{"mode": "lightning", "session_id": "abc-123"}'
+
+# Deep AI-powered analysis (<5000ms)  
+curl -X POST http://localhost:3001/api/perceive-mode \
+  -H "Content-Type: application/json" \
+  -d '{"mode": "deep", "session_id": "abc-123"}'
+```
+
+### 3. **Smart Element Interaction**
+```bash
+# Intelligent element search
+curl -X POST http://localhost:3001/api/smart-element-search \
+  -H "Content-Type: application/json" \
+  -d '{"query": "submit button", "max_results": 5}'
+```
+
+## 📊 Performance Benchmarks
+
+| Perception Mode | Response Time | Use Case |
+|-----------------|---------------|----------|
+| ⚡ Lightning    | <50ms         | Rapid automation, quick decisions |
+| 🚀 Quick       | <200ms        | Interactive exploration |
+| 🧠 Standard    | <1000ms       | Detailed analysis with metrics |
+| 🔬 Deep        | <5000ms       | AI insights and recommendations |
+| ✨ Adaptive    | Auto-select   | Context-aware mode selection |
+
+## 🏗️ Architecture
+
+### Layered Perception System
+
+```mermaid
+graph TB
+    A[User Request] --> B{Session ID?}
+    B -->|Yes| C[Session Browser]
+    B -->|No| D[Pool Browser]
+    C --> E[Perception Engine]
+    D --> E
+    E --> F{Mode Selection}
+    F -->|Lightning| G[Basic Structure <50ms]
+    F -->|Quick| H[Interactive Elements <200ms]
+    F -->|Standard| I[Full Analysis <1000ms]
+    F -->|Deep| J[AI Insights <5000ms]
+    F -->|Adaptive| K[Context-Based Selection]
+```
+
+### Browser Session Management
+
+- **Session Isolation**: Each session maintains independent browser state
+- **State Tracking**: URL history, form data, and interaction context
+- **Resource Pooling**: Efficient browser instance reuse
+- **Auto-Cleanup**: Automatic session expiration and cleanup
+
+## 🧪 API Documentation
+
+### Core Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/health` | GET | Service health check |
+| `/api/session/create` | POST | Create new browser session |
+| `/api/navigate` | POST | Navigate to URL |
+| `/api/perceive-mode` | POST | Layered perception analysis |
+| `/api/click` | POST | Click element |
+| `/api/type` | POST | Type text into element |
+| `/api/screenshot` | POST | Take page screenshot |
+
+For complete API documentation, see [API Reference](docs/API_REFERENCE.md).
+
+## 🔧 Configuration
+
+### Environment Variables
 
 ```bash
-# 启动Web服务器
-cargo run server
+# Browser Configuration
+RAINBOW_MOCK_MODE=false           # Enable/disable mock mode
+CHROMEDRIVER_PORT=9515           # ChromeDriver port
+BROWSER_HEADLESS=true            # Headless browser mode
 
-# 安装浏览器扩展
-# 1. 打开Chrome扩展管理页面 (chrome://extensions)
-# 2. 开启开发者模式
-# 3. 加载src/browser_extension文件夹
+# Server Configuration  
+SERVER_PORT=3001                 # API server port
+SESSION_TIMEOUT=1800             # Session timeout (seconds)
+MAX_SESSIONS=10                  # Maximum concurrent sessions
+
+# Performance Settings
+PERCEPTION_CACHE_SIZE=1000       # Perception cache size
+BROWSER_POOL_SIZE=5              # Browser pool size
 ```
 
-### 基本使用
+## 🧪 Development
+
+### Running Tests
 
 ```bash
-# 启动Web服务器模式
-cargo run server
+# Run all tests
+cargo test --all-features
 
-# 交互式CLI模式
-cargo run
+# Run specific test suite
+cargo test --test perception_tests
 
-# 独立应用模式
-./target/standalone/rainbow-browser-standalone
+# Run with output
+cargo test -- --nocapture
 ```
 
-### 编程接口
-
-```rust
-use rainbow_browser_ai::prelude::*;
-
-#[tokio::main]
-async fn main() -> Result<()> {
-    // 创建AI生命体
-    let browser = RainbowBrowserV8::new().await?;
-    
-    // 处理用户请求
-    let response = browser.process_request("我想去杭州旅游").await?;
-    println!("{}", response);
-    
-    // 获取系统状态
-    let status = browser.get_system_status().await?;
-    println!("系统状态: {:#?}", status);
-    
-    Ok(())
-}
-```
-
-## 💡 使用示例
-
-### 旅游规划
-```
-👤 用户: "我想去杭州旅游三天"
-
-🤖 AI助手: 我已经为您完成了杭州旅游的全面搜索！🏖️
-
-根据我的分析和搜索结果，我为您找到了：
-📍 详细的旅游攻略和景点推荐  
-🏨 优质的酒店住宿选择
-✈️ 便捷的交通和机票信息
-
-💡 我建议您：
-• 提前预订酒店和机票可以获得更好的价格
-• 查看最新的用户评价和旅游攻略  
-• 关注当地的天气和最佳旅游时间
-```
-
-### 智能购物
-```
-👤 用户: "帮我买个性价比高的手机"
-
-🤖 AI助手: 我已经为您完成了智能手机的智能比价搜索！🛒
-
-通过对比多个平台，我为您收集了：
-💰 不同平台的价格信息
-⭐ 用户评价和商品规格  
-🚚 配送和售后服务对比
-
-💡 购买建议：
-• 比较价格的同时也要考虑服务质量
-• 查看真实用户评价和买家秀
-• 关注优惠活动和促销信息
-```
-
-## 📂 项目结构
-
-```
-src/
-├── 🧠 unified_kernel/           # 统一内核 - AI生命体大脑
-│   ├── session_manager.rs      # 会话管理
-│   ├── resource_manager.rs     # 资源管理  
-│   └── health_guardian.rs      # 健康守护
-├── 📡 layered_perception/       # 分层感知 - AI感官系统
-│   ├── lightning.rs            # 闪电感知 (<100ms)
-│   ├── quick.rs               # 快速感知 (<500ms)
-│   ├── standard.rs            # 标准感知 (<2s)
-│   ├── deep.rs                # 深度感知 (<10s)
-│   └── adaptive.rs            # 自适应感知
-├── 🎯 intelligent_action/       # 智能行动 - AI行动系统
-│   ├── smart_executor.rs       # 智能执行器
-│   ├── browser_driver.rs       # 浏览器驱动
-│   ├── tools.rs               # 工具集成
-│   └── llm_integration.rs      # LLM集成
-├── 💾 optimized_persistence/    # 优化持久化 - AI记忆系统
-│   ├── vector_memory.rs        # 向量记忆
-│   ├── graph_memory.rs         # 图记忆
-│   ├── time_memory.rs          # 时序记忆
-│   └── semantic_memory.rs      # 语义记忆
-├── ⚡ performance_engine/       # 性能引擎 - AI优化系统
-├── 🛡️ stability_engine/         # 稳定引擎 - AI健康系统
-├── 🤖 apps/                    # 应用生态
-│   ├── assistant/             # 智能助手
-│   ├── travel/                # 旅游助手
-│   └── shopping/              # 购物助手
-├── 📱 standalone_browser.rs     # 独立浏览器应用
-├── 🔧 browser_extension/        # 浏览器扩展
-└── 🌈 lib.rs                   # AI生命体入口
-```
-
-## ⚙️ 配置
-
-项目支持多种LLM提供商：
-
-- **OpenAI** - GPT-3.5/GPT-4
-- **本地模型** - Ollama等本地部署
-- **Claude** - Anthropic的Claude模型
-- **自定义API** - 兼容OpenAI格式的API
-
-配置示例：
-```rust
-let config = BrowserConfig {
-    llm: LLMConfig {
-        provider: "openai".to_string(),
-        model: "gpt-3.5-turbo".to_string(),
-        api_key: Some("your-api-key".to_string()),
-        ..Default::default()
-    },
-    ..Default::default()
-};
-```
-
-## 🎯 实际应用价值
-
-### 👥 用户价值
-- ⏰ **节省时间** - 自动化信息收集和比较
-- 💰 **省钱** - 多平台比价，找到最优选择  
-- 🎯 **精准** - 智能理解需求，提供针对性方案
-- 🔄 **全面** - 一站式解决复合需求
-
-### 🏢 技术价值
-- 🧠 **AI应用落地** - 真正实用的AI助手
-- 🔗 **生态整合** - 连接各种在线服务
-- 📈 **持续学习** - 从用户交互中优化算法
-- 🌐 **跨平台能力** - 统一的服务接入层
-
-## 🛠️ 开发指南
-
-### 编译要求
-- **独立模式**: 无需任何依赖
-- **开发模式**: Rust 1.75+
-- **浏览器扩展**: Chrome/Edge/Firefox
-
-### 运行测试
-```bash
-# 基础功能测试
-cargo test
-
-# 集成测试
-cargo test --test integration_core_test
-
-# 演示示例
-cargo run --example real_world_demo
-cargo run --example simple_demo
-```
-
-### 构建配置
+### Code Quality
 
 ```bash
-# 开发版本 (调试优化)
-cargo build
+# Format code
+cargo fmt
 
-# 发布版本 (性能优化)
-cargo build --release
+# Run linter
+cargo clippy -- -D warnings
 
-# 独立可执行文件
-cargo build --release --bin rainbow-browser-standalone --features standalone,web-server
-
-# 特定平台交叉编译
-cargo build --release --target x86_64-pc-windows-gnu
+# Check compilation
+cargo check --all-targets --all-features
 ```
 
-### 部署选项
+### Development Server
 
-| 模式 | 文件大小 | 依赖 | 性能 | 适用场景 |
-|------|----------|------|------|----------|
-| 独立可执行文件 | ~800KB | 无 | 高 | 最终用户分发 |
-| 源码编译 | - | Rust | 最高 | 开发和定制 |
-| 浏览器扩展 | ~50KB | 浏览器 | 中 | 日常使用 |
+```bash
+# Development mode with hot reload
+RUST_LOG=debug cargo run -- serve --port 3001
 
-## 📱 独立应用模式
+# Mock mode for testing without browser
+RAINBOW_MOCK_MODE=true cargo run -- serve --port 3001
+```
 
-独立可执行文件是RainbowBrowserAI的核心分发方式，提供完整的AI浏览器控制功能：
+## 🚧 Project Status
 
-### 特性
-- **零依赖安装**: 无需Rust、Node.js或其他运行时
-- **自动浏览器启动**: 智能检测并启动系统默认浏览器
-- **内置AI服务器**: 本地运行，数据隐私保护
-- **跨平台支持**: Windows、macOS、Linux一致体验
+### ✅ Completed Features
 
-### 使用流程
-1. **启动应用**: `./rainbow-browser-standalone`
-2. **自动服务**: AI服务器自动启动在localhost:8888
-3. **浏览器打开**: 系统浏览器自动打开欢迎界面
-4. **智能控制**: 通过自然语言控制浏览器操作
+- **Session-aware browser automation** with state management
+- **Layered perception system** with 4 analysis modes
+- **Complete REST API** with comprehensive endpoints
+- **Interactive web dashboard** with real-time controls
+- **Smart form handling** with auto-fill capabilities
+- **Performance optimizations** and code quality improvements
 
-详细说明请参考: [STANDALONE.md](STANDALONE.md)
+### 🔄 In Progress
 
-## 📚 文档目录
+- Enhanced visual perception with computer vision
+- Advanced AI-powered element recognition
+- Multi-language support for the web interface
+- Comprehensive integration tests
 
-| 文档 | 描述 |
-|------|------|
-| [README.md](README.md) | 项目总览和快速开始 |
-| [STANDALONE.md](STANDALONE.md) | 独立可执行文件详细说明 |
-| [USER_GUIDE.md](USER_GUIDE.md) | 用户使用指南 |
-| [examples/](examples/) | 代码示例和演示 |
+### 📋 Roadmap
 
-## 📄 许可证
+- [ ] WebSocket support for real-time updates
+- [ ] Plugin architecture for custom tools
+- [ ] Advanced workflow automation
+- [ ] Performance monitoring dashboard
+- [ ] Container orchestration support
 
-MIT License - 详见 [LICENSE](LICENSE) 文件
+## 🤝 Contributing
 
-## 🤝 贡献
+We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
 
-欢迎提交 Issue 和 Pull Request！
+### Development Setup
 
-## 🌟 致谢
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature-name`
+3. Make your changes and add tests
+4. Run the test suite: `cargo test`
+5. Submit a pull request
 
-感谢所有贡献者和支持这个项目的开发者！
+## 📚 Documentation
+
+- [Architecture Guide](docs/ARCHITECTURE.md) - Detailed system architecture
+- [API Reference](docs/API_REFERENCE.md) - Complete API documentation
+- [Developer Guide](docs/DEVELOPER_GUIDE.md) - Development setup and guidelines
+- [Deployment Guide](docs/DEPLOYMENT.md) - Production deployment instructions
+- [Perception System](poc-chromiumoxide/PERCEPTION_REFACTOR_SUMMARY.md) - Layered perception details
+
+## ⚖️ License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🙏 Acknowledgments
+
+- Built with [chromiumoxide](https://github.com/mattsse/chromiumoxide) for browser automation
+- Powered by [Rust](https://www.rust-lang.org/) for performance and safety
+- UI framework using modern HTML5/CSS3/JavaScript
 
 ---
 
-🌈 **彩虹城浏览器** - 让AI真正"活"在数字世界中
+**Made with 🌈 by the RainbowBrowserAI team**
+
+For questions, issues, or contributions, please visit our [GitHub repository](https://github.com/your-org/RainbowBrowserAI).

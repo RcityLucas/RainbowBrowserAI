@@ -1,0 +1,251 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  release:
+    types: [ published ]
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  test:
+    name: Test Suite
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        rust: [1.75.0, stable]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: ${{ matrix.rust }}
+        components: rustfmt, clippy
+        
+    - name: Cache cargo registry
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-
+          
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          pkg-config \
+          libssl-dev \
+          wget \
+          gnupg \
+          ca-certificates
+          
+    - name: Install Chrome for testing
+      run: |
+        wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
+        echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" | sudo tee /etc/apt/sources.list.d/google-chrome.list
+        sudo apt-get update
+        sudo apt-get install -y google-chrome-stable
+        
+    - name: Check formatting
+      run: |
+        cd poc-chromiumoxide
+        cargo fmt -- --check
+        
+    - name: Run Clippy
+      run: |
+        cd poc-chromiumoxide
+        cargo clippy --all-targets --all-features -- -D warnings
+        
+    - name: Run tests
+      run: |
+        cd poc-chromiumoxide
+        RAINBOW_MOCK_MODE=true cargo test --all-features --verbose
+      env:
+        RUST_LOG: debug
+        
+    - name: Build project
+      run: |
+        cd poc-chromiumoxide
+        cargo build --release --bin rainbow-poc-chromiumoxide
+        
+    - name: Run security audit
+      run: |
+        cargo install cargo-audit
+        cd poc-chromiumoxide
+        cargo audit
+        
+  docker:
+    name: Docker Build
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'push' || github.event_name == 'release'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+      
+    - name: Login to Docker Hub
+      if: github.event_name == 'release'
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+        
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: rainbowbrowserai/rainbow-browser-ai
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=semver,pattern={{version}}
+          type=semver,pattern={{major}}.{{minor}}
+          
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        platforms: linux/amd64,linux/arm64
+        push: ${{ github.event_name == 'release' }}
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        
+  integration-test:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: test
+    
+    services:
+      chrome:
+        image: selenium/standalone-chrome:latest
+        options: --shm-size=2gb
+        ports:
+          - 4444:4444
+          
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+      
+    - name: Cache cargo
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-integration-${{ hashFiles('**/Cargo.lock') }}
+        
+    - name: Build application
+      run: |
+        cd poc-chromiumoxide
+        cargo build --release --bin rainbow-poc-chromiumoxide
+        
+    - name: Start application
+      run: |
+        cd poc-chromiumoxide
+        RAINBOW_MOCK_MODE=false ./target/release/rainbow-poc-chromiumoxide serve --port 3001 &
+        sleep 10
+        
+    - name: Wait for application to be ready
+      run: |
+        timeout 30 bash -c 'until curl -f http://localhost:3001/api/health; do sleep 1; done'
+        
+    - name: Run integration tests
+      run: |
+        # Test health endpoint
+        curl -f http://localhost:3001/api/health
+        
+        # Test session creation
+        SESSION_ID=$(curl -s -X POST http://localhost:3001/api/session/create | jq -r '.session_id')
+        echo "Created session: $SESSION_ID"
+        
+        # Test perception endpoint
+        curl -s -X POST http://localhost:3001/api/perceive-mode \
+          -H "Content-Type: application/json" \
+          -d "{\"mode\":\"lightning\",\"session_id\":\"$SESSION_ID\"}" | jq .
+          
+  benchmarks:
+    name: Performance Benchmarks
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+      
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y pkg-config libssl-dev
+        
+    - name: Run benchmarks
+      run: |
+        cd poc-chromiumoxide
+        cargo bench --features benchmarks
+        
+    - name: Upload benchmark results
+      uses: actions/upload-artifact@v4
+      with:
+        name: benchmark-results
+        path: poc-chromiumoxide/target/criterion/
+        
+  deploy:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [test, docker, integration-test]
+    if: github.event_name == 'release'
+    environment: production
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Deploy to production
+      run: |
+        echo "Deploying version ${{ github.event.release.tag_name }} to production"
+        # Add your deployment commands here
+        # For example, updating Kubernetes deployments, triggering CD pipelines, etc.
+        
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Run security scan
+      uses: rustsec/audit-check@v1.4.1
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        
+    - name: Docker image vulnerability scan
+      if: github.event_name == 'push'
+      run: |
+        docker build -t rainbow-browser-ai .
+        docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+          -v $(pwd):/tmp aquasec/trivy image --exit-code 1 rainbow-browser-ai

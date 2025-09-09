@@ -318,7 +318,21 @@
       "Bash(do sed -i 's/use crate::browser::{Browser, BrowserOps};/use crate::browser::Browser;/' \"$file\")",
       "Bash(done)",
       "Bash(./target/release/rainbow-poc-chromiumoxide.exe serve:*)",
-      "Bash(./target/release/rainbow-poc-chromiumoxide.exe --help)"
+      "Bash(./target/release/rainbow-poc-chromiumoxide.exe --help)",
+      "Bash(env RAINBOW_MOCK_MODE=true timeout 60s cargo build --message-format short)",
+      "Bash(env RAINBOW_MOCK_MODE=true timeout 10s cargo run --release --bin rainbow-poc-chromiumoxide -- serve --port 3002)",
+      "Bash(env RAINBOW_MOCK_MODE=true cargo run --release --bin rainbow-poc-chromiumoxide -- serve --port 3002)",
+      "Bash(env RAINBOW_MOCK_MODE=true timeout 60s cargo build --release --bin rainbow-poc-chromiumoxide --message-format short)",
+      "Bash(env RAINBOW_MOCK_MODE=true timeout 60s cargo build --release --bin rainbow-poc-chromiumoxide)",
+      "Bash(env RAINBOW_MOCK_MODE=true CHROMEDRIVER_PORT=9515 ./target/release/rainbow-poc-chromiumoxide.exe serve --port 3001)",
+      "Bash(./test_perception_api.bat)",
+      "Bash(./test_session_perception.bat)",
+      "Bash(./test_session_perception_simple.bat)",
+      "Bash(env RAINBOW_MOCK_MODE=true CHROMEDRIVER_PORT=9515 ./target/release/rainbow-poc-chromiumoxide.exe serve --port 3002)",
+      "Bash(./test_session_perception_port_3002.bat)",
+      "Bash(BASE_URL=http://localhost:3002 scripts/test/api-test.sh:*)",
+      "Bash(RAINBOW_MOCK_MODE=true cargo test --all-features -- --nocapture)",
+      "Bash(git check-ignore:*)"
     ],
     "deny": [],
     "additionalDirectories": [

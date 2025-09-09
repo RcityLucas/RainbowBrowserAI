@@ -254,6 +254,7 @@ impl LearningEngine {
     }
     
     /// Calculate confidence score for a pattern
+    #[allow(dead_code)] // Used in pattern analysis algorithms
     fn calculate_pattern_confidence(&self, pattern: &ActionPattern) -> f64 {
         let base_confidence = pattern.success_rate;
         
@@ -275,6 +276,7 @@ impl LearningEngine {
     }
     
     /// Generate improvement suggestions for a pattern
+    #[allow(dead_code)] // Used in pattern optimization
     fn generate_pattern_improvements(&self, pattern: &ActionPattern) -> Vec<String> {
         let mut suggestions = Vec::new();
         

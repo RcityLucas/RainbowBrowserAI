@@ -1,10 +1,10 @@
 ################################################################################
-# RainbowBrowserAI .gitignore
-# Comprehensive ignore file for Rust browser automation project with AI
+# RainbowBrowserAI .gitignore - Optimized for Project Submission
+# Browser automation with AI-powered perception system
 ################################################################################
 
 #===============================================================================
-# Rust & Cargo
+# Build Artifacts & Rust Compiler Output
 #===============================================================================
 
 # Compiled files and build artifacts
@@ -13,8 +13,8 @@
 debug/
 release/
 
-# Since this is an application (not a library), we keep Cargo.lock in version control
-# Cargo.lock  # Commented out - tracking for application
+# Keep Cargo.lock for application (not library)
+# Cargo.lock is tracked for reproducible builds
 
 # Rustfmt backup files
 **/*.rs.bk
@@ -23,106 +23,24 @@ release/
 # MSVC Windows debugging information
 *.pdb
 
-# Rust documentation build
-/target/doc/
+# Rust documentation build (generated)
 **/target/doc/
 
 # Criterion benchmark results
-/target/criterion/
 **/target/criterion/
 criterion/
 
 # Rust incremental compilation
-/target/incremental/
 **/target/incremental/
 
-# RLS (Rust Language Server) files
-/target/rls/
-**/target/rls/
-
-# Rust analyzer
+# Rust analyzer cache
 /target/rust-analyzer/
 
-# wasm-pack generated files
-/pkg/
-/wasm-pack.log
-
 #===============================================================================
-# WebDriver & Browser Automation
+# Environment & Configuration (CRITICAL - Never commit!)
 #===============================================================================
 
-# WebDriver executables (should be downloaded at runtime or in CI)
-chromedriver
-chromedriver_*
-geckodriver
-geckodriver.exe
-geckodriver_*
-msedgedriver
-msedgedriver.exe
-safaridriver
-operadriver
-IEDriverServer.exe
-drivers/
-selenium/
-
-# Keep the specific chromedriver in poc if it's intentionally tracked
-!poc/chromedriver.exe
-
-# Browser profiles and user data
-/browser_profiles/
-/user_data/
-/browser_data/
-/session_data/
-/profiles/
-/.mozilla/
-/.chrome/
-/.chromium/
-
-# Screenshots (usually test outputs)
-/screenshots/
-**/screenshots/
-# Keep screenshots directory structure but not contents
-!screenshots/.gitkeep
-!**/screenshots/.gitkeep
-
-#===============================================================================
-# AI & Machine Learning
-#===============================================================================
-
-# Model files
-/models/
-*.model
-*.gguf
-*.ggml
-*.bin
-*.safetensors
-*.onnx
-*.pt
-*.pth
-*.h5
-*.pb
-*.tflite
-*.ckpt
-
-# AI processing temporary files
-/processing/
-/ai_temp/
-/embeddings/
-*.embedding
-*.vector
-
-# Training/fine-tuning artifacts
-/checkpoints/
-/runs/
-/wandb/
-/mlruns/
-/tensorboard/
-
-#===============================================================================
-# Configuration & Secrets
-#===============================================================================
-
-# Environment files - CRITICAL: Never commit!
+# Environment files with secrets
 .env
 .env.*
 !.env.example
@@ -157,23 +75,7 @@ tokens.json
 .api_key
 .token
 
-# Custom/local configuration overrides
-custom_config.json
-local_config.json
-config.local.yaml
-config.override.yaml
-**/config.local.*
-
-# Keep example configurations
-!config.example.*
-!config.template.*
-!poc/config.yaml
-
-#===============================================================================
-# Cost Tracking & Monitoring
-#===============================================================================
-
-# Cost tracking data (contains API usage data)
+# Cost tracking data (contains API usage)
 cost_tracker.json
 cost_tracker_*.json
 /costs/
@@ -181,13 +83,73 @@ cost_tracker_*.json
 usage_stats.json
 api_usage.json
 
-# Monitoring and metrics
-/monitoring/
-/metrics/
-/analytics/
-*.metrics
-prometheus_data/
-grafana_data/
+#===============================================================================
+# Browser Automation & WebDriver
+#===============================================================================
+
+# WebDriver executables (downloaded at runtime)
+chromedriver
+chromedriver_*
+geckodriver
+geckodriver.exe
+geckodriver_*
+msedgedriver
+msedgedriver.exe
+safaridriver
+operadriver
+IEDriverServer.exe
+drivers/
+selenium/
+
+# Browser profiles and user data
+/browser_profiles/
+/user_data/
+/browser_data/
+/session_data/
+/profiles/
+/.mozilla/
+/.chrome/
+/.chromium/
+
+# Screenshots (test outputs)
+/screenshots/
+**/screenshots/
+# Keep directory structure
+!screenshots/.gitkeep
+!**/screenshots/.gitkeep
+
+#===============================================================================
+# AI & Machine Learning Files
+#===============================================================================
+
+# Model files (usually large)
+/models/
+*.model
+*.gguf
+*.ggml
+*.bin
+*.safetensors
+*.onnx
+*.pt
+*.pth
+*.h5
+*.pb
+*.tflite
+*.ckpt
+
+# AI processing artifacts
+/processing/
+/ai_temp/
+/embeddings/
+*.embedding
+*.vector
+
+# Training artifacts
+/checkpoints/
+/runs/
+/wandb/
+/mlruns/
+/tensorboard/
 
 #===============================================================================
 # IDE & Editor Files
@@ -196,8 +158,6 @@ grafana_data/
 # Visual Studio Code
 .vscode/
 !.vscode/extensions.json
-!.vscode/launch.json.example
-!.vscode/tasks.json.example
 *.code-workspace
 .history/
 
@@ -208,10 +168,6 @@ grafana_data/
 *.iws
 out/
 cmake-build-*/
-
-# Sublime Text
-*.sublime-project
-*.sublime-workspace
 
 # Vim
 *.swp
@@ -229,18 +185,12 @@ tags
 auto-save-list
 tramp
 .\#*
-.dir-locals.el
 
-# Kate
-*.kate-swp
-
-# TextMate
-*.tmproj
-*.tmproject
-tmtags
-
-# Notepad++
-nppBackup/
+# Claude Code local settings (user-specific)
+**/.claude/
+!**/.claude/settings.json
+.claude/settings.local.json
+poc/.claude/settings.local.json
 
 #===============================================================================
 # Operating System Files
@@ -285,75 +235,6 @@ $RECYCLE.BIN/
 .nfs*
 
 #===============================================================================
-# Build & Package Management
-#===============================================================================
-
-# Node.js (for any JS tooling)
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-package-lock.json
-yarn.lock
-pnpm-lock.yaml
-.pnp.*
-.yarn/
-
-# Python (for any Python scripts)
-__pycache__/
-*.py[cod]
-*$py.class
-*.pyc
-venv/
-env/
-.venv/
-.env/
-.Python
-pip-log.txt
-pip-delete-this-directory.txt
-*.egg-info/
-dist/
-*.egg
-
-# Build outputs
-/dist/
-/build/
-/out/
-/output/
-
-# Docker
-.dockerignore
-docker-compose.override.yml
-docker-compose.*.yml
-!docker-compose.example.yml
-
-#===============================================================================
-# Testing & Quality Assurance
-#===============================================================================
-
-# Test results and coverage
-/test-results/
-/test-output/
-/coverage/
-*.lcov
-.coverage
-htmlcov/
-.tox/
-.pytest_cache/
-.rspec_status
-
-# Benchmark results
-/benches/target/
-flamegraph.svg
-perf.data*
-*.bench
-
-# Integration test artifacts
-/tests/fixtures/output/
-/tests/temp/
-/tests/tmp/
-
-#===============================================================================
 # Logs & Temporary Files
 #===============================================================================
 
@@ -362,7 +243,6 @@ perf.data*
 *.log.*
 logs/
 log/
-/var/log/
 
 # Temporary files
 tmp/
@@ -393,6 +273,9 @@ temp/
 *.pid.lock
 pids/
 
+# Null files and junk
+nul
+
 #===============================================================================
 # Database & Storage
 #===============================================================================
@@ -416,7 +299,74 @@ local.db
 *.surreal
 
 #===============================================================================
-# Documentation
+# Build & Package Management
+#===============================================================================
+
+# Node.js (for tooling)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+.pnp.*
+.yarn/
+
+# Python (for scripts)
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+venv/
+env/
+.venv/
+.env/
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+*.egg-info/
+dist/
+*.egg
+
+# Build outputs
+/dist/
+/build/
+/out/
+/output/
+
+# Docker
+docker-compose.override.yml
+docker-compose.*.yml
+!docker-compose.example.yml
+
+#===============================================================================
+# Testing & Quality Assurance
+#===============================================================================
+
+# Test results and coverage
+/test-results/
+/test-output/
+/coverage/
+*.lcov
+.coverage
+htmlcov/
+.tox/
+.pytest_cache/
+
+# Benchmark results
+/benches/target/
+flamegraph.svg
+perf.data*
+*.bench
+
+# Integration test artifacts
+/tests/fixtures/output/
+/tests/temp/
+/tests/tmp/
+
+#===============================================================================
+# Documentation & Reports
 #===============================================================================
 
 # Generated documentation
@@ -431,11 +381,22 @@ mkdocs_build/
 .ipynb_checkpoints/
 *.ipynb_checkpoints
 
+# Analysis and improvement reports (keep for reference)
+# These are valuable for development history but not needed in final submission
+*IMPROVEMENTS_REPORT*.md
+*CLIPPY_*REPORT*.md
+*ANALYSIS*.md
+*REFACTOR*SUMMARY*.md
+*VALIDATION_REPORT*.md
+
+# Keep important project summaries
+!PROJECT_IMPROVEMENTS_SUMMARY.md
+
 #===============================================================================
-# Archive & Compressed Files
+# Archive & Binary Files
 #===============================================================================
 
-# Archive files (usually not needed in repo)
+# Archive files
 *.zip
 *.tar
 *.tar.gz
@@ -447,13 +408,6 @@ mkdocs_build/
 *.bz2
 *.xz
 
-# Keep specific archives if needed
-!required-assets.zip
-
-#===============================================================================
-# Binary & Compiled Files
-#===============================================================================
-
 # Shared libraries
 *.so
 *.so.*
@@ -462,14 +416,11 @@ mkdocs_build/
 *.a
 *.lib
 
-# Executables
+# Executables (except tracked ones)
 *.exe
 *.com
 *.app
 *.out
-
-# Keep specific executables if tracked intentionally
-!poc/chromedriver.exe
 
 # Object files
 *.o
@@ -484,20 +435,11 @@ mkdocs_build/
 *.exp
 *.ilk
 
-# Kernel Module Compile Results
-*.mod*
-*.cmd
-.tmp_versions/
-modules.order
-Module.symvers
-Mkfile.old
-dkms.conf
-
 #===============================================================================
-# Project-Specific Ignores
+# Project-Specific
 #===============================================================================
 
-# Plugin compiled artifacts
+# Plugin artifacts
 /poc/plugins/**/*.so
 /poc/plugins/**/*.dll
 /poc/plugins/**/*.dylib
@@ -512,14 +454,6 @@ dkms.conf
 /src/browser_extension/*.xpi
 manifest.json.bak
 extension.zip
-
-# Standalone build artifacts (keep main outputs)
-/target/standalone/*.d
-/target/release/deps/
-/target/debug/deps/
-# Keep important standalone files
-!target/standalone/rainbow-browser-standalone
-!target/standalone/rainbow-browser-standalone.exe
 
 # Server data
 /server_data/
@@ -537,16 +471,16 @@ extension_settings.json
 user_settings.json
 workspace.json
 
-# License and legal files that might contain sensitive info
-license_private.txt
-
-# Claude Code local settings - contains user-specific permissions and configs
-**/.claude/
-.claude/settings.local.json
-poc/.claude/settings.local.json
+# Monitoring and metrics
+/monitoring/
+/metrics/
+/analytics/
+*.metrics
+prometheus_data/
+grafana_data/
 
 #===============================================================================
-# Infrastructure & DevOps
+# Infrastructure & CI/CD
 #===============================================================================
 
 # Terraform
@@ -556,67 +490,34 @@ poc/.claude/settings.local.json
 *.tfplan
 *.tfvars
 !*.tfvars.example
-terraform.rc
-.terraformrc
-
-# Ansible
-*.retry
-/ansible/*.log
-.ansible/
 
 # Kubernetes
 kubeconfig
 *.kubeconfig
 
-# CI/CD
+# CI/CD local overrides
 .gitlab-ci-local/
 .github-ci-local/
 
-# Netlify
-.netlify
-
 #===============================================================================
-# Miscellaneous
+# Keep Important Files
 #===============================================================================
 
-# Java/JVM artifacts (if any JVM integration)
-*.class
-*.jar
-*.war
-*.ear
-
-# Backup files created by various tools
-*.swp
-*.swo
-*.bak
-*.backup
-*.old
-*.orig
-*.rej
-
-# Patch files
-*.patch
-*.diff
-
-# Core dumps
-core
-core.*
-vgcore.*
-
-# Valgrind
-callgrind.out.*
-cachegrind.out.*
-
-# Local folders for development
-/local/
-/.local/
-/private/
-/personal/
-
-# Keep .gitkeep files
+# Keep directory structure markers
 !.gitkeep
 !**/.gitkeep
 
-#===============================================================================
+# Keep example configurations
+!config.example.*
+!config.template.*
+!.env.example
+
+# Keep important documentation
+!README.md
+!CONTRIBUTING.md
+!CHANGELOG.md
+!LICENSE*
+
+################################################################################
 # End of .gitignore
-#===============================================================================
+################################################################################

@@ -6,22 +6,51 @@ use anyhow::Result;
 use serde::{Serialize, Deserialize};
 use crate::browser::Browser;
 use tracing::{info, debug};
+use chrono::{DateTime, Utc};
 
-pub mod visual;
+// Re-export advanced perception capabilities
+pub use layered_perception::{
+    LayeredPerception, PerceptionMode, PerceptionResult, PerceptionConfig,
+    LightningPerception, QuickPerception, StandardPerception, DeepPerception
+};
+pub use chromium_integration::{
+    ChromiumIntegration, ChromiumConfig, ChromiumPerceptionResult,
+    DomSnapshot, AccessibilityTree, PerformanceData, VisualElements
+};
+
+// pub mod visual; // Removed: Stub code not implemented
 pub mod semantic;
 pub mod context_aware;
 pub mod smart_forms;
 pub mod integration;
+pub mod layered_perception;
+pub mod chromium_integration;
 
-/// Core perception engine that understands web pages using chromiumoxide
+/// Enhanced core perception engine with layered architecture
 pub struct PerceptionEngine {
     browser: std::sync::Arc<Browser>,
     context: PerceptionContext,
     element_cache: HashMap<String, CachedElement>,
+    
+    // New layered perception components
+    layered_perception: LayeredPerception,
+    chromium_integration: Option<ChromiumIntegration>,
+    config: EnhancedPerceptionConfig,
+}
+
+/// Enhanced perception configuration
+#[derive(Debug, Clone)]
+pub struct EnhancedPerceptionConfig {
+    pub default_mode: PerceptionMode,
+    pub enable_advanced_cdp: bool,
+    pub enable_ai_insights: bool,
+    pub cache_enabled: bool,
+    pub performance_monitoring: bool,
+    pub accessibility_analysis: bool,
 }
 
 /// Maintains context across interactions
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PerceptionContext {
     pub current_url: String,
     pub page_type: PageType,
@@ -114,10 +143,40 @@ struct CachedElement {
     confidence: f32,
 }
 
-impl PerceptionEngine {
-    /// Create new perception engine
-    pub fn new(browser: std::sync::Arc<Browser>) -> Self {
+impl Default for EnhancedPerceptionConfig {
+    fn default() -> Self {
         Self {
+            default_mode: PerceptionMode::Quick,
+            enable_advanced_cdp: true,
+            enable_ai_insights: false,
+            cache_enabled: true,
+            performance_monitoring: true,
+            accessibility_analysis: true,
+        }
+    }
+}
+
+impl PerceptionEngine {
+    /// Create new enhanced perception engine with layered architecture
+    pub async fn new(browser: std::sync::Arc<Browser>) -> Result<Self> {
+        let config = EnhancedPerceptionConfig::default();
+        Self::with_config(browser, config).await
+    }
+
+    /// Create perception engine with custom configuration
+    pub async fn with_config(
+        browser: std::sync::Arc<Browser>, 
+        config: EnhancedPerceptionConfig
+    ) -> Result<Self> {
+        let layered_perception = LayeredPerception::new(browser.clone());
+        
+        let chromium_integration = if config.enable_advanced_cdp {
+            Some(ChromiumIntegration::new(browser.clone()).await?)
+        } else {
+            None
+        };
+
+        Ok(Self {
             browser,
             context: PerceptionContext {
                 current_url: String::new(),
@@ -129,10 +188,107 @@ impl PerceptionEngine {
                 screenshot_cache: None,
             },
             element_cache: HashMap::new(),
+            layered_perception,
+            chromium_integration,
+            config,
+        })
+    }
+
+    /// Enhanced page analysis using layered perception
+    pub async fn analyze_page_enhanced(&mut self) -> Result<EnhancedPageAnalysis> {
+        info!("Starting enhanced page analysis");
+
+        // Use layered perception for fast analysis
+        let perception_result = self.layered_perception
+            .perceive(self.config.default_mode)
+            .await?;
+
+        // Optional: Use advanced CDP analysis
+        let chromium_result = if let Some(ref chromium_integration) = self.chromium_integration {
+            Some(chromium_integration.perceive_with_cdp().await?)
+        } else {
+            None
+        };
+
+        // Combine results into enhanced analysis
+        let enhanced_analysis = EnhancedPageAnalysis {
+            layered_result: perception_result,
+            chromium_result,
+            context: self.context.clone(),
+            analysis_timestamp: chrono::Utc::now(),
+            performance_score: self.calculate_performance_score().await?,
+        };
+
+        // Update context with new findings
+        self.update_context_from_analysis(&enhanced_analysis).await?;
+
+        Ok(enhanced_analysis)
+    }
+
+    /// Lightning fast analysis (<50ms) for quick decisions
+    pub async fn quick_scan(&mut self) -> Result<LightningPerception> {
+        match self.layered_perception.perceive(PerceptionMode::Lightning).await? {
+            PerceptionResult::Lightning(result) => Ok(result),
+            _ => Err(anyhow::anyhow!("Expected Lightning perception result")),
         }
     }
 
-    /// Analyze the current page and return page information
+    /// Deep comprehensive analysis for complex pages
+    pub async fn deep_analysis(&mut self) -> Result<DeepPerception> {
+        match self.layered_perception.perceive(PerceptionMode::Deep).await? {
+            PerceptionResult::Deep(result) => Ok(result),
+            _ => Err(anyhow::anyhow!("Expected Deep perception result")),
+        }
+    }
+
+    /// Adaptive perception - automatically chooses best mode
+    pub async fn adaptive_perceive(&mut self) -> Result<PerceptionResult> {
+        self.layered_perception.perceive(PerceptionMode::Adaptive).await
+    }
+
+    /// Advanced element location using multiple strategies
+    pub async fn locate_element_intelligently(&self, query: &str) -> Result<Vec<SmartElementMatch>> {
+        let mut matches = Vec::new();
+
+        // Try different interpretation of the query
+        if let Ok(css_matches) = self.find_by_css_selector(query).await {
+            matches.extend(css_matches);
+        }
+
+        if let Ok(text_matches) = self.find_smart_by_text_content(query).await {
+            matches.extend(text_matches);
+        }
+
+        if let Ok(semantic_matches) = self.find_by_semantic_meaning(query).await {
+            matches.extend(semantic_matches);
+        }
+
+        // Use chromium integration for advanced matching
+        if let Some(ref chromium_integration) = self.chromium_integration {
+            if let Ok(advanced_matches) = chromium_integration.locate_element_advanced(query).await {
+                for m in advanced_matches {
+                    matches.push(SmartElementMatch {
+                        selector: m.selector,
+                        confidence: m.confidence,
+                        match_type: m.match_type,
+                        bounds: SmartBounds {
+                            x: m.bounds.x,
+                            y: m.bounds.y,
+                            width: m.bounds.width,
+                            height: m.bounds.height,
+                        },
+                        element_info: "Advanced CDP match".to_string(),
+                    });
+                }
+            }
+        }
+
+        // Sort by confidence and return top matches
+        matches.sort_by(|a, b| b.confidence.partial_cmp(&a.confidence).unwrap());
+        Ok(matches)
+    }
+
+    /// Legacy analyze_page method for backwards compatibility
     pub async fn analyze_page(&mut self) -> Result<PageAnalysis> {
         // Get current URL
         let url = self.browser.current_url().await.unwrap_or_else(|_| "unknown".to_string());
@@ -403,7 +559,7 @@ impl PerceptionEngine {
 
         // Login patterns
         if description.contains("login") || description.contains("sign in") {
-            let _login_selectors = vec![
+            let _login_selectors = [
                 "button:contains('Login')",
                 "a[href*='login']",
                 "#login",
@@ -802,6 +958,166 @@ impl PerceptionEngine {
         let result = self.browser.execute_script(generic_script).await?;
         Ok(result)
     }
+
+    // === Enhanced perception helper methods ===
+
+    async fn calculate_performance_score(&self) -> Result<f64> {
+        // Calculate performance score based on page metrics
+        let script = r#"
+            (function() {
+                const perf = performance.now();
+                const dom_size = document.all.length;
+                const interactive = document.querySelectorAll('button,input,a,select').length;
+                
+                // Simple scoring algorithm
+                let score = 1.0;
+                if (dom_size > 1000) score -= 0.1;
+                if (interactive > 100) score -= 0.1;
+                if (perf > 2000) score -= 0.2;
+                
+                return Math.max(0.0, score);
+            })()
+        "#;
+        
+        let result = self.browser.execute_script(script).await?;
+        Ok(result.as_f64().unwrap_or(0.8))
+    }
+
+    async fn update_context_from_analysis(&mut self, analysis: &EnhancedPageAnalysis) -> Result<()> {
+        // Update context based on analysis results
+        match &analysis.layered_result {
+            PerceptionResult::Lightning(lightning) => {
+                self.context.current_url = lightning.url.clone();
+            },
+            PerceptionResult::Quick(quick) => {
+                self.context.current_url = quick.lightning.url.clone();
+            },
+            PerceptionResult::Standard(standard) => {
+                self.context.current_url = standard.quick.lightning.url.clone();
+            },
+            PerceptionResult::Deep(deep) => {
+                self.context.current_url = deep.standard.quick.lightning.url.clone();
+            },
+        }
+        Ok(())
+    }
+
+    async fn find_by_css_selector(&self, selector: &str) -> Result<Vec<SmartElementMatch>> {
+        let script = format!(r#"
+            (function() {{
+                const elements = document.querySelectorAll('{}');
+                return Array.from(elements).slice(0, 10).map((el, index) => {{
+                    const rect = el.getBoundingClientRect();
+                    return {{
+                        selector: '{}',
+                        confidence: 0.9,
+                        match_type: 'css_selector',
+                        bounds: {{
+                            x: rect.x,
+                            y: rect.y, 
+                            width: rect.width,
+                            height: rect.height
+                        }},
+                        element_info: el.tagName + (el.id ? '#' + el.id : '') + (el.className ? '.' + el.className.split(' ').join('.') : '')
+                    }};
+                }});
+            }})()
+        "#, selector, selector);
+        
+        let result = self.browser.execute_script(&script).await?;
+        let matches: Vec<SmartElementMatch> = serde_json::from_value(result)?;
+        Ok(matches)
+    }
+
+    async fn find_smart_by_text_content(&self, text: &str) -> Result<Vec<SmartElementMatch>> {
+        let script = format!(r#"
+            (function() {{
+                const xpath = "//text()[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '{}')]";
+                const snapshot = document.evaluate(xpath, document, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
+                
+                const matches = [];
+                for (let i = 0; i < Math.min(snapshot.snapshotLength, 10); i++) {{
+                    const textNode = snapshot.snapshotItem(i);
+                    const element = textNode.parentElement;
+                    if (element) {{
+                        const rect = element.getBoundingClientRect();
+                        matches.push({{
+                            selector: element.tagName.toLowerCase() + (element.id ? '#' + element.id : ''),
+                            confidence: 0.8,
+                            match_type: 'text_content',
+                            bounds: {{
+                                x: rect.x,
+                                y: rect.y,
+                                width: rect.width,
+                                height: rect.height
+                            }},
+                            element_info: textNode.textContent.trim()
+                        }});
+                    }}
+                }}
+                return matches;
+            }})()
+        "#, text.to_lowercase());
+        
+        let result = self.browser.execute_script(&script).await?;
+        let matches: Vec<SmartElementMatch> = serde_json::from_value(result).unwrap_or_default();
+        Ok(matches)
+    }
+
+    async fn find_by_semantic_meaning(&self, meaning: &str) -> Result<Vec<SmartElementMatch>> {
+        // Semantic matching based on common patterns
+        let semantic_selectors = match meaning.to_lowercase().as_str() {
+            "submit" | "send" | "save" => vec!["input[type=submit]", "button[type=submit]", "button:contains('submit')", "button:contains('send')", "button:contains('save')"],
+            "search" => vec!["input[type=search]", "input[placeholder*='search']", "#search", ".search", "button:contains('search')"],
+            "login" | "signin" => vec!["input[type=password]", "form[class*='login']", "button:contains('login')", "button:contains('sign in')"],
+            "menu" | "navigation" => vec!["nav", ".nav", ".menu", "[role=navigation]", ".navbar"],
+            _ => vec![],
+        };
+
+        let mut all_matches = Vec::new();
+        for selector in semantic_selectors {
+            if let Ok(mut matches) = self.find_by_css_selector(selector).await {
+                for match_item in &mut matches {
+                    match_item.match_type = "semantic".to_string();
+                    match_item.confidence = 0.7; // Lower confidence for semantic matching
+                }
+                all_matches.extend(matches);
+            }
+        }
+        
+        Ok(all_matches)
+    }
+}
+
+// === Enhanced data structures ===
+
+/// Enhanced page analysis result combining all perception layers
+#[derive(Debug, Serialize, Deserialize)]
+pub struct EnhancedPageAnalysis {
+    pub layered_result: PerceptionResult,
+    pub chromium_result: Option<ChromiumPerceptionResult>,
+    pub context: PerceptionContext,
+    pub analysis_timestamp: DateTime<Utc>,
+    pub performance_score: f64,
+}
+
+/// Smart element match with confidence and type information
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SmartElementMatch {
+    pub selector: String,
+    pub confidence: f64,
+    pub match_type: String,
+    pub bounds: SmartBounds,
+    pub element_info: String,
+}
+
+/// Smart bounding box for elements
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SmartBounds {
+    pub x: f64,
+    pub y: f64,
+    pub width: f64,
+    pub height: f64,
 }
 
 // Re-export key types

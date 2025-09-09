@@ -51,6 +51,7 @@ pub enum TaskStepType {
 
 /// Executor for task plans
 pub struct TaskPlanExecutor {
+    #[allow(dead_code)] // Reserved for browser pool integration
     browser_pool: Option<std::sync::Arc<crate::browser::pool::BrowserPool>>,
     step_results: HashMap<String, TaskStepResult>,
 }
@@ -480,7 +481,7 @@ mod tests {
     
     #[tokio::test]
     async fn test_step_execution_order() {
-        let mut executor = TaskPlanExecutor::new();
+        let executor = TaskPlanExecutor::new();
         
         let steps = vec![
             TaskStep {

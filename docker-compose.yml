@@ -1,0 +1,62 @@
+version: '3.8'
+
+services:
+  rainbow-browser-ai:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3001:3001"
+    environment:
+      - RAINBOW_MOCK_MODE=false
+      - BROWSER_HEADLESS=true
+      - SERVER_PORT=3001
+      - CHROMEDRIVER_PORT=9515
+      - RUST_LOG=info
+      - MAX_CONCURRENT_SESSIONS=10
+      - SESSION_TIMEOUT_SECONDS=1800
+    volumes:
+      # Optional: Mount configuration files
+      - ./config:/app/config:ro
+      # Optional: Mount logs directory
+      - ./logs:/app/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+        reservations:
+          memory: 512M
+          cpus: '0.5'
+
+  # Optional: Redis for session storage (if implemented)
+  # redis:
+  #   image: redis:7-alpine
+  #   ports:
+  #     - "6379:6379"
+  #   volumes:
+  #     - redis_data:/data
+  #   restart: unless-stopped
+
+  # Optional: Monitoring with Prometheus (if metrics are implemented)
+  # prometheus:
+  #   image: prom/prometheus:latest
+  #   ports:
+  #     - "9090:9090"
+  #   volumes:
+  #     - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+  #   restart: unless-stopped
+
+# volumes:
+#   redis_data:
+
+networks:
+  default:
+    name: rainbow-browser-ai-network
