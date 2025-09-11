@@ -93,11 +93,25 @@ async function loadAvailableTools() {
         
         if (data.success && data.data) {
             console.log('Available tools loaded:', data.data);
+            
+            // Update tool count dynamically
+            const toolCount = (data.data.summary && data.data.summary.total_tools) || 0;
+            const toolsCountElement = document.getElementById('tools-count');
+            if (toolsCountElement) {
+                toolsCountElement.textContent = `${toolCount} Tools Available`;
+            }
+            
             updateStatus('Connected');
         }
     } catch (error) {
         console.error('Failed to load tools:', error);
         updateStatus('Disconnected', true);
+        
+        // Show error state for tool count
+        const toolsCountElement = document.getElementById('tools-count');
+        if (toolsCountElement) {
+            toolsCountElement.textContent = 'Tools Unavailable';
+        }
     }
 }
 

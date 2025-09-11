@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Fail pipeline if any stage fails (e.g., cargo build)
+set -o pipefail
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -81,7 +84,8 @@ echo -e "${GREEN}  ✓ Server will use port ${SERVER_PORT}${NC}"
 echo -e "\n${BLUE}Building the project...${NC}"
 if [ "$BUILD_MODE" = "release" ]; then
     echo -e "${YELLOW}  Building in release mode (optimized)...${NC}"
-    if cargo build --release 2>&1 | grep -E "(Compiling|Finished|error)"; then
+    # Show only key cargo lines and real Rust errors (avoid matching #[error("...")])
+    if cargo build --release --color never 2>&1 | grep -E "^[[:space:]]*(Compiling|Finished|error(\[|:))"; then
         echo -e "${GREEN}  ✓ Build completed${NC}"
     else
         echo -e "${RED}  ✗ Build failed${NC}"
@@ -95,7 +99,8 @@ if [ "$BUILD_MODE" = "release" ]; then
     fi
 else
     echo -e "${YELLOW}  Building in debug mode...${NC}"
-    if cargo build 2>&1 | grep -E "(Compiling|Finished|error)"; then
+    # Show only key cargo lines and real Rust errors (avoid matching #[error("...")])
+    if cargo build --color never 2>&1 | grep -E "^[[:space:]]*(Compiling|Finished|error(\[|:))"; then
         echo -e "${GREEN}  ✓ Build completed${NC}"
     else
         echo -e "${RED}  ✗ Build failed${NC}"

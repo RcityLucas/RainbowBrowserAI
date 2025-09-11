@@ -1,6 +1,6 @@
 //! Comprehensive integration tests for all browser automation tools
 //! 
-//! This test suite ensures all 22 tools are working correctly with the API
+//! This test suite ensures all 28 tools are working correctly with the API
 
 use rainbow_poc_chromiumoxide::browser::{Browser, BrowserOps};
 use tokio;
@@ -200,7 +200,7 @@ mod memory_tests {
 mod api_integration_tests {
     use super::*;
     
-    /// Test that all 22 tools are properly registered in the API
+    /// Test that all 28 tools are properly registered in the API
     #[tokio::test]
     async fn test_all_tools_registered() {
         // This would normally test against the actual API endpoint
@@ -218,7 +218,7 @@ mod api_integration_tests {
             "screenshot", "session_memory", "get_element_info", "history_tracker", "persistent_cache",
         ];
         
-        assert_eq!(expected_tools.len(), 22, "Should have exactly 22 tools");
+        assert_eq!(expected_tools.len(), 22, "Should have exactly 28 tools");
     }
 }
 

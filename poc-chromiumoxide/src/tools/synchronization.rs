@@ -1,5 +1,5 @@
 use super::traits::{Tool, ToolCategory};
-use crate::browser::Browser;
+use crate::browser::{Browser, core::BrowserOps};
 use anyhow::{Result, anyhow};
 use serde::{Deserialize, Serialize};
 use async_trait::async_trait;
@@ -184,6 +184,252 @@ impl Tool for WaitForConditionTool {
     async fn validate_input(&self, input: &Self::Input) -> Result<()> {
         if input.condition.is_empty() {
             return Err(anyhow!("Condition cannot be empty"));
+        }
+        Ok(())
+    }
+}
+
+// ============================================================================
+// Wait For Navigation Tool
+// ============================================================================
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct WaitForNavigationInput {
+    #[serde(default = "default_navigation_timeout")]
+    pub timeout_ms: u64,
+    #[serde(default)]
+    pub wait_for_load: bool,
+    #[serde(default)]
+    pub wait_for_network_idle: bool,
+    #[serde(default)]
+    pub expected_url: Option<String>,
+}
+
+fn default_navigation_timeout() -> u64 {
+    30000
+}
+
+#[derive(Debug, Serialize)]
+pub struct WaitForNavigationOutput {
+    pub success: bool,
+    pub navigation_completed: bool,
+    pub final_url: String,
+    pub wait_time_ms: u64,
+    pub load_time_ms: Option<u64>,
+}
+
+pub struct WaitForNavigationTool {
+    browser: Arc<Browser>,
+}
+
+impl WaitForNavigationTool {
+    pub fn new(browser: Arc<Browser>) -> Self {
+        Self { browser }
+    }
+}
+
+#[async_trait]
+impl Tool for WaitForNavigationTool {
+    type Input = WaitForNavigationInput;
+    type Output = WaitForNavigationOutput;
+    
+    fn name(&self) -> &str {
+        "wait_for_navigation"
+    }
+    
+    fn description(&self) -> &str {
+        "Wait for page navigation to complete with various load states"
+    }
+    
+    fn category(&self) -> ToolCategory {
+        ToolCategory::Synchronization
+    }
+    
+    async fn execute(&self, input: Self::Input) -> Result<Self::Output> {
+        info!("Waiting for navigation to complete");
+        let start = std::time::Instant::now();
+        let timeout = Duration::from_millis(input.timeout_ms);
+        
+        // Wait for basic navigation completion
+        let navigation_result = tokio::time::timeout(
+            timeout,
+            self.browser.wait_for_load()
+        ).await;
+        
+        match navigation_result {
+            Ok(Ok(())) => {
+                let mut wait_time = start.elapsed().as_millis() as u64;
+                let mut load_time_ms = None;
+                
+                // Additional wait for network idle if requested
+                if input.wait_for_network_idle {
+                    let idle_start = std::time::Instant::now();
+                    if let Err(_) = tokio::time::timeout(
+                        Duration::from_millis(input.timeout_ms - wait_time),
+                        self.browser.wait_for_network_idle(Duration::from_millis(1000))
+                    ).await {
+                        // Network idle timeout, but navigation still succeeded
+                    }
+                    let idle_time = idle_start.elapsed().as_millis() as u64;
+                    load_time_ms = Some(idle_time);
+                    wait_time = start.elapsed().as_millis() as u64;
+                }
+                
+                let final_url = self.browser.current_url().await.unwrap_or_default();
+                
+                // Check expected URL if provided
+                let url_matches = if let Some(expected) = &input.expected_url {
+                    final_url.contains(expected) || final_url == *expected
+                } else {
+                    true
+                };
+                
+                Ok(WaitForNavigationOutput {
+                    success: url_matches,
+                    navigation_completed: true,
+                    final_url,
+                    wait_time_ms: wait_time,
+                    load_time_ms,
+                })
+            }
+            Ok(Err(e)) => {
+                info!("Navigation failed: {}", e);
+                Ok(WaitForNavigationOutput {
+                    success: false,
+                    navigation_completed: false,
+                    final_url: self.browser.current_url().await.unwrap_or_default(),
+                    wait_time_ms: start.elapsed().as_millis() as u64,
+                    load_time_ms: None,
+                })
+            }
+            Err(_) => {
+                info!("Navigation timeout after {}ms", input.timeout_ms);
+                Ok(WaitForNavigationOutput {
+                    success: false,
+                    navigation_completed: false,
+                    final_url: self.browser.current_url().await.unwrap_or_default(),
+                    wait_time_ms: input.timeout_ms,
+                    load_time_ms: None,
+                })
+            }
+        }
+    }
+    
+    async fn validate_input(&self, input: &Self::Input) -> Result<()> {
+        if input.timeout_ms == 0 {
+            return Err(anyhow!("Timeout must be greater than 0"));
+        }
+        if input.timeout_ms > 300000 { // 5 minutes max
+            return Err(anyhow!("Timeout cannot exceed 300 seconds"));
+        }
+        Ok(())
+    }
+}
+
+// ============================================================================
+// Wait For Network Idle Tool
+// ============================================================================
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct WaitForNetworkIdleInput {
+    #[serde(default = "default_idle_time_ms")]
+    pub idle_time_ms: u64,
+    #[serde(default = "default_timeout")]
+    pub timeout_ms: u64,
+}
+
+fn default_idle_time_ms() -> u64 {
+    500 // 500ms network idle threshold
+}
+
+#[derive(Debug, Serialize)]
+pub struct WaitForNetworkIdleOutput {
+    pub success: bool,
+    pub network_idle_achieved: bool,
+    pub wait_time_ms: u64,
+    pub final_active_requests: usize,
+}
+
+pub struct WaitForNetworkIdleTool {
+    browser: Arc<Browser>,
+}
+
+impl WaitForNetworkIdleTool {
+    pub fn new(browser: Arc<Browser>) -> Self {
+        Self { browser }
+    }
+}
+
+#[async_trait]
+impl Tool for WaitForNetworkIdleTool {
+    type Input = WaitForNetworkIdleInput;
+    type Output = WaitForNetworkIdleOutput;
+    
+    fn name(&self) -> &str {
+        "wait_for_network_idle"
+    }
+    
+    fn description(&self) -> &str {
+        "Wait for network activity to be idle using enhanced CDP Network domain tracking"
+    }
+    
+    fn category(&self) -> ToolCategory {
+        ToolCategory::Synchronization
+    }
+    
+    async fn execute(&self, input: Self::Input) -> Result<Self::Output> {
+        info!("Waiting for network idle: {}ms threshold, {}ms timeout (CDP-backed)", input.idle_time_ms, input.timeout_ms);
+        let start = std::time::Instant::now();
+        
+        let idle_duration = Duration::from_millis(input.idle_time_ms);
+        let timeout = Duration::from_millis(input.timeout_ms);
+        
+        // Use the enhanced CDP-backed network idle detection from browser
+        let result = tokio::time::timeout(timeout, self.browser.wait_for_network_idle(idle_duration)).await;
+        
+        match result {
+            Ok(Ok(())) => {
+                info!("Network idle achieved after {}ms (CDP-tracked)", start.elapsed().as_millis());
+                Ok(WaitForNetworkIdleOutput {
+                    success: true,
+                    network_idle_achieved: true,
+                    wait_time_ms: start.elapsed().as_millis() as u64,
+                    final_active_requests: 0, // Idle means 0 active requests
+                })
+            }
+            Ok(Err(e)) => {
+                info!("Network idle failed: {}", e);
+                Ok(WaitForNetworkIdleOutput {
+                    success: false,
+                    network_idle_achieved: false,
+                    wait_time_ms: start.elapsed().as_millis() as u64,
+                    final_active_requests: 0, // Unknown, assume 0
+                })
+            }
+            Err(_) => {
+                info!("Network idle timeout after {}ms (CDP-tracked)", input.timeout_ms);
+                Ok(WaitForNetworkIdleOutput {
+                    success: false,
+                    network_idle_achieved: false,
+                    wait_time_ms: input.timeout_ms,
+                    final_active_requests: 0, // Unknown due to timeout
+                })
+            }
+        }
+    }
+    
+    async fn validate_input(&self, input: &Self::Input) -> Result<()> {
+        if input.idle_time_ms == 0 {
+            return Err(anyhow!("Idle time must be greater than 0"));
+        }
+        if input.idle_time_ms > 10000 {
+            return Err(anyhow!("Idle time cannot exceed 10 seconds"));
+        }
+        if input.timeout_ms == 0 {
+            return Err(anyhow!("Timeout must be greater than 0"));
+        }
+        if input.timeout_ms > 300000 { // 5 minutes max
+            return Err(anyhow!("Timeout cannot exceed 300 seconds"));
         }
         Ok(())
     }

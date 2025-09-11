@@ -146,7 +146,51 @@ impl Browser {
     /// Create browser in headless mode
     pub async fn new_headless() -> Result<Self> {
         let config = BrowserConfig::builder()
-            .with_head()
+            .no_sandbox()
+            .arg("--headless")
+            .arg("--disable-gpu")
+            .arg("--disable-web-security")
+            .arg("--disable-features=VizDisplayCompositor")
+            .arg("--disable-dev-shm-usage")
+            .build()
+            .unwrap();
+        Self::new_with_config(config).await
+    }
+
+    /// Create browser in new headless mode (Chrome 109+)
+    /// The new headless mode provides better compatibility and performance
+    pub async fn new_headless_new() -> Result<Self> {
+        let config = BrowserConfig::builder()
+            .no_sandbox()
+            .arg("--headless=new")  // Use the new headless mode API
+            .arg("--disable-gpu")
+            .arg("--disable-web-security")
+            .arg("--disable-features=VizDisplayCompositor")
+            .arg("--disable-dev-shm-usage")
+            .arg("--disable-background-timer-throttling")
+            .arg("--disable-backgrounding-occluded-windows")
+            .arg("--disable-renderer-backgrounding")
+            .arg("--no-first-run")
+            .arg("--no-default-browser-check")
+            .arg("--disable-blink-features=AutomationControlled")
+            .arg("--disable-extensions")
+            .arg("--disable-component-extensions-with-background-pages")
+            .arg("--remote-debugging-port=0") // Use dynamic port
+            .build()
+            .unwrap();
+        Self::new_with_config(config).await
+    }
+
+    /// Create browser in old headless mode (Chrome 108 and earlier)
+    /// Use this for compatibility with older Chrome versions
+    pub async fn new_headless_old() -> Result<Self> {
+        let config = BrowserConfig::builder()
+            .no_sandbox()
+            .arg("--headless=old")  // Explicitly use old headless mode
+            .arg("--disable-gpu")
+            .arg("--disable-web-security")
+            .arg("--disable-features=VizDisplayCompositor")
+            .arg("--disable-dev-shm-usage")
             .build()
             .unwrap();
         Self::new_with_config(config).await
@@ -155,7 +199,10 @@ impl Browser {
     /// Create browser with visible window (headed mode)
     pub async fn new_headed() -> Result<Self> {
         let config = BrowserConfig::builder()
+            .with_head()
             .no_sandbox()
+            .arg("--disable-web-security")
+            .arg("--disable-features=VizDisplayCompositor")
             .build()
             .unwrap();
         Self::new_with_config(config).await

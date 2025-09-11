@@ -8,11 +8,12 @@ pub mod pattern_recognition;
 pub mod decision_maker;
 
 // Re-exports for public API
-pub use organic_perception::{OrganicPerceptionEngine, PerceptionResult, ElementInsight, PageContext};
+pub use organic_perception::{OrganicPerceptionEngine, PerceptionResult, ElementInsight, PageContext, ViewportInfo};
 pub use learning_engine::{LearningEngine, ActionPattern, PerformanceMetrics, LearningData};
 pub use adaptation_manager::{AdaptationManager, AdaptationStrategy, EnvironmentContext};
 pub use pattern_recognition::{PatternRecognizer, ActionSequence, PatternMatch, SuccessPattern};
 pub use decision_maker::{DecisionMaker, Decision, DecisionContext, Confidence};
+
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};

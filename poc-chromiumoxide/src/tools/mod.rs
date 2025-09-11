@@ -2,12 +2,16 @@
 // Currently most tools are placeholders for future implementation
 
 pub mod traits;
-// pub mod registry;  // Removed - unused
+pub mod registry;
 pub mod navigation;
 pub mod interaction;
 pub mod extraction;
 pub mod synchronization;
 pub mod memory;
 pub mod config;
+pub mod cdp_monitoring;
+pub mod synthetic_fixtures;
+pub mod cache;
+pub mod dependencies;
 
 // Re-exports enabled for tool system

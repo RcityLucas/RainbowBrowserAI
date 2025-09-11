@@ -7,7 +7,7 @@ use serde_json::Value;
 use std::sync::Arc;
 
 /// Tool categories for organization
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum ToolCategory {
     Navigation,
     Interaction,

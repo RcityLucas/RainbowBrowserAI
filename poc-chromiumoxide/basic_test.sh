@@ -53,7 +53,7 @@ echo "  - GetElementInfoTool (element properties)"
 
 echo ""
 echo "4. Architecture Summary:"
-echo "✅ Tool trait system implemented (22 tools)"
+echo "✅ Tool trait system implemented (28 tools)"
 echo "✅ Dynamic tool registry with JSON I/O"
 echo "✅ Tool execution history and statistics"
 echo "✅ Tool chaining for complex workflows"

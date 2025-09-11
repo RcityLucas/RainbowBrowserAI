@@ -57,6 +57,127 @@ impl ScreenshotTool {
     pub fn new(browser: Arc<Browser>) -> Self {
         Self { browser }
     }
+
+    async fn screenshot_viewport(&self, input: &ScreenshotInput) -> Result<Vec<u8>> {
+        let options = crate::browser::ScreenshotOptions {
+            full_page: false,
+            format: match input.format {
+                ScreenshotFormat::Png => "png".to_string(),
+                ScreenshotFormat::Jpeg => "jpeg".to_string(),
+            },
+            quality: if matches!(input.format, ScreenshotFormat::Jpeg) {
+                Some(input.quality)
+            } else {
+                None
+            },
+            viewport_width: 1920,
+            viewport_height: 1080,
+            wait_after_load: std::time::Duration::from_millis(500),
+        };
+        self.browser.screenshot(options).await
+    }
+
+    async fn screenshot_full_page(&self, input: &ScreenshotInput) -> Result<Vec<u8>> {
+        // Get page dimensions first
+        let dimensions_script = r#"
+            JSON.stringify({
+                width: Math.max(document.documentElement.scrollWidth, document.body.scrollWidth),
+                height: Math.max(document.documentElement.scrollHeight, document.body.scrollHeight)
+            })
+        "#;
+        
+        let dimensions_result = self.browser.execute_script(dimensions_script).await?;
+        let width = dimensions_result["width"].as_u64().unwrap_or(1920) as u32;
+        let height = dimensions_result["height"].as_u64().unwrap_or(1080) as u32;
+        
+        let options = crate::browser::ScreenshotOptions {
+            full_page: true,
+            format: match input.format {
+                ScreenshotFormat::Png => "png".to_string(),
+                ScreenshotFormat::Jpeg => "jpeg".to_string(),
+            },
+            quality: if matches!(input.format, ScreenshotFormat::Jpeg) {
+                Some(input.quality)
+            } else {
+                None
+            },
+            viewport_width: width.max(1920),
+            viewport_height: height.max(1080),
+            wait_after_load: std::time::Duration::from_secs(1),
+        };
+        self.browser.screenshot(options).await
+    }
+
+    async fn screenshot_element(&self, selector: &str, input: &ScreenshotInput) -> Result<Vec<u8>> {
+        // First ensure the element exists and is visible
+        self.browser.wait_for_selector(selector, std::time::Duration::from_secs(5)).await
+            .map_err(|_| anyhow!("Element not found: {}", selector))?;
+
+        // Scroll element into view
+        let scroll_script = format!(
+            "document.querySelector('{}').scrollIntoView({{ behavior: 'auto', block: 'center', inline: 'center' }})",
+            selector
+        );
+        self.browser.execute_script(&scroll_script).await?;
+
+        // Wait a bit for scrolling to complete
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+
+        // Get element bounding box
+        let rect_script = format!(
+            r#"
+            const element = document.querySelector('{}');
+            const rect = element.getBoundingClientRect();
+            JSON.stringify({{
+                x: rect.x,
+                y: rect.y,
+                width: rect.width,
+                height: rect.height,
+                left: rect.left,
+                top: rect.top,
+                right: rect.right,
+                bottom: rect.bottom
+            }})
+            "#,
+            selector
+        );
+        
+        let rect_result = self.browser.execute_script(&rect_script).await?;
+        let x = rect_result["x"].as_f64().unwrap_or(0.0) as i32;
+        let y = rect_result["y"].as_f64().unwrap_or(0.0) as i32;
+        let width = rect_result["width"].as_f64().unwrap_or(100.0) as u32;
+        let height = rect_result["height"].as_f64().unwrap_or(100.0) as u32;
+
+        if width == 0 || height == 0 {
+            return Err(anyhow!("Element has zero dimensions: {}", selector));
+        }
+
+        // Take full viewport screenshot first
+        let viewport_options = crate::browser::ScreenshotOptions {
+            full_page: false,
+            format: match input.format {
+                ScreenshotFormat::Png => "png".to_string(),
+                ScreenshotFormat::Jpeg => "jpeg".to_string(),
+            },
+            quality: if matches!(input.format, ScreenshotFormat::Jpeg) {
+                Some(input.quality)
+            } else {
+                None
+            },
+            viewport_width: 1920,
+            viewport_height: 1080,
+            wait_after_load: std::time::Duration::from_millis(200),
+        };
+        
+        let viewport_screenshot = self.browser.screenshot(viewport_options).await?;
+        
+        // For now, return the full screenshot with element info in debug
+        // TODO: Implement actual image cropping when image processing crate is available
+        debug!("Element bounds: x={}, y={}, width={}, height={}", x, y, width, height);
+        debug!("Note: Element cropping not yet implemented, returning full viewport");
+        
+        Ok(viewport_screenshot)
+    }
 }
 
 #[async_trait]
@@ -77,26 +198,18 @@ impl Tool for ScreenshotTool {
     }
     
     async fn execute(&self, input: Self::Input) -> Result<Self::Output> {
-        info!("Taking screenshot");
+        info!("Taking screenshot with options: full_page={}, format={:?}, quality={}", 
+              input.full_page, input.format, input.quality);
         
-        let screenshot_data = if let Some(_selector) = &input.selector {
-            // Screenshot specific element - TODO: Implement element screenshot
-            debug!("Taking element screenshot (using full viewport for now)");
-            // Use default options for now
-            let options = crate::browser::ScreenshotOptions::default();
-            self.browser.screenshot(options).await?
+        let screenshot_data = if let Some(selector) = &input.selector {
+            debug!("Taking element screenshot for selector: {}", selector);
+            self.screenshot_element(selector, &input).await?
         } else if input.full_page {
-            // Full page screenshot - TODO: Implement full page screenshot
-            debug!("Taking full page screenshot (using viewport for now)");
-            // Use default options for now
-            let options = crate::browser::ScreenshotOptions::default();
-            self.browser.screenshot(options).await?
+            debug!("Taking full page screenshot");
+            self.screenshot_full_page(&input).await?
         } else {
-            // Viewport screenshot
             debug!("Taking viewport screenshot");
-            // Use default options for now
-            let options = crate::browser::ScreenshotOptions::default();
-            self.browser.screenshot(options).await?
+            self.screenshot_viewport(&input).await?
         };
         
         let size = screenshot_data.len();

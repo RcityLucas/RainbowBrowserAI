@@ -5,61 +5,180 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse},
 };
-use serde::Deserialize;
-use tracing::error;
+use serde::{Deserialize, Serialize};
+use tracing::{error, info, debug};
+use std::time::Instant;
 
 use super::{ApiResponse, AppState};
 use crate::perception::PerceptionMode;
+
+/// Enhanced error type for perception operations
+#[derive(Debug, thiserror::Error)]
+pub enum PerceptionError {
+    #[error("Invalid perception mode: {0}")]
+    InvalidMode(String),
+    
+    #[error("Browser acquisition failed: {0}")]
+    BrowserError(String),
+    
+    #[error("Perception engine creation failed: {0}")]
+    EngineError(String),
+    
+    #[error("Analysis failed: {0}")]
+    AnalysisError(String),
+    
+    #[error("Session not found: {0}")]
+    SessionNotFound(String),
+    
+    #[error("Invalid request parameters: {0}")]
+    ValidationError(String),
+    
+    #[error("Timeout occurred during perception: {0}ms")]
+    TimeoutError(u64),
+}
+
+/// Enhanced response wrapper with performance metrics
+#[derive(Debug, Serialize)]
+pub struct PerceptionResponse<T> {
+    pub success: bool,
+    pub data: Option<T>,
+    pub error: Option<String>,
+    pub metrics: PerformanceMetrics,
+}
+
+#[derive(Debug, Serialize)]
+pub struct PerformanceMetrics {
+    pub processing_time_ms: u64,
+    pub browser_acquisition_time_ms: u64,
+    pub perception_time_ms: u64,
+    pub total_time_ms: u64,
+}
+
+impl<T> PerceptionResponse<T> {
+    pub fn success(data: T, metrics: PerformanceMetrics) -> Self {
+        Self {
+            success: true,
+            data: Some(data),
+            error: None,
+            metrics,
+        }
+    }
+    
+    pub fn error(error: String, metrics: PerformanceMetrics) -> Self {
+        Self {
+            success: false,
+            data: None,
+            error: Some(error),
+            metrics,
+        }
+    }
+}
 
 pub async fn analyze_page(
     State(state): State<AppState>,
     Json(req): Json<AnalyzePageRequest>,
 ) -> impl IntoResponse {
-    // Check if session_id is provided for session-aware analysis
+    let start_time = Instant::now();
+    info!("Starting page analysis request with session_id: {:?}", req.session_id);
+    
+    // Validate request parameters
+    if let Err(validation_error) = validate_analyze_page_request(&req) {
+        let metrics = PerformanceMetrics {
+            processing_time_ms: 0,
+            browser_acquisition_time_ms: 0,
+            perception_time_ms: 0,
+            total_time_ms: start_time.elapsed().as_millis() as u64,
+        };
+        return Json(PerceptionResponse::<()>::error(validation_error.to_string(), metrics)).into_response();
+    }
+    
+    let browser_acquisition_start = Instant::now();
+    
+    // Check for session-specific browser first
     if let Some(session_id) = &req.session_id {
-        if let Some(session) = state.session_manager.get_session(session_id).await {
-            let session_guard = session.read().await;
-            let current_url = session_guard.current_url.as_deref().unwrap_or("about:blank");
-            
-            // Return session-aware mock analysis
-            let analysis = serde_json::json!({
-                "url": req.url.as_deref().unwrap_or(current_url),
-                "session_id": session_id,
-                "analysis_type": "session_aware",
-                "elements": {
-                    "clickable_count": 12,
-                    "form_count": 2,
-                    "input_count": 5
-                },
-                "metadata": {
-                    "processed_at": chrono::Utc::now().to_rfc3339(),
-                    "session_context": true
-                }
-            });
-            return Json(ApiResponse::success(analysis)).into_response();
+        if let Some(_session) = state.session_manager.get_session(session_id).await {
+            debug!("Using session-aware analysis for session: {}", session_id);
+            // For now, continue with browser pool - future enhancement: session-specific browsers
         } else {
-            return (StatusCode::BAD_REQUEST, 
-                   Json(ApiResponse::<()>::error(format!("Session not found: {}", session_id)))).into_response();
+            let metrics = PerformanceMetrics {
+                processing_time_ms: 0,
+                browser_acquisition_time_ms: browser_acquisition_start.elapsed().as_millis() as u64,
+                perception_time_ms: 0,
+                total_time_ms: start_time.elapsed().as_millis() as u64,
+            };
+            return (StatusCode::BAD_REQUEST,
+                   Json(PerceptionResponse::<()>::error(
+                       format!("Session not found: {}", session_id), metrics
+                   ))).into_response();
         }
     }
     
+    // Acquire browser from pool
     match state.browser_pool.acquire().await {
         Ok(browser) => {
+            let browser_acquisition_time = browser_acquisition_start.elapsed().as_millis() as u64;
+            let perception_start = Instant::now();
+            
+            // Navigate to URL if provided
+            if let Some(ref url) = req.url {
+                if let Err(e) = browser.navigate_to(url).await {
+                    error!("Failed to navigate to {}: {}", url, e);
+                    let metrics = PerformanceMetrics {
+                        processing_time_ms: 0,
+                        browser_acquisition_time_ms: browser_acquisition_time,
+                        perception_time_ms: 0,
+                        total_time_ms: start_time.elapsed().as_millis() as u64,
+                    };
+                    return (StatusCode::INTERNAL_SERVER_ERROR,
+                           Json(PerceptionResponse::<()>::error(
+                               format!("Navigation failed: {}", e), metrics
+                           ))).into_response();
+                }
+            }
+            
             // Create enhanced perception engine
             match crate::perception::PerceptionEngine::new(browser.browser_arc()).await {
                 Ok(mut perception) => {
-                    // Use enhanced analysis with layered perception
+                    // Try enhanced analysis first
                     match perception.analyze_page_enhanced().await {
-                        Ok(analysis) => Json(ApiResponse::success(analysis)).into_response(),
+                        Ok(analysis) => {
+                            let perception_time = perception_start.elapsed().as_millis() as u64;
+                            let metrics = PerformanceMetrics {
+                                processing_time_ms: perception_time,
+                                browser_acquisition_time_ms: browser_acquisition_time,
+                                perception_time_ms: perception_time,
+                                total_time_ms: start_time.elapsed().as_millis() as u64,
+                            };
+                            info!("Enhanced page analysis completed successfully in {}ms", perception_time);
+                            Json(PerceptionResponse::success(analysis, metrics)).into_response()
+                        },
                         Err(e) => {
                             error!("Enhanced page analysis failed: {}", e);
                             // Fallback to legacy analysis
                             match perception.analyze_page().await {
-                                Ok(legacy_analysis) => Json(ApiResponse::success(legacy_analysis)).into_response(),
+                                Ok(legacy_analysis) => {
+                                    let perception_time = perception_start.elapsed().as_millis() as u64;
+                                    let metrics = PerformanceMetrics {
+                                        processing_time_ms: perception_time,
+                                        browser_acquisition_time_ms: browser_acquisition_time,
+                                        perception_time_ms: perception_time,
+                                        total_time_ms: start_time.elapsed().as_millis() as u64,
+                                    };
+                                    info!("Fallback to legacy analysis completed in {}ms", perception_time);
+                                    Json(PerceptionResponse::success(legacy_analysis, metrics)).into_response()
+                                },
                                 Err(legacy_e) => {
                                     error!("Legacy page analysis also failed: {}", legacy_e);
+                                    let metrics = PerformanceMetrics {
+                                        processing_time_ms: 0,
+                                        browser_acquisition_time_ms: browser_acquisition_time,
+                                        perception_time_ms: perception_start.elapsed().as_millis() as u64,
+                                        total_time_ms: start_time.elapsed().as_millis() as u64,
+                                    };
                                     (StatusCode::INTERNAL_SERVER_ERROR,
-                                     Json(ApiResponse::<()>::error(e.to_string()))).into_response()
+                                     Json(PerceptionResponse::<()>::error(
+                                         format!("Both enhanced and legacy analysis failed: {}", e), metrics
+                                     ))).into_response()
                                 }
                             }
                         }
@@ -67,17 +186,140 @@ pub async fn analyze_page(
                 },
                 Err(e) => {
                     error!("Failed to create perception engine: {}", e);
+                    let metrics = PerformanceMetrics {
+                        processing_time_ms: 0,
+                        browser_acquisition_time_ms: browser_acquisition_time,
+                        perception_time_ms: perception_start.elapsed().as_millis() as u64,
+                        total_time_ms: start_time.elapsed().as_millis() as u64,
+                    };
                     (StatusCode::INTERNAL_SERVER_ERROR,
-                     Json(ApiResponse::<()>::error(e.to_string()))).into_response()
+                     Json(PerceptionResponse::<()>::error(
+                         format!("Failed to create perception engine: {}", e), metrics
+                     ))).into_response()
                 }
             }
         }
         Err(e) => {
             error!("Failed to acquire browser: {}", e);
+            let metrics = PerformanceMetrics {
+                processing_time_ms: 0,
+                browser_acquisition_time_ms: browser_acquisition_start.elapsed().as_millis() as u64,
+                perception_time_ms: 0,
+                total_time_ms: start_time.elapsed().as_millis() as u64,
+            };
             (StatusCode::INTERNAL_SERVER_ERROR,
-             Json(ApiResponse::<()>::error(e.to_string()))).into_response()
+             Json(PerceptionResponse::<()>::error(
+                 format!("Failed to acquire browser: {}", e), metrics
+             ))).into_response()
         }
     }
+}
+
+/// Validate analyze page request parameters
+fn validate_analyze_page_request(req: &AnalyzePageRequest) -> Result<(), PerceptionError> {
+    // Validate URL format if provided
+    if let Some(ref url) = req.url {
+        if url.trim().is_empty() {
+            return Err(PerceptionError::ValidationError("URL cannot be empty".to_string()));
+        }
+        
+        // Basic URL validation
+        if !url.starts_with("http://") && !url.starts_with("https://") && !url.starts_with("file://") && url != "about:blank" {
+            return Err(PerceptionError::ValidationError(
+                "URL must start with http://, https://, file://, or be 'about:blank'".to_string()
+            ));
+        }
+    }
+    
+    // Validate session_id format if provided
+    validate_session_id(&req.session_id)?;
+    
+    Ok(())
+}
+
+/// Validate session ID format
+fn validate_session_id(session_id: &Option<String>) -> Result<(), PerceptionError> {
+    if let Some(ref session_id) = session_id {
+        if session_id.trim().is_empty() {
+            return Err(PerceptionError::ValidationError("Session ID cannot be empty".to_string()));
+        }
+        
+        if session_id.len() > 128 {
+            return Err(PerceptionError::ValidationError("Session ID too long (max 128 characters)".to_string()));
+        }
+        
+        // Check for valid characters (alphanumeric, hyphens, underscores only)
+        if !session_id.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_') {
+            return Err(PerceptionError::ValidationError(
+                "Session ID can only contain alphanumeric characters, hyphens, and underscores".to_string()
+            ));
+        }
+    }
+    
+    Ok(())
+}
+
+/// Validate perception mode request
+fn validate_perception_mode_request(req: &PerceptionModeRequest) -> Result<(), PerceptionError> {
+    // Validate mode
+    let valid_modes = ["lightning", "quick", "standard", "deep", "adaptive"];
+    if !valid_modes.contains(&req.mode.to_lowercase().as_str()) {
+        return Err(PerceptionError::InvalidMode(
+            format!("Invalid mode '{}'. Valid modes: {}", req.mode, valid_modes.join(", "))
+        ));
+    }
+    
+    // Validate session_id
+    validate_session_id(&req.session_id)?;
+    
+    Ok(())
+}
+
+/// Validate smart element search request
+#[allow(dead_code)]
+fn validate_smart_element_search_request(req: &SmartElementSearchRequest) -> Result<(), PerceptionError> {
+    // Validate query
+    if req.query.trim().is_empty() {
+        return Err(PerceptionError::ValidationError("Search query cannot be empty".to_string()));
+    }
+    
+    if req.query.len() > 512 {
+        return Err(PerceptionError::ValidationError("Search query too long (max 512 characters)".to_string()));
+    }
+    
+    // Validate max_results
+    if let Some(max_results) = req.max_results {
+        if max_results == 0 {
+            return Err(PerceptionError::ValidationError("max_results must be greater than 0".to_string()));
+        }
+        
+        if max_results > 100 {
+            return Err(PerceptionError::ValidationError("max_results cannot exceed 100".to_string()));
+        }
+    }
+    
+    // Validate session_id
+    validate_session_id(&req.session_id)?;
+    
+    Ok(())
+}
+
+/// Validate find element request
+#[allow(dead_code)]
+fn validate_find_element_request(req: &FindElementRequest) -> Result<(), PerceptionError> {
+    // Validate description
+    if req.description.trim().is_empty() {
+        return Err(PerceptionError::ValidationError("Element description cannot be empty".to_string()));
+    }
+    
+    if req.description.len() > 256 {
+        return Err(PerceptionError::ValidationError("Element description too long (max 256 characters)".to_string()));
+    }
+    
+    // Validate session_id
+    validate_session_id(&req.session_id)?;
+    
+    Ok(())
 }
 
 pub async fn intelligent_find_element(
@@ -292,258 +534,164 @@ pub async fn perceive_with_mode(
     State(state): State<AppState>,
     Json(req): Json<PerceptionModeRequest>,
 ) -> impl IntoResponse {
-    let _mode = match req.mode.to_lowercase().as_str() {
+    let start_time = Instant::now();
+    info!("Starting layered perception with mode: {} and session_id: {:?}", req.mode, req.session_id);
+    
+    // Validate request parameters
+    if let Err(validation_error) = validate_perception_mode_request(&req) {
+        let metrics = PerformanceMetrics {
+            processing_time_ms: 0,
+            browser_acquisition_time_ms: 0,
+            perception_time_ms: 0,
+            total_time_ms: start_time.elapsed().as_millis() as u64,
+        };
+        return (StatusCode::BAD_REQUEST,
+               Json(PerceptionResponse::<()>::error(validation_error.to_string(), metrics))).into_response();
+    }
+    
+    let mode = match req.mode.to_lowercase().as_str() {
         "lightning" => PerceptionMode::Lightning,
         "quick" => PerceptionMode::Quick,
         "standard" => PerceptionMode::Standard,
         "deep" => PerceptionMode::Deep,
         "adaptive" => PerceptionMode::Adaptive,
-        _ => {
-            return (StatusCode::BAD_REQUEST,
-                   Json(ApiResponse::<()>::error("Invalid perception mode. Use: lightning, quick, standard, deep, or adaptive".to_string()))).into_response();
-        }
+        _ => unreachable!(), // Should be caught by validation
     };
 
-    // NEW: Session-aware perception logic
-    if let Some(session_id) = req.session_id.clone() {
-        // Try to get browser from specific session
-        if let Some(session) = state.session_manager.get_session(&session_id).await {
-            let session_guard = session.read().await;
-            let current_url = session_guard.current_url.clone()
-                .unwrap_or_else(|| "about:blank".to_string());
+    let browser_acquisition_start = Instant::now();
+    
+    match state.browser_pool.acquire().await {
+        Ok(browser) => {
+            let browser_acquisition_time = browser_acquisition_start.elapsed().as_millis() as u64;
+            let perception_start = Instant::now();
             
-            // Return enhanced mock data that includes session info
-            let enhanced_mock_result = match req.mode.to_lowercase().as_str() {
-                "lightning" => {
-                    serde_json::json!({
-                        "url": current_url,
-                        "title": "Current Session Page",
-                        "ready_state": "complete",
-                        "clickable_count": 15,
-                        "input_count": 3,
-                        "link_count": 8,
-                        "form_count": 2,
-                        "perception_time_ms": 35,
-                        "session_id": session_id,
-                        "source": "session_browser"
-                    })
+            // Create layered perception engine
+            let mut layered_perception = crate::perception::LayeredPerception::new(browser.browser_arc());
+            
+            match layered_perception.perceive(mode).await {
+                Ok(result) => {
+                    let perception_time = perception_start.elapsed().as_millis() as u64;
+                    let metrics = PerformanceMetrics {
+                        processing_time_ms: perception_time,
+                        browser_acquisition_time_ms: browser_acquisition_time,
+                        perception_time_ms: perception_time,
+                        total_time_ms: start_time.elapsed().as_millis() as u64,
+                    };
+                    
+                    // Add session information if provided
+                    let mut response_data = serde_json::to_value(&result).unwrap_or_default();
+                    if let Some(session_id) = req.session_id {
+                        if let Some(obj) = response_data.as_object_mut() {
+                            obj.insert("session_id".to_string(), serde_json::Value::String(session_id));
+                            obj.insert("source".to_string(), serde_json::Value::String("layered_perception".to_string()));
+                        }
+                    }
+                    
+                    info!("Layered perception completed successfully in {}ms with mode: {}", perception_time, req.mode);
+                    Json(PerceptionResponse::success(response_data, metrics)).into_response()
                 },
-                "quick" => {
-                    serde_json::json!({
-                        "url": current_url,
-                        "session_id": session_id,
-                        "source": "session_browser",
-                        "mode": req.mode,
-                        "interactive_count": 15,
-                        "text_blocks": 8,
-                        "forms": 2,
-                        "images": 3,
-                        "perception_time_ms": 145,
-                        "key_elements": [
-                            {"selector": ".nav-item", "type": "navigation"},
-                            {"selector": ".btn-primary", "type": "button"}
-                        ]
-                    })
-                },
-                "deep" => {
-                    serde_json::json!({
-                        "url": current_url,
-                        "session_id": session_id,
-                        "source": "session_browser",
-                        "mode": req.mode,
-                        "ai_insights": {
-                            "page_purpose": "Current session page analysis",
-                            "complexity": "Moderate",
-                            "recommendations": ["Continue with session context"]
-                        },
-                        "perception_time_ms": 3247
-                    })
-                },
-                _ => {
-                    serde_json::json!({
-                        "url": current_url,
-                        "session_id": session_id,
-                        "source": "session_browser",
-                        "mode": req.mode,
-                        "message": "Session-aware perception active"
-                    })
+                Err(e) => {
+                    error!("Layered perception failed: {}", e);
+                    let metrics = PerformanceMetrics {
+                        processing_time_ms: 0,
+                        browser_acquisition_time_ms: browser_acquisition_time,
+                        perception_time_ms: perception_start.elapsed().as_millis() as u64,
+                        total_time_ms: start_time.elapsed().as_millis() as u64,
+                    };
+                    (StatusCode::INTERNAL_SERVER_ERROR,
+                     Json(PerceptionResponse::<()>::error(format!("Perception failed: {}", e), metrics))).into_response()
                 }
+            }
+        }
+        Err(e) => {
+            error!("Failed to acquire browser for perception: {}", e);
+            let metrics = PerformanceMetrics {
+                processing_time_ms: 0,
+                browser_acquisition_time_ms: browser_acquisition_start.elapsed().as_millis() as u64,
+                perception_time_ms: 0,
+                total_time_ms: start_time.elapsed().as_millis() as u64,
             };
-            return Json(ApiResponse::success(enhanced_mock_result)).into_response();
-        } else {
-            return (StatusCode::BAD_REQUEST,
-                   Json(ApiResponse::<()>::error(format!("Session not found: {}", session_id)))).into_response();
+            (StatusCode::INTERNAL_SERVER_ERROR,
+             Json(PerceptionResponse::<()>::error(format!("Failed to acquire browser: {}", e), metrics))).into_response()
         }
     }
-    
-    // Fallback to mock data for demonstration
-    let mock_result = match req.mode.to_lowercase().as_str() {
-        "lightning" => {
-            serde_json::json!({
-                "url": "http://localhost:3001",
-                "title": "RainbowBrowserAI Dashboard",
-                "ready_state": "complete",
-                "clickable_count": 15,
-                "input_count": 3,
-                "link_count": 8,
-                "form_count": 2,
-                "perception_time_ms": 35,
-                "source": "browser_pool_fallback"
-            })
-        }
-        "quick" => {
-            serde_json::json!({
-                "url": "http://localhost:3001",
-                "title": "RainbowBrowserAI Dashboard", 
-                "ready_state": "complete",
-                "clickable_count": 15,
-                "input_count": 3,
-                "link_count": 8,
-                "form_count": 2,
-                "perception_time_ms": 145,
-                "interactive_elements": [
-                    {"selector": ".nav-item", "type": "link", "text": "Perception", "visible": true},
-                    {"selector": ".btn-lightning", "type": "button", "text": "Lightning", "visible": true},
-                    {"selector": ".btn-quick", "type": "button", "text": "Quick", "visible": true}
-                ],
-                "visible_text_blocks": [
-                    {"content": "Layered Perception", "tag": "h3", "is_heading": true},
-                    {"content": "Advanced AI perception", "tag": "p", "is_heading": false}
-                ],
-                "form_fields": [
-                    {"name": "smart-search-query", "type": "text", "required": false, "placeholder": "Enter search query"}
-                ]
-            })
-        }
-        "standard" => {
-            serde_json::json!({
-                "url": "http://localhost:3001",
-                "title": "RainbowBrowserAI Dashboard",
-                "ready_state": "complete", 
-                "clickable_count": 15,
-                "input_count": 3,
-                "link_count": 8,
-                "form_count": 2,
-                "perception_time_ms": 892,
-                "semantic_analysis": "Complete",
-                "accessibility_info": "Available",
-                "performance_metrics": {
-                    "load_time": 1.2,
-                    "dom_ready": 0.8,
-                    "resources": 12
-                }
-            })
-        }
-        "deep" => {
-            serde_json::json!({
-                "url": "http://localhost:3001", 
-                "title": "RainbowBrowserAI Dashboard",
-                "ready_state": "complete",
-                "clickable_count": 15,
-                "input_count": 3,
-                "link_count": 8,
-                "form_count": 2,
-                "perception_time_ms": 3247,
-                "dom_analysis": "Complete",
-                "visual_analysis": "Complete",
-                "ai_insights": {
-                    "page_purpose": "Browser automation dashboard",
-                    "complexity": "Moderate",
-                    "recommendations": ["Use perception features", "Navigate to test pages"]
-                }
-            })
-        }
-        _ => {
-            serde_json::json!({
-                "url": "http://localhost:3001",
-                "title": "RainbowBrowserAI Dashboard", 
-                "ready_state": "complete",
-                "clickable_count": 15,
-                "input_count": 3,
-                "link_count": 8,
-                "form_count": 2,
-                "perception_time_ms": 145,
-                "mode": "adaptive",
-                "selected_mode": "quick"
-            })
-        }
-    };
-
-    Json(ApiResponse::success(mock_result)).into_response()
 }
 
 /// Lightning fast perception for quick decisions
 pub async fn quick_scan(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
 ) -> impl IntoResponse {
-    // Return mock data instead of trying to create new browser instances
-    let mock_result = serde_json::json!({
-        "interactive_count": 15,
-        "text_blocks": 8,
-        "forms": 2,
-        "images": 3,
-        "key_elements": [
-            {"selector": ".nav-item", "type": "navigation"},
-            {"selector": ".btn-primary", "type": "button"},
-            {"selector": "#smart-search-query", "type": "input"},
-            {"selector": ".perception-modes", "type": "button-group"}
-        ],
-        "page_complexity": "Moderate",
-        "scan_time_ms": 127
-    });
-
-    Json(ApiResponse::success(mock_result)).into_response()
+    match state.browser_pool.acquire().await {
+        Ok(browser) => {
+            // Create perception engine for quick scan
+            match crate::perception::PerceptionEngine::new(browser.browser_arc()).await {
+                Ok(mut perception) => {
+                    match perception.quick_scan().await {
+                        Ok(lightning_result) => Json(ApiResponse::success(lightning_result)).into_response(),
+                        Err(e) => {
+                            error!("Quick scan failed: {}", e);
+                            (StatusCode::INTERNAL_SERVER_ERROR,
+                             Json(ApiResponse::<()>::error(format!("Quick scan failed: {}", e)))).into_response()
+                        }
+                    }
+                },
+                Err(e) => {
+                    error!("Failed to create perception engine for quick scan: {}", e);
+                    (StatusCode::INTERNAL_SERVER_ERROR,
+                     Json(ApiResponse::<()>::error(e.to_string()))).into_response()
+                }
+            }
+        }
+        Err(e) => {
+            error!("Failed to acquire browser for quick scan: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR,
+             Json(ApiResponse::<()>::error(e.to_string()))).into_response()
+        }
+    }
 }
 
 /// Smart element search using multiple strategies
 pub async fn smart_element_search(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
     Json(req): Json<SmartElementSearchRequest>,
 ) -> impl IntoResponse {
-    // Return mock data instead of trying to create new browser instances
-    let mock_matches = vec![
-        serde_json::json!({
-            "selector": "button[type='submit']",
-            "confidence": 0.95,
-            "strategy": "attribute_match",
-            "element_type": "button",
-            "text_content": "Submit",
-            "visible": true,
-            "coordinates": {"x": 150, "y": 200}
-        }),
-        serde_json::json!({
-            "selector": ".btn-primary",
-            "confidence": 0.87,
-            "strategy": "class_semantic",
-            "element_type": "button", 
-            "text_content": "Primary Action",
-            "visible": true,
-            "coordinates": {"x": 250, "y": 180}
-        }),
-        serde_json::json!({
-            "selector": "#main-submit",
-            "confidence": 0.83,
-            "strategy": "id_match",
-            "element_type": "button",
-            "text_content": "Send",
-            "visible": true,
-            "coordinates": {"x": 180, "y": 220}
-        })
-    ];
-
-    // Filter based on query relevance (simple mock logic)
-    let filtered_matches: Vec<serde_json::Value> = if req.query.to_lowercase().contains("submit") {
-        mock_matches.into_iter().take(req.max_results.unwrap_or(10)).collect()
-    } else {
-        // Return fewer matches for other queries
-        mock_matches.into_iter().take(req.max_results.unwrap_or(5).min(2)).collect()
-    };
-
-    Json(ApiResponse::success(serde_json::json!({
-        "query": req.query,
-        "matches_found": filtered_matches.len(),
-        "search_time_ms": 156,
-        "strategies_used": ["attribute_match", "class_semantic", "id_match", "text_content"],
-        "matches": filtered_matches
-    }))).into_response()
+    match state.browser_pool.acquire().await {
+        Ok(browser) => {
+            match crate::perception::PerceptionEngine::new(browser.browser_arc()).await {
+                Ok(perception) => {
+                    match perception.locate_element_intelligently(&req.query).await {
+                        Ok(matches) => {
+                            // Limit results based on max_results parameter
+                            let limited_matches: Vec<_> = matches.into_iter()
+                                .take(req.max_results.unwrap_or(10))
+                                .collect();
+                            
+                            Json(ApiResponse::success(serde_json::json!({
+                                "query": req.query,
+                                "matches_found": limited_matches.len(),
+                                "search_time_ms": 156, // TODO: Track actual time
+                                "strategies_used": ["css_selector", "text_content", "semantic", "advanced_cdp"],
+                                "matches": limited_matches
+                            }))).into_response()
+                        },
+                        Err(e) => {
+                            error!("Smart element search failed: {}", e);
+                            (StatusCode::INTERNAL_SERVER_ERROR,
+                             Json(ApiResponse::<()>::error(format!("Element search failed: {}", e)))).into_response()
+                        }
+                    }
+                },
+                Err(e) => {
+                    error!("Failed to create perception engine for element search: {}", e);
+                    (StatusCode::INTERNAL_SERVER_ERROR,
+                     Json(ApiResponse::<()>::error(e.to_string()))).into_response()
+                }
+            }
+        }
+        Err(e) => {
+            error!("Failed to acquire browser for element search: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR,
+             Json(ApiResponse::<()>::error(e.to_string()))).into_response()
+        }
+    }
 }

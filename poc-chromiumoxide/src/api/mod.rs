@@ -1,38 +1,94 @@
 use anyhow::Result;
 use axum::{
-    extract::{State, Json},
+    extract::{State, Json, Path, Query},
     response::{IntoResponse, Response},
     routing::{get, post},
     Router,
     http::StatusCode,
 };
+use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
 mod perception_handlers;
+mod llm_handlers;
+mod intelligence_handlers;
+mod workflow_handlers;
+mod task_executor;
 use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
 use tower_http::services::ServeDir;
-use tracing::{info, error};
+use tracing::{info, error, debug};
 use crate::browser::{BrowserOps, pool::BrowserPool, SessionManager};
+use crate::tools::registry::ToolRegistry;
+use tokio::sync::RwLock;
 
 #[derive(Clone)]
 struct AppState {
     browser_pool: Arc<BrowserPool>,
     session_manager: Arc<SessionManager>,
+    tool_registry: Arc<LazyToolRegistry>,
+}
+
+#[derive(Clone)]
+struct LazyToolRegistry {
+    inner: Arc<RwLock<Option<Arc<ToolRegistry>>>>,
+    browser_pool: Arc<BrowserPool>,
+}
+
+impl LazyToolRegistry {
+    fn new(browser_pool: Arc<BrowserPool>) -> Self {
+        Self {
+            inner: Arc::new(RwLock::new(None)),
+            browser_pool,
+        }
+    }
+
+    async fn get(&self) -> anyhow::Result<Arc<ToolRegistry>> {
+        // Fast path: already initialized
+        if let Some(existing) = self.inner.read().await.as_ref() {
+            return Ok(existing.clone());
+        }
+        // Initialize lazily
+        let mut write_guard = self.inner.write().await;
+        if let Some(existing) = write_guard.as_ref() {
+            return Ok(existing.clone());
+        }
+        // Acquire a browser from the pool to build the registry
+        let browser_guard = self.browser_pool.acquire().await?;
+        let registry = Arc::new(ToolRegistry::new(browser_guard.browser_arc()));
+
+        // Start background cache cleanup task once
+        {
+            use crate::tools::cache::start_cache_cleanup_task;
+            let cache = registry.cache.clone();
+            tokio::spawn(start_cache_cleanup_task(cache, std::time::Duration::from_secs(300)));
+        }
+
+        *write_guard = Some(registry.clone());
+        Ok(registry)
+    }
+
+    async fn initialized(&self) -> bool {
+        self.inner.read().await.is_some()
+    }
 }
 
 pub async fn serve(port: u16, browser_pool: BrowserPool) -> Result<()> {
     let session_manager = SessionManager::default();
+
+    let browser_pool_arc = Arc::new(browser_pool);
     let state = AppState {
-        browser_pool: Arc::new(browser_pool),
+        browser_pool: browser_pool_arc.clone(),
         session_manager: Arc::new(session_manager),
+        tool_registry: Arc::new(LazyToolRegistry::new(browser_pool_arc.clone())),
     };
     
     let app = Router::new()
         // Health check
         .route("/health", get(health_check))
         .route("/api/health", get(health_check))
+        .route("/api/diagnostics", get(diagnostics))
         
         // Session management
         .route("/api/session/create", post(create_session))
@@ -58,6 +114,29 @@ pub async fn serve(port: u16, browser_pool: BrowserPool) -> Result<()> {
         // Tools API endpoints
         .route("/api/tools", get(list_tools))
         .route("/api/tools/execute", post(execute_tool))
+        .route("/api/tools/metadata", get(get_tools_metadata))
+        .route("/api/tools/validate", post(validate_registry))
+        
+        // Performance Monitoring API endpoints
+        .route("/api/tools/performance/stats", get(get_all_performance_stats))
+        .route("/api/tools/performance/stats/:tool_name", get(get_tool_performance_stats))
+        .route("/api/tools/performance/metrics", get(get_recent_performance_metrics))
+        .route("/api/tools/performance/metrics/:tool_name", get(get_tool_performance_metrics))
+        .route("/api/tools/performance/clear", post(clear_performance_metrics))
+        
+        // Cache Management API endpoints
+        .route("/api/tools/cache/stats", get(get_cache_stats))
+        .route("/api/tools/cache/clear", post(clear_all_cache))
+        .route("/api/tools/cache/clear/:tool_name", post(clear_tool_cache))
+        .route("/api/tools/cache/config/:tool_name", post(set_tool_cache_config))
+        
+        // Dependency Management API endpoints
+        .route("/api/tools/dependencies/plan", post(create_execution_plan))
+        .route("/api/tools/dependencies/execute", post(execute_with_dependencies))
+        .route("/api/tools/dependencies/register", post(register_tool_dependencies))
+        .route("/api/tools/dependencies/:tool_name", get(get_tool_dependencies))
+        .route("/api/tools/dependencies/dependents/:tool_name", get(get_dependent_tools))
+        .route("/api/tools/dependencies/stats", get(get_dependency_stats))
         
         // Perception API endpoints
         .route("/api/perception/analyze", post(perception_handlers::analyze_page))
@@ -71,6 +150,24 @@ pub async fn serve(port: u16, browser_pool: BrowserPool) -> Result<()> {
         .route("/api/quick-scan", post(perception_handlers::quick_scan))
         .route("/api/smart-element-search", post(perception_handlers::smart_element_search))
         
+        // LLM API endpoints
+        .route("/api/llm/query", post(llm_handlers::llm_query))
+        .route("/api/llm/plan", post(llm_handlers::task_planning))
+        .route("/api/llm/execute", post(llm_handlers::execute_command))
+        .route("/api/llm/usage", post(llm_handlers::get_usage_metrics))
+        
+        // Intelligence API endpoints
+        .route("/api/intelligence/analyze", post(intelligence_handlers::analyze_situation))
+        .route("/api/intelligence/recommend", post(intelligence_handlers::recommend_action))
+        .route("/api/intelligence/learn", post(intelligence_handlers::submit_learning_feedback))
+        .route("/api/intelligence/statistics", post(intelligence_handlers::get_intelligence_statistics))
+        .route("/api/intelligence/config", post(intelligence_handlers::update_intelligence_config))
+        
+        // Workflow API endpoints
+        .route("/api/workflow/intelligent", post(workflow_handlers::execute_intelligent_workflow))
+        .route("/api/workflow/simple", post(workflow_handlers::execute_simple_workflow))
+        .route("/api/workflow/status", post(workflow_handlers::get_workflow_status))
+        
         // Static files (serve our migrated interface)
         .nest_service("/static", ServeDir::new("static"))
         .route("/", get(dashboard))
@@ -79,9 +176,10 @@ pub async fn serve(port: u16, browser_pool: BrowserPool) -> Result<()> {
         .layer(TraceLayer::new_for_http())
         .with_state(state);
     
-    let addr = format!("0.0.0.0:{}", port);
+    // Bind to loopback to avoid sandbox restrictions on 0.0.0.0
+    let addr = format!("127.0.0.1:{}", port);
     info!("API server listening on {}", addr);
-    
+
     let listener = tokio::net::TcpListener::bind(&addr).await?;
     axum::serve(listener, app).await?;
     
@@ -123,6 +221,48 @@ async fn dashboard() -> impl IntoResponse {
             axum::response::Html(fallback_html).into_response()
         }
     }
+}
+
+// Diagnostics endpoint
+async fn diagnostics(
+    State(state): State<AppState>,
+    Query(params): Query<HashMap<String, String>>,
+) -> Response {
+    let probe = params.get("probe").map(|v| v == "true").unwrap_or(false);
+
+    // Is tool registry initialized?
+    let initialized = state.tool_registry.initialized().await;
+
+    // Optionally probe browser availability by attempting to acquire once
+    let mut browser_status = serde_json::json!({
+        "initialized": initialized,
+        "probe_attempted": false,
+        "can_launch": serde_json::Value::Null,
+        "error": serde_json::Value::Null
+    });
+
+    if probe {
+        match state.browser_pool.acquire().await {
+            Ok(_browser) => {
+                browser_status["probe_attempted"] = serde_json::json!(true);
+                browser_status["can_launch"] = serde_json::json!(true);
+            }
+            Err(e) => {
+                browser_status["probe_attempted"] = serde_json::json!(true);
+                browser_status["can_launch"] = serde_json::json!(false);
+                browser_status["error"] = serde_json::json!(e.to_string());
+            }
+        }
+    }
+
+    let response = serde_json::json!({
+        "status": "ok",
+        "timestamp": chrono::Utc::now().to_rfc3339(),
+        "binding": "127.0.0.1",
+        "browser": browser_status,
+    });
+
+    Json(ApiResponse::success(response)).into_response()
 }
 
 // Request/Response types
@@ -597,43 +737,44 @@ async fn list_sessions(
 }
 
 // Tools API handlers
-async fn list_tools() -> Response {
-    let tools = serde_json::json!({
-        "navigation_tools": [
-            {"name": "navigate_to_url", "description": "Navigate to a specific URL"},
-            {"name": "scroll", "description": "Scroll the page"},
-            {"name": "refresh", "description": "Refresh the current page"},
-            {"name": "go_back", "description": "Go back in browser history"},
-            {"name": "go_forward", "description": "Go forward in browser history"}
-        ],
-        "interaction_tools": [
-            {"name": "click", "description": "Click on an element"},
-            {"name": "type_text", "description": "Type text into an input field"},
-            {"name": "select_option", "description": "Select an option from a dropdown"},
-            {"name": "hover", "description": "Hover over an element"},
-            {"name": "focus", "description": "Focus on an element"}
-        ],
-        "extraction_tools": [
-            {"name": "extract_text", "description": "Extract text from elements"},
-            {"name": "extract_links", "description": "Extract all links from the page"},
-            {"name": "extract_data", "description": "Extract structured data"},
-            {"name": "extract_table", "description": "Extract table data"},
-            {"name": "extract_form", "description": "Extract form data"}
-        ],
-        "synchronization_tools": [
-            {"name": "wait_for_element", "description": "Wait for an element to appear"},
-            {"name": "wait_for_condition", "description": "Wait for a condition to be met"}
-        ],
-        "memory_tools": [
-            {"name": "screenshot", "description": "Take a screenshot"},
-            {"name": "session_memory", "description": "Access session memory"},
-            {"name": "get_element_info", "description": "Get element information"},
-            {"name": "history_tracker", "description": "Track page history"},
-            {"name": "persistent_cache", "description": "Access persistent cache"}
-        ]
+async fn list_tools(State(state): State<AppState>) -> Response {
+    let registry = match state.tool_registry.get().await {
+        Ok(r) => r,
+        Err(e) => {
+            error!("Tool registry unavailable: {}", e);
+            return (StatusCode::SERVICE_UNAVAILABLE,
+                Json(ApiResponse::<()>::error("Tool registry not initialized (browser unavailable)".to_string()))
+                ).into_response();
+        }
+    };
+    let summary = registry.get_summary();
+    let metadata = registry.get_all_metadata();
+    
+    // Group tools by category
+    let mut tools_by_category = std::collections::HashMap::new();
+    
+    for (tool_name, tool_metadata) in &metadata {
+        tools_by_category
+            .entry(tool_metadata.category)
+            .or_insert_with(Vec::new)
+            .push(serde_json::json!({
+                "name": tool_name,
+                "description": tool_metadata.description,
+                "version": tool_metadata.version,
+                "author": tool_metadata.author
+            }));
+    }
+    
+    let response = serde_json::json!({
+        "summary": {
+            "total_tools": summary.total_tools,
+            "categories": summary.categories,
+        },
+        "tools_by_category": tools_by_category,
+        "all_tools": summary.tool_names
     });
     
-    Json(ApiResponse::success(tools)).into_response()
+    Json(ApiResponse::success(response)).into_response()
 }
 
 #[derive(Deserialize)]
@@ -646,287 +787,388 @@ async fn execute_tool(
     State(state): State<AppState>,
     Json(req): Json<ExecuteToolRequest>,
 ) -> Response {
-    match state.browser_pool.acquire().await {
-        Ok(browser) => {
-            let result = match req.tool_name.as_str() {
-                "navigate_to_url" => {
-                    if let Some(url) = req.parameters.get("url").and_then(|v| v.as_str()) {
-                        match browser.navigate_to(url).await {
-                            Ok(_) => Ok(serde_json::json!({"status": "navigated", "url": url})),
-                            Err(e) => Err(anyhow::anyhow!(e))
-                        }
-                    } else {
-                        Err(anyhow::anyhow!("Missing required parameter: url"))
-                    }
-                }
-                "click" => {
-                    if let Some(selector) = req.parameters.get("selector").and_then(|v| v.as_str()) {
-                        match browser.click(selector).await {
-                            Ok(_) => Ok(serde_json::json!({"status": "clicked", "selector": selector})),
-                            Err(e) => Err(anyhow::anyhow!(e))
-                        }
-                    } else {
-                        Err(anyhow::anyhow!("Missing required parameter: selector"))
-                    }
-                }
-                "type_text" => {
-                    if let (Some(selector), Some(text)) = (
-                        req.parameters.get("selector").and_then(|v| v.as_str()),
-                        req.parameters.get("text").and_then(|v| v.as_str())
-                    ) {
-                        match browser.type_text(selector, text).await {
-                            Ok(_) => Ok(serde_json::json!({"status": "typed", "selector": selector, "text": text})),
-                            Err(e) => Err(anyhow::anyhow!(e))
-                        }
-                    } else {
-                        Err(anyhow::anyhow!("Missing required parameters: selector, text"))
-                    }
-                }
-                "screenshot" => {
-                    let options = crate::browser::ScreenshotOptions::default();
-                    browser.screenshot(options).await
-                        .map(|data| {
-                            use base64::Engine;
-                            let base64 = base64::engine::general_purpose::STANDARD.encode(&data);
-                            serde_json::json!({"status": "captured", "screenshot": base64, "size": data.len()})
-                        })
-                        .map_err(|e| anyhow::anyhow!(e))
-                }
-                "extract_text" => {
-                    if let Some(selector) = req.parameters.get("selector").and_then(|v| v.as_str()) {
-                        browser.get_text(selector).await
-                            .map(|text| serde_json::json!({"status": "extracted", "selector": selector, "text": text}))
-                            .map_err(|e| anyhow::anyhow!(e))
-                    } else {
-                        Err(anyhow::anyhow!("Missing required parameter: selector"))
-                    }
-                }
-                "scroll" => {
-                    if let (Some(x), Some(y)) = (
-                        req.parameters.get("x").and_then(|v| v.as_i64()),
-                        req.parameters.get("y").and_then(|v| v.as_i64())
-                    ) {
-                        browser.scroll_to(x as i32, y as i32).await
-                            .map(|_| serde_json::json!({"status": "scrolled", "x": x, "y": y}))
-                            .map_err(|e| anyhow::anyhow!(e))
-                    } else {
-                        Err(anyhow::anyhow!("Missing required parameters: x, y"))
-                    }
-                }
-                
-                // Navigation tools
-                "refresh" | "refresh_page" => {
-                    browser.refresh().await
-                        .map(|_| serde_json::json!({"status": "refreshed"}))
-                        .map_err(|e| anyhow::anyhow!(e))
-                }
-                "go_back" => {
-                    browser.go_back().await
-                        .map(|_| serde_json::json!({"status": "went_back"}))
-                        .map_err(|e| anyhow::anyhow!(e))
-                }
-                "go_forward" => {
-                    browser.go_forward().await
-                        .map(|_| serde_json::json!({"status": "went_forward"}))
-                        .map_err(|e| anyhow::anyhow!(e))
-                }
-                
-                // Interaction tools
-                "hover" => {
-                    if let Some(selector) = req.parameters.get("selector").and_then(|v| v.as_str()) {
-                        browser.hover(selector).await
-                            .map(|_| serde_json::json!({"status": "hovered", "selector": selector}))
-                            .map_err(|e| anyhow::anyhow!(e))
-                    } else {
-                        Err(anyhow::anyhow!("Missing required parameter: selector"))
-                    }
-                }
-                "focus" => {
-                    if let Some(selector) = req.parameters.get("selector").and_then(|v| v.as_str()) {
-                        browser.focus(selector).await
-                            .map(|_| serde_json::json!({"status": "focused", "selector": selector}))
-                            .map_err(|e| anyhow::anyhow!(e))
-                    } else {
-                        Err(anyhow::anyhow!("Missing required parameter: selector"))
-                    }
-                }
-                "select_option" => {
-                    if let (Some(selector), Some(value)) = (
-                        req.parameters.get("selector").and_then(|v| v.as_str()),
-                        req.parameters.get("value").and_then(|v| v.as_str())
-                    ) {
-                        browser.select_option(selector, value).await
-                            .map(|_| serde_json::json!({"status": "selected", "selector": selector, "value": value}))
-                            .map_err(|e| anyhow::anyhow!(e))
-                    } else {
-                        Err(anyhow::anyhow!("Missing required parameters: selector, value"))
-                    }
-                }
-                
-                // Data extraction tools
-                "extract_links" => {
-                    let selector = req.parameters.get("selector")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("a");
-                    browser.extract_links(selector).await
-                        .map(|links| serde_json::json!({"status": "extracted", "links": links}))
-                        .map_err(|e| anyhow::anyhow!(e))
-                }
-                "extract_data" => {
-                    if let Some(selector) = req.parameters.get("selector").and_then(|v| v.as_str()) {
-                        let attributes = req.parameters.get("attributes")
-                            .and_then(|v| v.as_array())
-                            .map(|arr| arr.iter()
-                                .filter_map(|v| v.as_str().map(String::from))
-                                .collect::<Vec<_>>())
-                            .unwrap_or_default();
-                        
-                        browser.extract_attributes(selector, &attributes).await
-                            .map(|data| serde_json::json!({"status": "extracted", "data": data}))
-                            .map_err(|e| anyhow::anyhow!(e))
-                    } else {
-                        Err(anyhow::anyhow!("Missing required parameter: selector"))
-                    }
-                }
-                "extract_table" => {
-                    let selector = req.parameters.get("selector")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("table");
-                    browser.extract_table(selector).await
-                        .map(|table| serde_json::json!({"status": "extracted", "table": table}))
-                        .map_err(|e| anyhow::anyhow!(e))
-                }
-                "extract_form" => {
-                    let selector = req.parameters.get("selector")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("form");
-                    browser.extract_form(selector).await
-                        .map(|form| serde_json::json!({"status": "extracted", "form": form}))
-                        .map_err(|e| anyhow::anyhow!(e))
-                }
-                
-                // Synchronization tools
-                "wait_for_element" => {
-                    if let Some(selector) = req.parameters.get("selector").and_then(|v| v.as_str()) {
-                        let timeout = req.parameters.get("timeout")
-                            .and_then(|v| v.as_u64())
-                            .unwrap_or(5000);
-                        
-                        browser.wait_for_selector(selector, std::time::Duration::from_millis(timeout)).await
-                            .map(|_| serde_json::json!({"status": "element_found", "selector": selector}))
-                            .map_err(|e| anyhow::anyhow!(e))
-                    } else {
-                        Err(anyhow::anyhow!("Missing required parameter: selector"))
-                    }
-                }
-                "wait_for_condition" => {
-                    if let Some(condition) = req.parameters.get("condition").and_then(|v| v.as_str()) {
-                        let timeout = req.parameters.get("timeout")
-                            .and_then(|v| v.as_u64())
-                            .unwrap_or(5000);
-                        
-                        browser.wait_for_condition(condition, std::time::Duration::from_millis(timeout)).await
-                            .map(|_| serde_json::json!({"status": "condition_met", "condition": condition}))
-                            .map_err(|e| anyhow::anyhow!(e))
-                    } else {
-                        Err(anyhow::anyhow!("Missing required parameter: condition"))
-                    }
-                }
-                
-                // Memory tools
-                "session_memory" => {
-                    let action = req.parameters.get("action")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("get");
-                    
-                    match action {
-                        "get" => {
-                            if let Some(key) = req.parameters.get("key").and_then(|v| v.as_str()) {
-                                Ok(serde_json::json!({"status": "retrieved", "key": key, "value": null}))
-                            } else {
-                                Ok(serde_json::json!({"status": "retrieved", "data": {}}))
-                            }
-                        }
-                        "set" => {
-                            if let (Some(key), Some(_value)) = (
-                                req.parameters.get("key").and_then(|v| v.as_str()),
-                                req.parameters.get("value")
-                            ) {
-                                Ok(serde_json::json!({"status": "stored", "key": key}))
-                            } else {
-                                Err(anyhow::anyhow!("Missing required parameters: key, value"))
-                            }
-                        }
-                        "clear" => {
-                            Ok(serde_json::json!({"status": "cleared"}))
-                        }
-                        _ => Err(anyhow::anyhow!("Invalid action: {}", action))
-                    }
-                }
-                "get_element_info" => {
-                    if let Some(selector) = req.parameters.get("selector").and_then(|v| v.as_str()) {
-                        browser.get_element_info(selector).await
-                            .map(|info| serde_json::json!({"status": "retrieved", "element": info}))
-                            .map_err(|e| anyhow::anyhow!(e))
-                    } else {
-                        Err(anyhow::anyhow!("Missing required parameter: selector"))
-                    }
-                }
-                "history_tracker" => {
-                    let action = req.parameters.get("action")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("get");
-                    
-                    match action {
-                        "get" => Ok(serde_json::json!({"status": "retrieved", "history": []})),
-                        "clear" => Ok(serde_json::json!({"status": "cleared"})),
-                        _ => Err(anyhow::anyhow!("Invalid action: {}", action))
-                    }
-                }
-                "persistent_cache" => {
-                    let action = req.parameters.get("action")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("get");
-                    
-                    match action {
-                        "get" => {
-                            if let Some(key) = req.parameters.get("key").and_then(|v| v.as_str()) {
-                                Ok(serde_json::json!({"status": "retrieved", "key": key, "value": null}))
-                            } else {
-                                Ok(serde_json::json!({"status": "retrieved", "cache": {}}))
-                            }
-                        }
-                        "set" => {
-                            if let (Some(key), Some(_value)) = (
-                                req.parameters.get("key").and_then(|v| v.as_str()),
-                                req.parameters.get("value")
-                            ) {
-                                Ok(serde_json::json!({"status": "stored", "key": key}))
-                            } else {
-                                Err(anyhow::anyhow!("Missing required parameters: key, value"))
-                            }
-                        }
-                        "clear" => Ok(serde_json::json!({"status": "cleared"})),
-                        _ => Err(anyhow::anyhow!("Invalid action: {}", action))
-                    }
-                }
-                
-                _ => Err(anyhow::anyhow!("Unknown tool: {}", req.tool_name))
-            };
-
-            match result {
-                Ok(data) => Json(ApiResponse::success(data)).into_response(),
-                Err(e) => {
-                    error!("Tool execution failed: {}", e);
-                    (StatusCode::INTERNAL_SERVER_ERROR,
-                     Json(ApiResponse::<()>::error(e.to_string()))).into_response()
-                }
-            }
+    info!("Executing tool: {} with parameters: {}", req.tool_name, req.parameters);
+    
+    // Use the registry to execute the tool
+    let registry = match state.tool_registry.get().await {
+        Ok(r) => r,
+        Err(e) => {
+            error!("Tool registry unavailable: {}", e);
+            return (StatusCode::SERVICE_UNAVAILABLE,
+                Json(ApiResponse::<()>::error("Tool registry not initialized (browser unavailable)".to_string()))
+                ).into_response();
+        }
+    };
+    match registry.execute_tool(&req.tool_name, req.parameters).await {
+        Ok(result) => {
+            debug!("Tool '{}' executed successfully", req.tool_name);
+            Json(ApiResponse::success(result)).into_response()
         }
         Err(e) => {
-            error!("Failed to acquire browser: {}", e);
+            error!("Tool '{}' execution failed: {}", req.tool_name, e);
+            (StatusCode::BAD_REQUEST, 
+             Json(ApiResponse::<()>::error(e.to_string()))).into_response()
+        }
+    }
+}
+
+// Tool metadata and validation endpoints
+async fn get_tools_metadata(State(state): State<AppState>) -> Response {
+    let registry = match state.tool_registry.get().await {
+        Ok(r) => r,
+        Err(e) => {
+            error!("Tool registry unavailable: {}", e);
+            return (StatusCode::SERVICE_UNAVAILABLE,
+                Json(ApiResponse::<()>::error("Tool registry not initialized (browser unavailable)".to_string()))
+                ).into_response();
+        }
+    };
+    let metadata = registry.get_all_metadata();
+    
+    Json(ApiResponse::success(metadata)).into_response()
+}
+
+async fn validate_registry(State(state): State<AppState>) -> Response {
+    let registry = match state.tool_registry.get().await {
+        Ok(r) => r,
+        Err(e) => {
+            error!("Tool registry unavailable: {}", e);
+            return (StatusCode::SERVICE_UNAVAILABLE,
+                Json(ApiResponse::<()>::error("Tool registry not initialized (browser unavailable)".to_string()))
+                ).into_response();
+        }
+    };
+    match registry.validate_registry().await {
+        Ok(report) => {
+            Json(ApiResponse::success(report)).into_response()
+        }
+        Err(e) => {
+            error!("Registry validation failed: {}", e);
             (StatusCode::INTERNAL_SERVER_ERROR,
              Json(ApiResponse::<()>::error(e.to_string()))).into_response()
         }
     }
+}
+
+// Performance Monitoring API handlers
+
+async fn get_all_performance_stats(State(state): State<AppState>) -> Response {
+    let registry = match state.tool_registry.get().await {
+        Ok(r) => r,
+        Err(e) => {
+            error!("Tool registry unavailable: {}", e);
+            return (StatusCode::SERVICE_UNAVAILABLE,
+                Json(ApiResponse::<()>::error("Tool registry not initialized (browser unavailable)".to_string()))
+                ).into_response();
+        }
+    };
+    let stats = registry.get_all_performance_stats().await;
+    Json(ApiResponse::success(stats)).into_response()
+}
+
+async fn get_tool_performance_stats(
+    State(state): State<AppState>,
+    Path(tool_name): Path<String>,
+) -> Response {
+    let registry = match state.tool_registry.get().await {
+        Ok(r) => r,
+        Err(e) => {
+            error!("Tool registry unavailable: {}", e);
+            return (StatusCode::SERVICE_UNAVAILABLE,
+                Json(ApiResponse::<()>::error("Tool registry not initialized (browser unavailable)".to_string()))
+                ).into_response();
+        }
+    };
+    match registry.get_tool_performance_stats(&tool_name).await {
+        Some(stats) => Json(ApiResponse::success(stats)).into_response(),
+        None => {
+            (StatusCode::NOT_FOUND,
+             Json(ApiResponse::<()>::error(format!("No performance data found for tool '{}'", tool_name)))).into_response()
+        }
+    }
+}
+
+async fn get_recent_performance_metrics(
+    State(state): State<AppState>,
+    Query(params): Query<HashMap<String, String>>,
+) -> Response {
+    let registry = match state.tool_registry.get().await {
+        Ok(r) => r,
+        Err(e) => {
+            error!("Tool registry unavailable: {}", e);
+            return (StatusCode::SERVICE_UNAVAILABLE,
+                Json(ApiResponse::<()>::error("Tool registry not initialized (browser unavailable)".to_string()))
+                ).into_response();
+        }
+    };
+    let limit = params.get("limit")
+        .and_then(|s| s.parse::<usize>().ok())
+        .unwrap_or(50); // Default to 50 recent metrics
+    
+    let metrics = registry.get_recent_metrics(limit).await;
+    Json(ApiResponse::success(metrics)).into_response()
+}
+
+async fn get_tool_performance_metrics(
+    State(state): State<AppState>,
+    Path(tool_name): Path<String>,
+    Query(params): Query<HashMap<String, String>>,
+) -> Response {
+    let registry = match state.tool_registry.get().await {
+        Ok(r) => r,
+        Err(e) => {
+            error!("Tool registry unavailable: {}", e);
+            return (StatusCode::SERVICE_UNAVAILABLE,
+                Json(ApiResponse::<()>::error("Tool registry not initialized (browser unavailable)".to_string()))
+                ).into_response();
+        }
+    };
+    let limit = params.get("limit")
+        .and_then(|s| s.parse::<usize>().ok());
+    
+    let metrics = registry.get_tool_metrics(&tool_name, limit).await;
+    Json(ApiResponse::success(metrics)).into_response()
+}
+
+async fn clear_performance_metrics(State(state): State<AppState>) -> Response {
+    let registry = match state.tool_registry.get().await {
+        Ok(r) => r,
+        Err(e) => {
+            error!("Tool registry unavailable: {}", e);
+            return (StatusCode::SERVICE_UNAVAILABLE,
+                Json(ApiResponse::<()>::error("Tool registry not initialized (browser unavailable)".to_string()))
+                ).into_response();
+        }
+    };
+    registry.clear_performance_metrics().await;
+    Json(ApiResponse::success(serde_json::json!({
+        "message": "Performance metrics cleared successfully"
+    }))).into_response()
+}
+
+// Cache Management API handlers
+
+async fn get_cache_stats(State(state): State<AppState>) -> Response {
+    let registry = match state.tool_registry.get().await {
+        Ok(r) => r,
+        Err(e) => {
+            error!("Tool registry unavailable: {}", e);
+            return (StatusCode::SERVICE_UNAVAILABLE,
+                Json(ApiResponse::<()>::error("Tool registry not initialized (browser unavailable)".to_string()))
+                ).into_response();
+        }
+    };
+    let stats = registry.get_cache_stats().await;
+    Json(ApiResponse::success(stats)).into_response()
+}
+
+async fn clear_all_cache(State(state): State<AppState>) -> Response {
+    let registry = match state.tool_registry.get().await {
+        Ok(r) => r,
+        Err(e) => {
+            error!("Tool registry unavailable: {}", e);
+            return (StatusCode::SERVICE_UNAVAILABLE,
+                Json(ApiResponse::<()>::error("Tool registry not initialized (browser unavailable)".to_string()))
+                ).into_response();
+        }
+    };
+    registry.clear_cache().await;
+    
+    Json(ApiResponse::success(serde_json::json!({
+        "success": true,
+        "message": "All cache entries cleared successfully"
+    }))).into_response()
+}
+
+async fn clear_tool_cache(
+    State(state): State<AppState>,
+    Path(tool_name): Path<String>,
+) -> Response {
+    let registry = match state.tool_registry.get().await {
+        Ok(r) => r,
+        Err(e) => {
+            error!("Tool registry unavailable: {}", e);
+            return (StatusCode::SERVICE_UNAVAILABLE,
+                Json(ApiResponse::<()>::error("Tool registry not initialized (browser unavailable)".to_string()))
+                ).into_response();
+        }
+    };
+    registry.clear_tool_cache(&tool_name).await;
+    
+    Json(ApiResponse::success(serde_json::json!({
+        "success": true,
+        "message": format!("Cache cleared successfully for tool '{}'", tool_name)
+    }))).into_response()
+}
+
+#[derive(Deserialize)]
+struct CacheConfigRequest {
+    ttl_seconds: Option<u64>,
+    max_entries: Option<usize>,
+    enabled: Option<bool>,
+    invalidate_on_navigation: Option<bool>,
+}
+
+async fn set_tool_cache_config(
+    State(state): State<AppState>,
+    Path(tool_name): Path<String>,
+    Json(req): Json<CacheConfigRequest>,
+) -> Response {
+    use crate::tools::cache::CacheConfig;
+    use std::time::Duration;
+    
+    let registry = match state.tool_registry.get().await {
+        Ok(r) => r,
+        Err(e) => {
+            error!("Tool registry unavailable: {}", e);
+            return (StatusCode::SERVICE_UNAVAILABLE,
+                Json(ApiResponse::<()>::error("Tool registry not initialized (browser unavailable)".to_string()))
+                ).into_response();
+        }
+    };
+    
+    // Get current config or use default
+    let current_config = registry.cache.get_tool_config(&tool_name).await;
+    
+    let new_config = CacheConfig {
+        ttl: Duration::from_secs(req.ttl_seconds.unwrap_or(current_config.ttl.as_secs())),
+        max_entries: req.max_entries.unwrap_or(current_config.max_entries),
+        enabled: req.enabled.unwrap_or(current_config.enabled),
+        invalidate_on_navigation: req.invalidate_on_navigation.unwrap_or(current_config.invalidate_on_navigation),
+    };
+    
+    registry.set_tool_cache_config(&tool_name, new_config).await;
+    
+    Json(ApiResponse::success(serde_json::json!({
+        "success": true,
+        "message": format!("Cache configuration updated successfully for tool '{}'", tool_name)
+    }))).into_response()
+}
+
+// Dependency Management API handlers
+
+#[derive(Deserialize)]
+struct ExecutionPlanRequest {
+    tool_names: Vec<String>,
+}
+
+async fn create_execution_plan(
+    State(state): State<AppState>,
+    Json(req): Json<ExecutionPlanRequest>,
+) -> Response {
+    let registry = match state.tool_registry.get().await {
+        Ok(r) => r,
+        Err(e) => {
+            error!("Tool registry unavailable: {}", e);
+            return (StatusCode::SERVICE_UNAVAILABLE,
+                Json(ApiResponse::<()>::error("Tool registry not initialized (browser unavailable)".to_string()))
+                ).into_response();
+        }
+    };
+    match registry.create_execution_plan(req.tool_names).await {
+        Ok(plan) => Json(ApiResponse::success(plan)).into_response(),
+        Err(e) => {
+            error!("Failed to create execution plan: {}", e);
+            (StatusCode::BAD_REQUEST,
+             Json(ApiResponse::<()>::error(e.to_string()))).into_response()
+        }
+    }
+}
+
+async fn execute_with_dependencies(
+    State(state): State<AppState>,
+    Json(req): Json<ExecutionPlanRequest>,
+) -> Response {
+    let registry = match state.tool_registry.get().await {
+        Ok(r) => r,
+        Err(e) => {
+            error!("Tool registry unavailable: {}", e);
+            return (StatusCode::SERVICE_UNAVAILABLE,
+                Json(ApiResponse::<()>::error("Tool registry not initialized (browser unavailable)".to_string()))
+                ).into_response();
+        }
+    };
+    match registry.execute_tools_with_dependencies(req.tool_names).await {
+        Ok(context) => Json(ApiResponse::success(context)).into_response(),
+        Err(e) => {
+            error!("Failed to execute tools with dependencies: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR,
+             Json(ApiResponse::<()>::error(e.to_string()))).into_response()
+        }
+    }
+}
+
+#[derive(Deserialize)]
+struct RegisterDependenciesRequest {
+    tool_name: String,
+    dependencies: Vec<crate::tools::dependencies::ToolDependency>,
+}
+
+async fn register_tool_dependencies(
+    State(state): State<AppState>,
+    Json(req): Json<RegisterDependenciesRequest>,
+) -> Response {
+    let registry = match state.tool_registry.get().await {
+        Ok(r) => r,
+        Err(e) => {
+            error!("Tool registry unavailable: {}", e);
+            return (StatusCode::SERVICE_UNAVAILABLE,
+                Json(ApiResponse::<()>::error("Tool registry not initialized (browser unavailable)".to_string()))
+                ).into_response();
+        }
+    };
+    registry.register_tool_dependencies(req.tool_name.clone(), req.dependencies.clone()).await;
+    
+    Json(ApiResponse::success(serde_json::json!({
+        "success": true,
+        "message": format!("Registered {} dependencies for tool '{}'", req.dependencies.len(), req.tool_name)
+    }))).into_response()
+}
+
+async fn get_tool_dependencies(
+    State(state): State<AppState>,
+    Path(tool_name): Path<String>,
+) -> Response {
+    let registry = match state.tool_registry.get().await {
+        Ok(r) => r,
+        Err(e) => {
+            error!("Tool registry unavailable: {}", e);
+            return (StatusCode::SERVICE_UNAVAILABLE,
+                Json(ApiResponse::<()>::error("Tool registry not initialized (browser unavailable)".to_string()))
+                ).into_response();
+        }
+    };
+    let dependencies = registry.get_tool_dependencies(&tool_name).await;
+    Json(ApiResponse::success(dependencies)).into_response()
+}
+
+async fn get_dependent_tools(
+    State(state): State<AppState>,
+    Path(tool_name): Path<String>,
+) -> Response {
+    let registry = match state.tool_registry.get().await {
+        Ok(r) => r,
+        Err(e) => {
+            error!("Tool registry unavailable: {}", e);
+            return (StatusCode::SERVICE_UNAVAILABLE,
+                Json(ApiResponse::<()>::error("Tool registry not initialized (browser unavailable)".to_string()))
+                ).into_response();
+        }
+    };
+    let dependents = registry.get_dependent_tools(&tool_name).await;
+    Json(ApiResponse::success(dependents)).into_response()
+}
+
+async fn get_dependency_stats(State(state): State<AppState>) -> Response {
+    let registry = match state.tool_registry.get().await {
+        Ok(r) => r,
+        Err(e) => {
+            error!("Tool registry unavailable: {}", e);
+            return (StatusCode::SERVICE_UNAVAILABLE,
+                Json(ApiResponse::<()>::error("Tool registry not initialized (browser unavailable)".to_string()))
+                ).into_response();
+        }
+    };
+    let stats = registry.get_dependency_stats().await;
+    Json(ApiResponse::success(stats)).into_response()
 }

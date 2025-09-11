@@ -8,6 +8,8 @@ mod browser;
 mod api;
 mod tools;
 mod perception;
+mod llm;
+mod intelligence;
 
 use browser::Browser;
 
@@ -107,10 +109,9 @@ async fn serve_api(port: u16, headless: bool) -> Result<()> {
     info!("Browser mode: {}", if headless { "headless" } else { "headed" });
     
     // Initialize browser pool with headless mode (single browser for session consistency)
+    // Do not preload a browser at startup so the API can come up even if
+    // Chromium/headless deps are not available yet. Browsers will be created lazily.
     let pool = browser::pool::BrowserPool::new_with_headless(1, headless)?;
-    
-    // Preload one browser
-    pool.preload(1).await?;
     
     // Start API server
     api::serve(port, pool).await?;
