@@ -13,6 +13,7 @@ use super::extraction::{ExtractTextTool, ExtractLinksTool, ExtractDataTool, Extr
 use super::synchronization::{WaitForElementTool, WaitForConditionTool, WaitForNavigationTool, WaitForNetworkIdleTool};
 use super::memory::{ScreenshotTool, SessionMemoryTool, GetElementInfoTool, HistoryTrackerTool, PersistentCacheTool};
 use super::cdp_monitoring::{NetworkMonitorTool, PerformanceMetricsTool, CDPNetworkIdleTool};
+use super::intelligent_action::IntelligentActionTool;
 use super::synthetic_fixtures::CreateTestFixtureTool;
 use super::cache::ToolCache;
 use super::dependencies::{DependencyManager, ExecutionPlan, ExecutionContext, ExecutionStats};
@@ -84,6 +85,9 @@ impl ToolRegistry {
         self.register_tool(SelectOptionTool::new(browser.clone()));
         self.register_tool(HoverTool::new(browser.clone()));
         self.register_tool(FocusTool::new(browser.clone()));
+        
+        // Intelligent Action Engine
+        self.register_tool(IntelligentActionTool::new(browser.clone()));
 
         // Data Extraction Tools
         self.register_tool(ExtractTextTool::new(browser.clone()));

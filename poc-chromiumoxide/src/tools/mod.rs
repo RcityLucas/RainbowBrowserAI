@@ -13,5 +13,6 @@ pub mod cdp_monitoring;
 pub mod synthetic_fixtures;
 pub mod cache;
 pub mod dependencies;
+pub mod intelligent_action;
 
 // Re-exports enabled for tool system

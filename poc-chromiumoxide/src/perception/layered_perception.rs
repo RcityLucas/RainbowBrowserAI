@@ -478,19 +478,272 @@ impl LayeredPerception {
     }
 
     async fn analyze_dom_structure(&self) -> Result<DomAnalysis> {
-        Ok(DomAnalysis::default())
+        // Deep DOM analysis with full tree traversal
+        let script = r#"
+            function analyzeDom() {
+                let nodeCount = 0;
+                let maxDepth = 0;
+                let interactiveNodes = 0;
+                
+                function traverse(node, depth) {
+                    nodeCount++;
+                    maxDepth = Math.max(maxDepth, depth);
+                    
+                    // Check if node is interactive
+                    if (node.nodeType === 1) {
+                        const tagName = node.tagName.toLowerCase();
+                        const interactiveTags = ['a', 'button', 'input', 'select', 'textarea', 'form'];
+                        if (interactiveTags.includes(tagName) || node.onclick || node.getAttribute('role') === 'button') {
+                            interactiveNodes++;
+                        }
+                    }
+                    
+                    // Traverse children
+                    for (let child of node.childNodes) {
+                        traverse(child, depth + 1);
+                    }
+                }
+                
+                traverse(document.documentElement, 0);
+                
+                return {
+                    total_nodes: nodeCount,
+                    max_depth: maxDepth,
+                    interactive_nodes: interactiveNodes
+                };
+            }
+            analyzeDom();
+        "#;
+        
+        let result = self.browser.execute_script(script).await?;
+        
+        Ok(DomAnalysis {
+            total_nodes: result["total_nodes"].as_u64().unwrap_or(0) as u32,
+            max_depth: result["max_depth"].as_u64().unwrap_or(0) as u32,
+            interactive_nodes: result["interactive_nodes"].as_u64().unwrap_or(0) as u32,
+        })
     }
 
     async fn analyze_visual_content(&self) -> Result<VisualAnalysis> {
-        Ok(VisualAnalysis::default())
+        // Visual content analysis including colors and elements
+        let script = r#"
+            function analyzeVisual() {
+                // Get dominant colors from computed styles
+                const elements = document.querySelectorAll('*');
+                const colors = new Set();
+                const visualElements = new Set();
+                
+                for (let el of elements) {
+                    const style = window.getComputedStyle(el);
+                    
+                    // Collect colors
+                    if (style.backgroundColor && style.backgroundColor !== 'rgba(0, 0, 0, 0)') {
+                        colors.add(style.backgroundColor);
+                    }
+                    if (style.color) {
+                        colors.add(style.color);
+                    }
+                    
+                    // Identify visual elements
+                    if (el.tagName === 'IMG') visualElements.add('image');
+                    if (el.tagName === 'VIDEO') visualElements.add('video');
+                    if (el.tagName === 'CANVAS') visualElements.add('canvas');
+                    if (el.tagName === 'SVG') visualElements.add('svg');
+                    if (style.backgroundImage && style.backgroundImage !== 'none') {
+                        visualElements.add('background-image');
+                    }
+                }
+                
+                // Create a simple hash based on page content
+                const content = document.documentElement.innerHTML;
+                let hash = 0;
+                for (let i = 0; i < Math.min(content.length, 1000); i++) {
+                    hash = ((hash << 5) - hash) + content.charCodeAt(i);
+                    hash = hash & hash;
+                }
+                
+                return {
+                    screenshot_hash: Math.abs(hash).toString(16),
+                    color_palette: Array.from(colors).slice(0, 10),
+                    visual_elements: Array.from(visualElements)
+                };
+            }
+            analyzeVisual();
+        "#;
+        
+        let result = self.browser.execute_script(script).await?;
+        
+        Ok(VisualAnalysis {
+            screenshot_hash: result["screenshot_hash"].as_str().unwrap_or("").to_string(),
+            color_palette: result["color_palette"]
+                .as_array()
+                .map(|arr| arr.iter()
+                    .filter_map(|v| v.as_str().map(String::from))
+                    .collect())
+                .unwrap_or_default(),
+            visual_elements: result["visual_elements"]
+                .as_array()
+                .map(|arr| arr.iter()
+                    .filter_map(|v| v.as_str().map(String::from))
+                    .collect())
+                .unwrap_or_default(),
+        })
     }
 
     async fn analyze_behavioral_patterns(&self) -> Result<BehaviorPatterns> {
-        Ok(BehaviorPatterns::default())
+        // Analyze potential user flows and interaction patterns
+        let script = r#"
+            function analyzeBehavior() {
+                const forms = document.querySelectorAll('form');
+                const links = document.querySelectorAll('a[href]');
+                const buttons = document.querySelectorAll('button, [role="button"]');
+                
+                // Identify user flows
+                const userFlows = [];
+                if (forms.length > 0) {
+                    userFlows.push('form-submission');
+                }
+                if (links.length > 10) {
+                    userFlows.push('navigation-heavy');
+                }
+                if (buttons.length > 5) {
+                    userFlows.push('interactive-actions');
+                }
+                
+                // Find interaction hotspots
+                const hotspots = [];
+                
+                // Check header area
+                const header = document.querySelector('header, [role="banner"], .header, #header');
+                if (header) {
+                    const headerButtons = header.querySelectorAll('button, a');
+                    if (headerButtons.length > 0) {
+                        hotspots.push('header-navigation');
+                    }
+                }
+                
+                // Check main content area
+                const main = document.querySelector('main, [role="main"], .main, #main');
+                if (main) {
+                    const mainInteractive = main.querySelectorAll('button, input, a');
+                    if (mainInteractive.length > 0) {
+                        hotspots.push('main-content-interaction');
+                    }
+                }
+                
+                // Check footer area
+                const footer = document.querySelector('footer, [role="contentinfo"], .footer, #footer');
+                if (footer) {
+                    hotspots.push('footer-links');
+                }
+                
+                return {
+                    user_flows: userFlows,
+                    interaction_hotspots: hotspots
+                };
+            }
+            analyzeBehavior();
+        "#;
+        
+        let result = self.browser.execute_script(script).await?;
+        
+        Ok(BehaviorPatterns {
+            user_flows: result["user_flows"]
+                .as_array()
+                .map(|arr| arr.iter()
+                    .filter_map(|v| v.as_str().map(String::from))
+                    .collect())
+                .unwrap_or_default(),
+            interaction_hotspots: result["interaction_hotspots"]
+                .as_array()
+                .map(|arr| arr.iter()
+                    .filter_map(|v| v.as_str().map(String::from))
+                    .collect())
+                .unwrap_or_default(),
+        })
     }
 
     async fn generate_ai_insights(&self) -> Result<AiInsights> {
-        Ok(AiInsights::default())
+        // Generate AI-based insights about the page
+        let script = r#"
+            function generateInsights() {
+                // Analyze page purpose
+                const title = document.title.toLowerCase();
+                const h1 = document.querySelector('h1');
+                const forms = document.querySelectorAll('form').length;
+                const links = document.querySelectorAll('a').length;
+                const images = document.querySelectorAll('img').length;
+                
+                let pagePurpose = 'general-content';
+                const recommendations = [];
+                
+                // Determine page purpose
+                if (forms > 0) {
+                    if (title.includes('login') || title.includes('sign')) {
+                        pagePurpose = 'authentication';
+                        recommendations.push('Fill and submit login form');
+                    } else if (title.includes('search')) {
+                        pagePurpose = 'search';
+                        recommendations.push('Enter search query');
+                    } else {
+                        pagePurpose = 'data-collection';
+                        recommendations.push('Complete form fields');
+                    }
+                } else if (links > 20) {
+                    pagePurpose = 'navigation-hub';
+                    recommendations.push('Navigate to relevant section');
+                } else if (images > 10) {
+                    pagePurpose = 'media-gallery';
+                    recommendations.push('Browse visual content');
+                } else if (title.includes('article') || title.includes('blog')) {
+                    pagePurpose = 'article';
+                    recommendations.push('Read main content');
+                }
+                
+                // Calculate usability score
+                let usabilityScore = 0.5;
+                
+                // Positive factors
+                if (h1) usabilityScore += 0.1;
+                if (document.querySelector('nav')) usabilityScore += 0.1;
+                if (forms > 0 && forms < 3) usabilityScore += 0.1;
+                
+                // Negative factors
+                if (links > 100) usabilityScore -= 0.1;
+                if (forms > 5) usabilityScore -= 0.1;
+                
+                // Clamp between 0 and 1
+                usabilityScore = Math.max(0, Math.min(1, usabilityScore));
+                
+                // Add contextual recommendations
+                if (forms > 0) {
+                    recommendations.push('Validate form inputs before submission');
+                }
+                if (links > 50) {
+                    recommendations.push('Use search or navigation menu for efficiency');
+                }
+                
+                return {
+                    page_purpose: pagePurpose,
+                    recommended_actions: recommendations,
+                    usability_score: usabilityScore
+                };
+            }
+            generateInsights();
+        "#;
+        
+        let result = self.browser.execute_script(script).await?;
+        
+        Ok(AiInsights {
+            page_purpose: result["page_purpose"].as_str().unwrap_or("unknown").to_string(),
+            recommended_actions: result["recommended_actions"]
+                .as_array()
+                .map(|arr| arr.iter()
+                    .filter_map(|v| v.as_str().map(String::from))
+                    .collect())
+                .unwrap_or_default(),
+            usability_score: result["usability_score"].as_f64().unwrap_or(0.5),
+        })
     }
 }
 

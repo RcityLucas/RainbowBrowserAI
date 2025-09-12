@@ -108,10 +108,10 @@ async fn serve_api(port: u16, headless: bool) -> Result<()> {
     info!("Starting API server on port {}", port);
     info!("Browser mode: {}", if headless { "headless" } else { "headed" });
     
-    // Initialize browser pool with headless mode (single browser for session consistency)
-    // Do not preload a browser at startup so the API can come up even if
+    // Initialize browser pool with headless mode (3 browsers max to prevent excessive windows)
+    // Do not preload browsers at startup so the API can come up even if
     // Chromium/headless deps are not available yet. Browsers will be created lazily.
-    let pool = browser::pool::BrowserPool::new_with_headless(1, headless)?;
+    let pool = browser::pool::BrowserPool::new_with_headless(3, headless)?;
     
     // Start API server
     api::serve(port, pool).await?;

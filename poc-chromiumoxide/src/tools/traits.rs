@@ -17,6 +17,7 @@ pub enum ToolCategory {
     Intelligence,
     MetaCognitive,
     AdvancedAutomation,
+    Workflow,
 }
 
 /// Metadata about a tool

@@ -75,9 +75,15 @@ impl LazyToolRegistry {
 }
 
 pub async fn serve(port: u16, browser_pool: BrowserPool) -> Result<()> {
-    let session_manager = SessionManager::default();
-
     let browser_pool_arc = Arc::new(browser_pool);
+    
+    // Create session manager using the browser pool
+    let session_manager = SessionManager::new(
+        browser_pool_arc.clone(),
+        10,    // max_sessions
+        1800   // session_timeout (30 minutes)
+    );
+
     let state = AppState {
         browser_pool: browser_pool_arc.clone(),
         session_manager: Arc::new(session_manager),
@@ -149,6 +155,8 @@ pub async fn serve(port: u16, browser_pool: BrowserPool) -> Result<()> {
         .route("/api/perceive-mode", post(perception_handlers::perceive_with_mode))
         .route("/api/quick-scan", post(perception_handlers::quick_scan))
         .route("/api/smart-element-search", post(perception_handlers::smart_element_search))
+        .route("/api/perception/smart_search", post(perception_handlers::smart_element_search))
+        .route("/api/perception/find_element", post(perception_handlers::intelligent_find_element))
         
         // LLM API endpoints
         .route("/api/llm/query", post(llm_handlers::llm_query))

@@ -7,6 +7,7 @@ use uuid::Uuid;
 use chrono::{DateTime, Utc};
 use tracing::info;
 use super::core::Browser;
+use super::pool::{BrowserPool, BrowserGuard};
 
 /// Browser session for stateful operations
 #[derive(Clone)]
@@ -21,7 +22,29 @@ pub struct BrowserSession {
 }
 
 impl BrowserSession {
-    /// Create a new browser session
+    /// Create a new browser session using browser pool
+    pub async fn from_pool(browser_pool: &BrowserPool) -> Result<(Self, BrowserGuard)> {
+        let id = Uuid::new_v4().to_string();
+        let browser_guard = browser_pool.acquire().await?;
+        let browser = browser_guard.browser_arc();
+        
+        info!("Created new browser session from pool: {}", id);
+        
+        let session = Self {
+            id: id.clone(),
+            browser,
+            created_at: Utc::now(),
+            last_used: Utc::now(),
+            metadata: HashMap::new(),
+            current_url: None,
+            history: Vec::new(),
+        };
+        
+        Ok((session, browser_guard))
+    }
+    
+    /// Create a new browser session (deprecated - use from_pool instead)
+    #[deprecated(note = "Use from_pool() to reuse browsers from pool")]
     pub async fn new() -> Result<Self> {
         let id = Uuid::new_v4().to_string();
         let browser = Arc::new(Browser::new().await?);
@@ -126,15 +149,19 @@ impl BrowserSession {
 /// Session manager for managing multiple browser sessions
 pub struct SessionManager {
     sessions: Arc<RwLock<HashMap<String, Arc<RwLock<BrowserSession>>>>>,
+    browser_guards: Arc<RwLock<HashMap<String, BrowserGuard>>>,
+    browser_pool: Arc<BrowserPool>,
     max_sessions: usize,
     session_timeout: i64, // seconds
 }
 
 impl SessionManager {
-    /// Create a new session manager
-    pub fn new(max_sessions: usize, session_timeout: i64) -> Self {
+    /// Create a new session manager with browser pool
+    pub fn new(browser_pool: Arc<BrowserPool>, max_sessions: usize, session_timeout: i64) -> Self {
         Self {
             sessions: Arc::new(RwLock::new(HashMap::new())),
+            browser_guards: Arc::new(RwLock::new(HashMap::new())),
+            browser_pool,
             max_sessions,
             session_timeout,
         }
@@ -156,13 +183,15 @@ impl SessionManager {
             }
         }
         
-        // Create new session
-        let session = BrowserSession::new().await?;
+        // Create new session using browser pool
+        let (session, browser_guard) = BrowserSession::from_pool(&self.browser_pool).await?;
         let session_id = session.id.clone();
         
-        // Store session
+        // Store session and its browser guard
         let mut sessions = self.sessions.write().await;
+        let mut browser_guards = self.browser_guards.write().await;
         sessions.insert(session_id.clone(), Arc::new(RwLock::new(session)));
+        browser_guards.insert(session_id.clone(), browser_guard);
         
         info!("Created session: {} (total: {})", session_id, sessions.len());
         Ok(session_id)
@@ -177,7 +206,11 @@ impl SessionManager {
     /// Remove a session
     pub async fn remove_session(&self, session_id: &str) -> Result<()> {
         let mut sessions = self.sessions.write().await;
+        let mut browser_guards = self.browser_guards.write().await;
+        
         if sessions.remove(session_id).is_some() {
+            // Also remove the browser guard (this returns the browser to the pool)
+            browser_guards.remove(session_id);
             info!("Removed session: {} (remaining: {})", session_id, sessions.len());
             Ok(())
         } else {
@@ -188,6 +221,7 @@ impl SessionManager {
     /// Clean up expired sessions
     pub async fn cleanup_expired(&self) -> usize {
         let mut sessions = self.sessions.write().await;
+        let mut browser_guards = self.browser_guards.write().await;
         let _initial_count = sessions.len();
         
         let expired_ids: Vec<String> = {
@@ -203,6 +237,7 @@ impl SessionManager {
         
         for id in &expired_ids {
             sessions.remove(id);
+            browser_guards.remove(id); // Return browser to pool
             info!("Cleaned up expired session: {}", id);
         }
         
@@ -261,8 +296,5 @@ pub struct SessionInfo {
     pub idle_seconds: i64,
 }
 
-impl Default for SessionManager {
-    fn default() -> Self {
-        Self::new(10, 1800) // 10 sessions max, 30 minutes timeout
-    }
-}
+// Default implementation removed - SessionManager now requires a BrowserPool
+// Use SessionManager::new(browser_pool, max_sessions, timeout) directly
