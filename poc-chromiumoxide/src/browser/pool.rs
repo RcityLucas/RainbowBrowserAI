@@ -11,6 +11,7 @@ pub struct BrowserPool {
     semaphore: Arc<Semaphore>,
     max_browsers: usize,
     config: BrowserConfig,
+    headless: bool,
 }
 
 impl BrowserPool {
@@ -21,6 +22,14 @@ impl BrowserPool {
 
     /// Create a new browser pool with specified headless mode
     pub fn new_with_headless(max_browsers: usize, headless: bool) -> Result<Self> {
+        // Generate a unique base directory for this pool instance
+        let pool_id = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos();
+        let base_dir = std::env::temp_dir()
+            .join(format!("rainbow-pool-{}", pool_id));
+        
         let config = if headless {
             BrowserConfig::builder()
                 .arg("--headless")
@@ -29,6 +38,9 @@ impl BrowserPool {
                 .arg("--disable-features=VizDisplayCompositor")
                 .arg("--disable-dev-shm-usage")
                 .arg("--no-sandbox")
+                .arg(format!("--user-data-dir={}", base_dir.display()))
+                .arg("--new-window")
+                .arg("--no-startup-window")
                 .build()
                 .map_err(|e| anyhow::anyhow!("Failed to build headless config: {}", e))?
         } else {
@@ -46,6 +58,9 @@ impl BrowserPool {
                 .arg("--no-first-run")
                 .arg("--no-default-browser-check")
                 .arg("--disable-blink-features=AutomationControlled")
+                .arg(format!("--user-data-dir={}", base_dir.display()))
+                .arg("--new-window")
+                .arg("--no-startup-window")
                 .build()
                 .map_err(|e| anyhow::anyhow!("Failed to build headed config: {}", e))?
         };
@@ -55,6 +70,7 @@ impl BrowserPool {
             semaphore: Arc::new(Semaphore::new(max_browsers)),
             max_browsers,
             config,
+            headless,
         })
     }
 
@@ -65,6 +81,7 @@ impl BrowserPool {
             semaphore: Arc::new(Semaphore::new(max_browsers)),
             max_browsers,
             config,
+            headless: false, // Default to headed mode for custom config
         }
     }
 
@@ -122,7 +139,49 @@ impl BrowserPool {
                 tokio::time::sleep(tokio::time::Duration::from_secs(wait_time)).await;
             }
             
-            match Browser::new_with_config(self.config.clone()).await {
+            // Create a config with unique user-data-dir to prevent session conflicts
+            let unique_id = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos();
+            let temp_dir = std::env::temp_dir()
+                .join(format!("rainbow-browser-{}", unique_id));
+            
+            // Rebuild config with unique user-data-dir and ensure new instance
+            let config_with_unique_dir = if self.headless {
+                BrowserConfig::builder()
+                    .arg("--headless")
+                    .arg("--disable-gpu")
+                    .arg("--disable-web-security")
+                    .arg("--disable-features=VizDisplayCompositor")
+                    .arg("--disable-dev-shm-usage")
+                    .arg("--no-sandbox")
+                    .arg(format!("--user-data-dir={}", temp_dir.display()))
+                    .arg("--new-window")  // Force new window
+                    .arg("--no-startup-window")  // Don't restore previous session
+                    .build()
+                    .unwrap_or(self.config.clone())
+            } else {
+                BrowserConfig::builder()
+                    .no_sandbox()
+                    .arg("--disable-web-security")
+                    .arg("--disable-features=VizDisplayCompositor")
+                    .arg("--disable-gpu")
+                    .arg("--disable-dev-shm-usage")
+                    .arg("--disable-background-timer-throttling")
+                    .arg("--disable-backgrounding-occluded-windows")
+                    .arg("--disable-renderer-backgrounding")
+                    .arg("--no-first-run")
+                    .arg("--no-default-browser-check")
+                    .arg("--disable-blink-features=AutomationControlled")
+                    .arg(format!("--user-data-dir={}", temp_dir.display()))
+                    .arg("--new-window")  // Force new window
+                    .arg("--no-startup-window")  // Don't restore previous session
+                    .build()
+                    .unwrap_or(self.config.clone())
+            };
+            
+            match Browser::new_with_config(config_with_unique_dir).await {
                 Ok(browser) => {
                     info!("Successfully created new browser for pool");
                     // Test the new browser is actually connected

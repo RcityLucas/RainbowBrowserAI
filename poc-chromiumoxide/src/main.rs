@@ -10,6 +10,7 @@ mod tools;
 mod perception;
 mod llm;
 mod intelligence;
+mod coordination;
 
 use browser::Browser;
 

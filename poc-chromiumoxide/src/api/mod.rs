@@ -15,10 +15,11 @@ mod llm_handlers;
 mod intelligence_handlers;
 mod workflow_handlers;
 mod task_executor;
+mod coordinated_handlers;  // New coordinated handlers
 use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
 use tower_http::services::ServeDir;
-use tracing::{info, error, debug};
+use tracing::{info, error, debug, warn};
 use crate::browser::{BrowserOps, pool::BrowserPool, SessionManager};
 use crate::tools::registry::ToolRegistry;
 use tokio::sync::RwLock;
@@ -84,17 +85,47 @@ pub async fn serve(port: u16, browser_pool: BrowserPool) -> Result<()> {
         1800   // session_timeout (30 minutes)
     );
 
+    // Create the RainbowCoordinator for coordinated operations
+    let coordinator = match crate::coordination::RainbowCoordinator::new(browser_pool_arc.clone()).await {
+        Ok(c) => Arc::new(c),
+        Err(e) => {
+            error!("Failed to create RainbowCoordinator: {}", e);
+            // Continue with legacy system if coordinator fails
+            return serve_legacy(port, browser_pool_arc, session_manager).await;
+        }
+    };
+
     let state = AppState {
         browser_pool: browser_pool_arc.clone(),
         session_manager: Arc::new(session_manager),
         tool_registry: Arc::new(LazyToolRegistry::new(browser_pool_arc.clone())),
     };
     
+    let coordinated_state = coordinated_handlers::CoordinatedApiState {
+        coordinator: coordinator.clone(),
+    };
+    
+    // Create v2 router with coordinated endpoints
+    let v2_router = Router::new()
+        .route("/session/create", post(coordinated_handlers::create_coordinated_session))
+        .route("/session/:id", get(coordinated_handlers::get_coordinated_session)
+            .delete(coordinated_handlers::delete_coordinated_session))
+        .route("/sessions", get(coordinated_handlers::list_coordinated_sessions))
+        .route("/navigate", post(coordinated_handlers::coordinated_navigate))
+        .route("/intelligent-action", post(coordinated_handlers::coordinated_intelligent_action))
+        .route("/perception/analyze", post(coordinated_handlers::coordinated_perception_analysis))
+        .route("/tool/execute", post(coordinated_handlers::coordinated_tool_execution))
+        .route("/health", get(coordinated_handlers::get_system_health))
+        .with_state(coordinated_state);
+    
     let app = Router::new()
         // Health check
         .route("/health", get(health_check))
         .route("/api/health", get(health_check))
         .route("/api/diagnostics", get(diagnostics))
+        
+        // Nest v2 coordinated endpoints under /api/v2
+        .nest("/api/v2", v2_router)
         
         // Session management
         .route("/api/session/create", post(create_session))
@@ -192,6 +223,104 @@ pub async fn serve(port: u16, browser_pool: BrowserPool) -> Result<()> {
     axum::serve(listener, app).await?;
     
     Ok(())
+}
+
+// Legacy serve function for fallback when coordinator fails
+async fn serve_legacy(
+    port: u16, 
+    browser_pool_arc: Arc<BrowserPool>,
+    session_manager: SessionManager,
+) -> Result<()> {
+    info!("Starting API server in LEGACY mode (coordinator unavailable)");
+    
+    let state = AppState {
+        browser_pool: browser_pool_arc.clone(),
+        session_manager: Arc::new(session_manager),
+        tool_registry: Arc::new(LazyToolRegistry::new(browser_pool_arc)),
+    };
+    
+    // Build app without coordinated endpoints
+    let app = build_legacy_app(state);
+    
+    let addr = format!("127.0.0.1:{}", port);
+    info!("API server (legacy mode) listening on {}", addr);
+    
+    let listener = tokio::net::TcpListener::bind(&addr).await?;
+    axum::serve(listener, app).await?;
+    
+    Ok(())
+}
+
+// Build legacy app without coordination
+fn build_legacy_app(state: AppState) -> Router {
+    Router::new()
+        // Health check
+        .route("/health", get(health_check))
+        .route("/api/health", get(health_check))
+        .route("/api/diagnostics", get(diagnostics))
+        
+        // All the existing non-coordinated endpoints
+        .route("/api/session/create", post(create_session))
+        .route("/api/session/:id", get(get_session).delete(delete_session))
+        .route("/api/sessions", get(list_sessions))
+        .route("/api/navigate", post(navigate))
+        .route("/api/screenshot", post(screenshot))
+        .route("/api/click", post(click))
+        .route("/api/type", post(type_text))
+        .route("/api/execute", post(execute_script))
+        .route("/api/find", post(find_elements))
+        .route("/api/get_text", post(get_text))
+        .route("/api/scroll", post(scroll))
+        .route("/api/zoom", post(set_zoom_level))
+        .route("/api/fix_scaling", post(fix_content_scaling))
+        .route("/api/fix_window", post(fix_window_completely))
+        .route("/api/workflow", post(execute_workflow))
+        .route("/api/tools", get(list_tools))
+        .route("/api/tools/execute", post(execute_tool))
+        .route("/api/tools/metadata", get(get_tools_metadata))
+        .route("/api/tools/validate", post(validate_registry))
+        .route("/api/tools/performance/stats", get(get_all_performance_stats))
+        .route("/api/tools/performance/stats/:tool_name", get(get_tool_performance_stats))
+        .route("/api/tools/performance/metrics", get(get_recent_performance_metrics))
+        .route("/api/tools/performance/metrics/:tool_name", get(get_tool_performance_metrics))
+        .route("/api/tools/performance/clear", post(clear_performance_metrics))
+        .route("/api/tools/cache/stats", get(get_cache_stats))
+        .route("/api/tools/cache/clear", post(clear_all_cache))
+        .route("/api/tools/cache/clear/:tool_name", post(clear_tool_cache))
+        .route("/api/tools/cache/config/:tool_name", post(set_tool_cache_config))
+        .route("/api/tools/dependencies/plan", post(create_execution_plan))
+        .route("/api/tools/dependencies/execute", post(execute_with_dependencies))
+        .route("/api/tools/dependencies/register", post(register_tool_dependencies))
+        .route("/api/tools/dependencies/:tool_name", get(get_tool_dependencies))
+        .route("/api/tools/dependencies/dependents/:tool_name", get(get_dependent_tools))
+        .route("/api/tools/dependencies/stats", get(get_dependency_stats))
+        .route("/api/perception/analyze", post(perception_handlers::analyze_page))
+        .route("/api/perception/find", post(perception_handlers::intelligent_find_element))
+        .route("/api/perception/command", post(perception_handlers::execute_intelligent_command))
+        .route("/api/perception/forms/analyze", post(perception_handlers::analyze_form))
+        .route("/api/perception/forms/fill", post(perception_handlers::auto_fill_form))
+        .route("/api/perceive-mode", post(perception_handlers::perceive_with_mode))
+        .route("/api/quick-scan", post(perception_handlers::quick_scan))
+        .route("/api/smart-element-search", post(perception_handlers::smart_element_search))
+        .route("/api/perception/smart_search", post(perception_handlers::smart_element_search))
+        .route("/api/perception/find_element", post(perception_handlers::intelligent_find_element))
+        .route("/api/llm/query", post(llm_handlers::llm_query))
+        .route("/api/llm/plan", post(llm_handlers::task_planning))
+        .route("/api/llm/execute", post(llm_handlers::execute_command))
+        .route("/api/llm/usage", post(llm_handlers::get_usage_metrics))
+        .route("/api/intelligence/analyze", post(intelligence_handlers::analyze_situation))
+        .route("/api/intelligence/recommend", post(intelligence_handlers::recommend_action))
+        .route("/api/intelligence/learn", post(intelligence_handlers::submit_learning_feedback))
+        .route("/api/intelligence/statistics", post(intelligence_handlers::get_intelligence_statistics))
+        .route("/api/intelligence/config", post(intelligence_handlers::update_intelligence_config))
+        .route("/api/workflow/intelligent", post(workflow_handlers::execute_intelligent_workflow))
+        .route("/api/workflow/simple", post(workflow_handlers::execute_simple_workflow))
+        .route("/api/workflow/status", post(workflow_handlers::get_workflow_status))
+        .nest_service("/static", ServeDir::new("static"))
+        .route("/", get(dashboard))
+        .layer(CorsLayer::permissive())
+        .layer(TraceLayer::new_for_http())
+        .with_state(state)
 }
 
 // Health check endpoint
@@ -789,24 +918,50 @@ async fn list_tools(State(state): State<AppState>) -> Response {
 struct ExecuteToolRequest {
     tool_name: String,
     parameters: serde_json::Value,
+    session_id: Option<String>,  // Add session_id field
 }
 
 async fn execute_tool(
     State(state): State<AppState>,
     Json(req): Json<ExecuteToolRequest>,
 ) -> Response {
-    info!("Executing tool: {} with parameters: {}", req.tool_name, req.parameters);
+    info!("Executing tool: {} with parameters: {} (session: {:?})", 
+          req.tool_name, req.parameters, req.session_id);
     
-    // Use the registry to execute the tool
-    let registry = match state.tool_registry.get().await {
-        Ok(r) => r,
-        Err(e) => {
-            error!("Tool registry unavailable: {}", e);
-            return (StatusCode::SERVICE_UNAVAILABLE,
-                Json(ApiResponse::<()>::error("Tool registry not initialized (browser unavailable)".to_string()))
-                ).into_response();
+    // If session_id is provided, use the session's browser
+    let registry = if let Some(session_id) = &req.session_id {
+        // Get the session's browser
+        if let Some(session) = state.session_manager.get_session(session_id).await {
+            info!("Using browser from session {} for tool execution", session_id);
+            let session_guard = session.read().await;
+            // Create a tool registry with the session's browser
+            Arc::new(ToolRegistry::new(session_guard.browser.clone()))
+        } else {
+            warn!("Session {} not found, falling back to pool browser", session_id);
+            // Fallback to getting registry from pool
+            match state.tool_registry.get().await {
+                Ok(r) => r,
+                Err(e) => {
+                    error!("Tool registry unavailable: {}", e);
+                    return (StatusCode::SERVICE_UNAVAILABLE,
+                        Json(ApiResponse::<()>::error("Tool registry not initialized (browser unavailable)".to_string()))
+                        ).into_response();
+                }
+            }
+        }
+    } else {
+        // No session_id, use the registry from pool
+        match state.tool_registry.get().await {
+            Ok(r) => r,
+            Err(e) => {
+                error!("Tool registry unavailable: {}", e);
+                return (StatusCode::SERVICE_UNAVAILABLE,
+                    Json(ApiResponse::<()>::error("Tool registry not initialized (browser unavailable)".to_string()))
+                    ).into_response();
+            }
         }
     };
+    
     match registry.execute_tool(&req.tool_name, req.parameters).await {
         Ok(result) => {
             debug!("Tool '{}' executed successfully", req.tool_name);

@@ -6,7 +6,7 @@ use axum::{
     response::{IntoResponse},
 };
 use serde::{Deserialize, Serialize};
-use tracing::{error, info, debug};
+use tracing::{error, info, debug, warn};
 use std::time::Instant;
 
 use super::{ApiResponse, AppState};
@@ -275,52 +275,7 @@ fn validate_perception_mode_request(req: &PerceptionModeRequest) -> Result<(), P
     Ok(())
 }
 
-/// Validate smart element search request
-#[allow(dead_code)]
-fn validate_smart_element_search_request(req: &SmartElementSearchRequest) -> Result<(), PerceptionError> {
-    // Validate query
-    if req.query.trim().is_empty() {
-        return Err(PerceptionError::ValidationError("Search query cannot be empty".to_string()));
-    }
-    
-    if req.query.len() > 512 {
-        return Err(PerceptionError::ValidationError("Search query too long (max 512 characters)".to_string()));
-    }
-    
-    // Validate max_results
-    if let Some(max_results) = req.max_results {
-        if max_results == 0 {
-            return Err(PerceptionError::ValidationError("max_results must be greater than 0".to_string()));
-        }
-        
-        if max_results > 100 {
-            return Err(PerceptionError::ValidationError("max_results cannot exceed 100".to_string()));
-        }
-    }
-    
-    // Validate session_id
-    validate_session_id(&req.session_id)?;
-    
-    Ok(())
-}
-
-/// Validate find element request
-#[allow(dead_code)]
-fn validate_find_element_request(req: &FindElementRequest) -> Result<(), PerceptionError> {
-    // Validate description
-    if req.description.trim().is_empty() {
-        return Err(PerceptionError::ValidationError("Element description cannot be empty".to_string()));
-    }
-    
-    if req.description.len() > 256 {
-        return Err(PerceptionError::ValidationError("Element description too long (max 256 characters)".to_string()));
-    }
-    
-    // Validate session_id
-    validate_session_id(&req.session_id)?;
-    
-    Ok(())
-}
+// Unused validation functions removed for code consolidation
 
 pub async fn intelligent_find_element(
     State(state): State<AppState>,
@@ -560,13 +515,54 @@ pub async fn perceive_with_mode(
 
     let browser_acquisition_start = Instant::now();
     
-    match state.browser_pool.acquire().await {
-        Ok(browser) => {
-            let browser_acquisition_time = browser_acquisition_start.elapsed().as_millis() as u64;
-            let perception_start = Instant::now();
-            
-            // Create layered perception engine
-            let mut layered_perception = crate::perception::LayeredPerception::new(browser.browser_arc());
+    // Try to use session browser if session_id is provided
+    let browser_arc = if let Some(session_id) = &req.session_id {
+        // Try to get browser from existing session
+        if let Some(session) = state.session_manager.get_session(session_id).await {
+            info!("Using browser from session {} for perception", session_id);
+            let session_guard = session.read().await;
+            session_guard.browser.clone()
+        } else {
+            warn!("Session {} not found, creating new browser", session_id);
+            // Fallback to acquiring new browser from pool
+            match state.browser_pool.acquire().await {
+                Ok(browser) => browser.browser_arc(),
+                Err(e) => {
+                    error!("Failed to acquire browser: {}", e);
+                    let metrics = PerformanceMetrics {
+                        processing_time_ms: 0,
+                        browser_acquisition_time_ms: browser_acquisition_start.elapsed().as_millis() as u64,
+                        perception_time_ms: 0,
+                        total_time_ms: start_time.elapsed().as_millis() as u64,
+                    };
+                    return (StatusCode::INTERNAL_SERVER_ERROR,
+                           Json(PerceptionResponse::<()>::error(format!("Failed to acquire browser: {}", e), metrics))).into_response();
+                }
+            }
+        }
+    } else {
+        // No session_id provided, acquire new browser from pool
+        match state.browser_pool.acquire().await {
+            Ok(browser) => browser.browser_arc(),
+            Err(e) => {
+                error!("Failed to acquire browser: {}", e);
+                let metrics = PerformanceMetrics {
+                    processing_time_ms: 0,
+                    browser_acquisition_time_ms: browser_acquisition_start.elapsed().as_millis() as u64,
+                    perception_time_ms: 0,
+                    total_time_ms: start_time.elapsed().as_millis() as u64,
+                };
+                return (StatusCode::INTERNAL_SERVER_ERROR,
+                       Json(PerceptionResponse::<()>::error(format!("Failed to acquire browser: {}", e), metrics))).into_response();
+            }
+        }
+    };
+    
+    let browser_acquisition_time = browser_acquisition_start.elapsed().as_millis() as u64;
+    let perception_start = Instant::now();
+    
+    // Create layered perception engine with the browser (either from session or pool)
+    let mut layered_perception = crate::perception::LayeredPerception::new(browser_arc);
             
             match layered_perception.perceive(mode).await {
                 Ok(result) => {
@@ -602,19 +598,6 @@ pub async fn perceive_with_mode(
                      Json(PerceptionResponse::<()>::error(format!("Perception failed: {}", e), metrics))).into_response()
                 }
             }
-        }
-        Err(e) => {
-            error!("Failed to acquire browser for perception: {}", e);
-            let metrics = PerformanceMetrics {
-                processing_time_ms: 0,
-                browser_acquisition_time_ms: browser_acquisition_start.elapsed().as_millis() as u64,
-                perception_time_ms: 0,
-                total_time_ms: start_time.elapsed().as_millis() as u64,
-            };
-            (StatusCode::INTERNAL_SERVER_ERROR,
-             Json(PerceptionResponse::<()>::error(format!("Failed to acquire browser: {}", e), metrics))).into_response()
-        }
-    }
 }
 
 /// Lightning fast perception for quick decisions

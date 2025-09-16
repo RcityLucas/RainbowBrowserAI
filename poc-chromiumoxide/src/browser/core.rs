@@ -175,7 +175,6 @@ impl Browser {
             .arg("--disable-blink-features=AutomationControlled")
             .arg("--disable-extensions")
             .arg("--disable-component-extensions-with-background-pages")
-            .arg("--remote-debugging-port=0") // Use dynamic port
             .build()
             .unwrap();
         Self::new_with_config(config).await
@@ -249,6 +248,23 @@ impl Browser {
     
     pub async fn current_url(&self) -> Result<String> {
         <Self as BrowserOps>::current_url(self).await
+    }
+    
+    pub async fn url(&self) -> Result<String> {
+        self.current_url().await
+    }
+    
+    pub async fn title(&self) -> Result<String> {
+        let page = self.page.write().await;
+        Ok(page.evaluate("document.title")
+            .await?
+            .into_value::<String>()
+            .unwrap_or_else(|_| "Untitled".to_string()))
+    }
+    
+    pub async fn content(&self) -> Result<String> {
+        let page = self.page.write().await;
+        Ok(page.content().await?)
     }
     
     pub async fn screenshot(&self, options: ScreenshotOptions) -> Result<Vec<u8>> {
