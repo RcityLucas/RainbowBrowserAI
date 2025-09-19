@@ -6,19 +6,19 @@ This document provides comprehensive information about the testing framework imp
 
 ### Run All Tests
 ```bash
-./run_comprehensive_tests.sh
+scripts/run_comprehensive_tests.sh
 ```
 
 ### Run Quick Test Suite (Recommended for Development)
 ```bash
-./run_comprehensive_tests.sh quick
+scripts/run_comprehensive_tests.sh quick
 ```
 
 ### Run Specific Test Category
 ```bash
-./run_comprehensive_tests.sh perception
-./run_comprehensive_tests.sh performance
-./run_comprehensive_tests.sh e2e
+scripts/run_comprehensive_tests.sh perception
+scripts/run_comprehensive_tests.sh performance
+scripts/run_comprehensive_tests.sh e2e
 ```
 
 ## Test Structure
@@ -63,7 +63,7 @@ Tests all REST API endpoints including:
 
 **Example:**
 ```bash
-./run_comprehensive_tests.sh api
+scripts/run_comprehensive_tests.sh api
 ```
 
 ### 2. User Interface Tests (`ui/`)
@@ -77,7 +77,7 @@ Tests the web interface including:
 
 **Example:**
 ```bash
-./run_comprehensive_tests.sh ui
+scripts/run_comprehensive_tests.sh ui
 ```
 
 ### 3. Browser Automation Tests (`browser/`)
@@ -91,7 +91,7 @@ Tests core browser functionality:
 
 **Example:**
 ```bash
-./run_comprehensive_tests.sh browser
+scripts/run_comprehensive_tests.sh browser
 ```
 
 ### 4. Tools Tests (`tools/`)
@@ -105,7 +105,7 @@ Comprehensive testing of all available tools:
 
 **Example:**
 ```bash
-./run_comprehensive_tests.sh tools
+scripts/run_comprehensive_tests.sh tools
 ```
 
 ### 5. Perception Tests (`perception/`)
@@ -119,7 +119,7 @@ Tests AI-powered perception capabilities:
 
 **Example:**
 ```bash
-./run_comprehensive_tests.sh perception
+scripts/run_comprehensive_tests.sh perception
 ```
 
 ### 6. Performance Tests (`performance/`)
@@ -133,7 +133,7 @@ Tests system performance and scalability:
 
 **Example:**
 ```bash
-./run_comprehensive_tests.sh performance
+scripts/run_comprehensive_tests.sh performance
 ```
 
 ### 7. End-to-End Tests (`e2e/`)
@@ -147,7 +147,7 @@ Tests complete user workflows:
 
 **Example:**
 ```bash
-./run_comprehensive_tests.sh e2e
+scripts/run_comprehensive_tests.sh e2e
 ```
 
 ### 8. Integration Tests (`integration/`)
@@ -160,7 +160,7 @@ Tests system integration between components:
 
 **Example:**
 ```bash
-./run_comprehensive_tests.sh integration
+scripts/run_comprehensive_tests.sh integration
 ```
 
 ## Test Configuration
@@ -250,13 +250,13 @@ jobs:
       - name: Install dependencies
         run: sudo apt-get install -y curl jq bc
       - name: Run tests
-        run: ./run_comprehensive_tests.sh quick
+        run: scripts/run_comprehensive_tests.sh quick
 ```
 
 ### Local Development Workflow
-1. **During development**: Use `./run_comprehensive_tests.sh quick`
+1. **During development**: Use `scripts/run_comprehensive_tests.sh quick`
 2. **Before commits**: Run specific test categories related to your changes
-3. **Before releases**: Run full test suite with `./run_comprehensive_tests.sh`
+3. **Before releases**: Run full test suite with `scripts/run_comprehensive_tests.sh`
 
 ## Test Development
 
@@ -280,7 +280,7 @@ jobs:
 1. Create a new directory under `tests/`
 2. Create a test script following the naming convention
 3. Make the script executable: `chmod +x script_name.sh`
-4. Add the new category to `run_comprehensive_tests.sh`
+4. Add the new category to `scripts/run_comprehensive_tests.sh`
 
 ### Test Best Practices
 - **Use descriptive test names**

@@ -2,10 +2,10 @@
 // 利用Chrome DevTools Protocol实现高级感知能力
 
 use anyhow::Result;
-use serde::{Serialize, Deserialize};
+use chromiumoxide::Page;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
-use chromiumoxide::Page;
 use tracing::info;
 
 use crate::browser::Browser;
@@ -152,7 +152,7 @@ impl ChromiumIntegration {
     /// 创建新的Chromium集成实例
     pub async fn new(browser: Arc<Browser>) -> Result<Self> {
         let page = Arc::new(browser.page().await);
-        
+
         Ok(Self {
             browser,
             page,
@@ -163,7 +163,7 @@ impl ChromiumIntegration {
     /// 使用自定义配置创建
     pub async fn with_config(browser: Arc<Browser>, config: ChromiumConfig) -> Result<Self> {
         let page = Arc::new(browser.page().await);
-        
+
         Ok(Self {
             browser,
             page,
@@ -242,32 +242,46 @@ impl ChromiumIntegration {
                 });
             })()
         "#;
-        
+
         let dom_result = self.browser.execute_script(dom_script).await?;
 
         // Parse DOM result and create simplified nodes
         let empty_vec = Vec::new();
         let nodes_array = dom_result.as_array().unwrap_or(&empty_vec);
         let mut nodes = Vec::new();
-        
+
         for (index, node_value) in nodes_array.iter().enumerate() {
             if let Some(node_obj) = node_value.as_object() {
-                let bounds = node_obj.get("bounds")
-                    .and_then(|b| b.as_object())
-                    .map(|b| BoundingBox {
-                        x: b.get("x").and_then(|v| v.as_f64()).unwrap_or(0.0),
-                        y: b.get("y").and_then(|v| v.as_f64()).unwrap_or(0.0),
-                        width: b.get("width").and_then(|v| v.as_f64()).unwrap_or(0.0),
-                        height: b.get("height").and_then(|v| v.as_f64()).unwrap_or(0.0),
-                    });
-                
+                let bounds =
+                    node_obj
+                        .get("bounds")
+                        .and_then(|b| b.as_object())
+                        .map(|b| BoundingBox {
+                            x: b.get("x").and_then(|v| v.as_f64()).unwrap_or(0.0),
+                            y: b.get("y").and_then(|v| v.as_f64()).unwrap_or(0.0),
+                            width: b.get("width").and_then(|v| v.as_f64()).unwrap_or(0.0),
+                            height: b.get("height").and_then(|v| v.as_f64()).unwrap_or(0.0),
+                        });
+
                 let dom_node = DomNode {
                     node_id: index as u32,
                     backend_node_id: index as u32,
                     node_type: 1, // Element node
-                    node_name: node_obj.get("tagName").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-                    local_name: node_obj.get("tagName").and_then(|v| v.as_str()).unwrap_or("").to_lowercase(),
-                    node_value: node_obj.get("textContent").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                    node_name: node_obj
+                        .get("tagName")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string(),
+                    local_name: node_obj
+                        .get("tagName")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_lowercase(),
+                    node_value: node_obj
+                        .get("textContent")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string(),
                     attributes: vec![], // Simplified
                     parent_id: None,
                     children: vec![],
@@ -310,21 +324,33 @@ impl ChromiumIntegration {
                 }));
             })()
         "#;
-        
+
         let a11y_result = self.browser.execute_script(a11y_script).await?;
 
         // Parse accessibility result
         let empty_vec = Vec::new();
         let a11y_array = a11y_result.as_array().unwrap_or(&empty_vec);
         let mut nodes = Vec::new();
-        
+
         for (index, a11y_value) in a11y_array.iter().enumerate() {
             if let Some(a11y_obj) = a11y_value.as_object() {
                 let node = AccessibilityNode {
                     node_id: index.to_string(),
-                    role: a11y_obj.get("role").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-                    name: a11y_obj.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-                    description: a11y_obj.get("description").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                    role: a11y_obj
+                        .get("role")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string(),
+                    name: a11y_obj
+                        .get("name")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string(),
+                    description: a11y_obj
+                        .get("description")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string(),
                     properties: HashMap::new(),
                     children: vec![],
                 };
@@ -380,7 +406,7 @@ impl ChromiumIntegration {
                 };
             })()
         "#;
-        
+
         let perf_result = self.browser.execute_script(perf_script).await?;
 
         // Parse performance metrics
@@ -475,7 +501,7 @@ impl ChromiumIntegration {
         let heap_usage = self.get_heap_usage().await?;
 
         Ok(RuntimeInfo {
-            console_messages: vec![], // TODO: 收集控制台消息
+            console_messages: vec![],  // TODO: 收集控制台消息
             javascript_errors: vec![], // TODO: 收集JS错误
             heap_usage,
             execution_contexts,
@@ -501,14 +527,22 @@ impl ChromiumIntegration {
                 };
             })()
         "#;
-        
+
         let layout_result = self.browser.execute_script(layout_script).await?;
 
         // Parse layout result
-        let viewport_width = layout_result["viewport"]["width"].as_f64().unwrap_or(1920.0);
-        let viewport_height = layout_result["viewport"]["height"].as_f64().unwrap_or(1080.0);
-        let doc_width = layout_result["document"]["width"].as_f64().unwrap_or(viewport_width);
-        let doc_height = layout_result["document"]["height"].as_f64().unwrap_or(viewport_height);
+        let viewport_width = layout_result["viewport"]["width"]
+            .as_f64()
+            .unwrap_or(1920.0);
+        let viewport_height = layout_result["viewport"]["height"]
+            .as_f64()
+            .unwrap_or(1080.0);
+        let doc_width = layout_result["document"]["width"]
+            .as_f64()
+            .unwrap_or(viewport_width);
+        let doc_height = layout_result["document"]["height"]
+            .as_f64()
+            .unwrap_or(viewport_height);
 
         Ok(LayoutMetrics {
             content_size: Size {
@@ -566,12 +600,18 @@ impl ChromiumIntegration {
     // === 辅助方法实现 ===
 
     #[allow(dead_code)] // TODO: Implement computed styles feature
-    async fn get_computed_styles_for_nodes(&self, _nodes: &[DomNode]) -> Result<HashMap<u32, ComputedStyle>> {
+    async fn get_computed_styles_for_nodes(
+        &self,
+        _nodes: &[DomNode],
+    ) -> Result<HashMap<u32, ComputedStyle>> {
         // TODO: 实现计算样式获取
         Ok(HashMap::new())
     }
 
-    async fn check_accessibility_violations(&self, _nodes: &[AccessibilityNode]) -> Result<Vec<A11yViolation>> {
+    async fn check_accessibility_violations(
+        &self,
+        _nodes: &[AccessibilityNode],
+    ) -> Result<Vec<A11yViolation>> {
         // TODO: 实现可访问性违规检查
         Ok(vec![])
     }

@@ -1,12 +1,12 @@
 use super::traits::{Tool, ToolCategory};
 use crate::browser::Browser;
-use anyhow::{Result, anyhow};
-use serde::{Deserialize, Serialize};
+use anyhow::{anyhow, Result};
 use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
-use tracing::{info, debug};
-use std::collections::HashMap;
+use tracing::{debug, info};
 // use futures::StreamExt; // Reserved for future CDP event streaming
 
 // ============================================================================
@@ -67,28 +67,28 @@ impl NetworkMonitorTool {
 impl Tool for NetworkMonitorTool {
     type Input = NetworkMonitorInput;
     type Output = NetworkMonitorOutput;
-    
+
     fn name(&self) -> &str {
         "monitor_network"
     }
-    
+
     fn description(&self) -> &str {
         "Monitor network requests and responses for a specified duration"
     }
-    
+
     fn category(&self) -> ToolCategory {
         ToolCategory::AdvancedAutomation
     }
-    
+
     async fn execute(&self, input: Self::Input) -> Result<Self::Output> {
         info!("Starting network monitoring for {}ms", input.duration_ms);
-        
+
         let start_time = std::time::Instant::now();
-        
+
         // For now, simulate network monitoring by capturing basic page load info
         // TODO: Implement actual CDP Network domain integration
         let monitor_duration = Duration::from_millis(input.duration_ms);
-        
+
         // Get current page load performance data
         let performance_script = r#"
             JSON.stringify({
@@ -104,64 +104,69 @@ impl Tool for NetworkMonitorTool {
                 }))
             })
         "#;
-        
+
         tokio::time::sleep(monitor_duration).await;
-        
+
         let performance_result = self.browser.execute_script(performance_script).await?;
-        
+
         let mut requests = Vec::new();
         let mut total_bytes = 0u64;
         let mut failed_count = 0u64;
-        
+
         if let Some(resources) = performance_result.get("resources") {
             if let Some(resources_array) = resources.as_array() {
                 for (index, resource) in resources_array.iter().enumerate() {
-                    let url = resource.get("name")
+                    let url = resource
+                        .get("name")
                         .and_then(|v| v.as_str())
                         .unwrap_or("unknown")
                         .to_string();
-                    
-                    let duration = resource.get("duration")
+
+                    let duration = resource
+                        .get("duration")
                         .and_then(|v| v.as_f64())
                         .unwrap_or(0.0) as u64;
-                    
-                    let transfer_size = resource.get("transferSize")
+
+                    let transfer_size = resource
+                        .get("transferSize")
                         .and_then(|v| v.as_u64())
                         .unwrap_or(0);
-                    
-                    let resource_type = resource.get("initiatorType")
+
+                    let resource_type = resource
+                        .get("initiatorType")
                         .and_then(|v| v.as_str())
                         .unwrap_or("other")
                         .to_string();
-                    
+
                     // Apply filters
                     if let Some(ref filter_types) = input.filter_resource_types {
                         if !filter_types.contains(&resource_type) {
                             continue;
                         }
                     }
-                    
+
                     if let Some(ref domain_filter) = input.domain_filter {
                         if !url.contains(domain_filter) {
                             continue;
                         }
                     }
-                    
+
                     total_bytes += transfer_size;
-                    
+
                     // Simulate some failures for demonstration
-                    let status_code = if index % 20 == 0 { 
+                    let status_code = if index % 20 == 0 {
                         failed_count += 1;
-                        Some(404) 
-                    } else { 
-                        Some(200) 
+                        Some(404)
+                    } else {
+                        Some(200)
                     };
-                    
+
                     requests.push(NetworkRequest {
                         url,
                         method: "GET".to_string(),
                         resource_type,
-                        timestamp: resource.get("responseEnd")
+                        timestamp: resource
+                            .get("responseEnd")
                             .and_then(|v| v.as_f64())
                             .unwrap_or(0.0),
                         status_code,
@@ -172,9 +177,9 @@ impl Tool for NetworkMonitorTool {
                 }
             }
         }
-        
+
         let monitoring_duration = start_time.elapsed().as_millis() as u64;
-        
+
         Ok(NetworkMonitorOutput {
             success: true,
             total_requests: requests.len() as u64,
@@ -184,12 +189,13 @@ impl Tool for NetworkMonitorTool {
             failed_requests: failed_count,
         })
     }
-    
+
     async fn validate_input(&self, input: &Self::Input) -> Result<()> {
         if input.duration_ms == 0 {
             return Err(anyhow!("Duration must be greater than 0"));
         }
-        if input.duration_ms > 60000 { // 1 minute max
+        if input.duration_ms > 60000 {
+            // 1 minute max
             return Err(anyhow!("Duration cannot exceed 60 seconds"));
         }
         Ok(())
@@ -197,7 +203,7 @@ impl Tool for NetworkMonitorTool {
 }
 
 // ============================================================================
-// Performance Metrics Tool  
+// Performance Metrics Tool
 // ============================================================================
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -238,31 +244,31 @@ pub struct NavigationTiming {
     pub first_contentful_paint_ms: Option<f64>,
     pub largest_contentful_paint_ms: Option<f64>,
     pub cumulative_layout_shift: Option<f64>,
-    
+
     // Navigation timing
     pub navigation_start: f64,
     pub dns_lookup_start: f64,
     pub dns_lookup_end: f64,
     pub dns_lookup_duration_ms: f64,
-    
+
     pub connect_start: f64,
     pub connect_end: f64,
     pub connect_duration_ms: f64,
-    
+
     pub request_start: f64,
     pub response_start: f64,
     pub response_end: f64,
     pub request_response_duration_ms: f64,
-    
+
     pub dom_interactive: f64,
     pub dom_content_loaded: f64,
     pub dom_complete: f64,
     pub dom_processing_duration_ms: f64,
-    
+
     pub load_event_start: f64,
     pub load_event_end: f64,
     pub load_complete_duration_ms: f64,
-    
+
     // Additional metrics
     pub redirect_start: Option<f64>,
     pub redirect_end: Option<f64>,
@@ -335,22 +341,22 @@ impl PerformanceMetricsTool {
 impl Tool for PerformanceMetricsTool {
     type Input = PerformanceMetricsInput;
     type Output = PerformanceMetricsOutput;
-    
+
     fn name(&self) -> &str {
         "get_performance_metrics"
     }
-    
+
     fn description(&self) -> &str {
         "Collect detailed performance metrics from the current page"
     }
-    
+
     fn category(&self) -> ToolCategory {
         ToolCategory::AdvancedAutomation
     }
-    
+
     async fn execute(&self, input: Self::Input) -> Result<Self::Output> {
         debug!("Collecting comprehensive performance metrics via CDP and Performance APIs");
-        
+
         // Enhanced performance metrics collection using both CDP and Performance APIs
         let comprehensive_metrics_script = r#"
             JSON.stringify({
@@ -392,68 +398,144 @@ impl Tool for PerformanceMetricsTool {
                 serverTiming: performance.getEntriesByType('navigation')[0]?.serverTiming || []
             })
         "#;
-        
-        let metrics_result = self.browser.execute_script(comprehensive_metrics_script).await?;
-        
+
+        let metrics_result = self
+            .browser
+            .execute_script(comprehensive_metrics_script)
+            .await?;
+
         let navigation_timing = if input.include_navigation_timing {
             if let Some(nav) = metrics_result.get("navigation") {
-                let nav_start = nav.get("navigationStart").and_then(|v| v.as_f64()).unwrap_or(0.0);
-                let dns_start = nav.get("domainLookupStart").and_then(|v| v.as_f64()).unwrap_or(0.0);
-                let dns_end = nav.get("domainLookupEnd").and_then(|v| v.as_f64()).unwrap_or(0.0);
-                let connect_start = nav.get("connectStart").and_then(|v| v.as_f64()).unwrap_or(0.0);
-                let connect_end = nav.get("connectEnd").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                let nav_start = nav
+                    .get("navigationStart")
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(0.0);
+                let dns_start = nav
+                    .get("domainLookupStart")
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(0.0);
+                let dns_end = nav
+                    .get("domainLookupEnd")
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(0.0);
+                let connect_start = nav
+                    .get("connectStart")
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(0.0);
+                let connect_end = nav
+                    .get("connectEnd")
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(0.0);
                 let secure_start = nav.get("secureConnectionStart").and_then(|v| v.as_f64());
-                let request_start = nav.get("requestStart").and_then(|v| v.as_f64()).unwrap_or(0.0);
-                let response_start = nav.get("responseStart").and_then(|v| v.as_f64()).unwrap_or(0.0);
-                let response_end = nav.get("responseEnd").and_then(|v| v.as_f64()).unwrap_or(0.0);
-                let dom_interactive = nav.get("domInteractive").and_then(|v| v.as_f64()).unwrap_or(0.0);
-                let dom_content_loaded = nav.get("domContentLoadedEventEnd").and_then(|v| v.as_f64()).unwrap_or(0.0);
-                let dom_complete = nav.get("domComplete").and_then(|v| v.as_f64()).unwrap_or(0.0);
-                let load_start = nav.get("loadEventStart").and_then(|v| v.as_f64()).unwrap_or(0.0);
-                let load_end = nav.get("loadEventEnd").and_then(|v| v.as_f64()).unwrap_or(0.0);
-                let redirect_start = nav.get("redirectStart").and_then(|v| v.as_f64()).filter(|&v| v > 0.0);
-                let redirect_end = nav.get("redirectEnd").and_then(|v| v.as_f64()).filter(|&v| v > 0.0);
-                
+                let request_start = nav
+                    .get("requestStart")
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(0.0);
+                let response_start = nav
+                    .get("responseStart")
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(0.0);
+                let response_end = nav
+                    .get("responseEnd")
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(0.0);
+                let dom_interactive = nav
+                    .get("domInteractive")
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(0.0);
+                let dom_content_loaded = nav
+                    .get("domContentLoadedEventEnd")
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(0.0);
+                let dom_complete = nav
+                    .get("domComplete")
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(0.0);
+                let load_start = nav
+                    .get("loadEventStart")
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(0.0);
+                let load_end = nav
+                    .get("loadEventEnd")
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(0.0);
+                let redirect_start = nav
+                    .get("redirectStart")
+                    .and_then(|v| v.as_f64())
+                    .filter(|&v| v > 0.0);
+                let redirect_end = nav
+                    .get("redirectEnd")
+                    .and_then(|v| v.as_f64())
+                    .filter(|&v| v > 0.0);
+
                 // Get Core Web Vitals from the webVitals object
                 let web_vitals = metrics_result.get("webVitals");
-                let fcp = web_vitals.and_then(|wv| wv.get("fcp")).and_then(|v| v.as_f64());
-                let lcp = web_vitals.and_then(|wv| wv.get("lcp")).and_then(|v| v.as_f64());
-                let _ttfb = web_vitals.and_then(|wv| wv.get("ttfb")).and_then(|v| v.as_f64());
-                
+                let fcp = web_vitals
+                    .and_then(|wv| wv.get("fcp"))
+                    .and_then(|v| v.as_f64());
+                let lcp = web_vitals
+                    .and_then(|wv| wv.get("lcp"))
+                    .and_then(|v| v.as_f64());
+                let _ttfb = web_vitals
+                    .and_then(|wv| wv.get("ttfb"))
+                    .and_then(|v| v.as_f64());
+
                 Some(NavigationTiming {
                     // Core Web Vitals
                     first_contentful_paint_ms: fcp,
                     largest_contentful_paint_ms: lcp,
                     cumulative_layout_shift: None, // Requires Performance Observer
-                    
+
                     // Navigation timing breakdown
                     navigation_start: nav_start,
                     dns_lookup_start: dns_start,
                     dns_lookup_end: dns_end,
-                    dns_lookup_duration_ms: if dns_end > dns_start { dns_end - dns_start } else { 0.0 },
-                    
+                    dns_lookup_duration_ms: if dns_end > dns_start {
+                        dns_end - dns_start
+                    } else {
+                        0.0
+                    },
+
                     connect_start,
                     connect_end,
-                    connect_duration_ms: if connect_end > connect_start { connect_end - connect_start } else { 0.0 },
-                    
+                    connect_duration_ms: if connect_end > connect_start {
+                        connect_end - connect_start
+                    } else {
+                        0.0
+                    },
+
                     request_start,
                     response_start,
                     response_end,
-                    request_response_duration_ms: if response_end > request_start { response_end - request_start } else { 0.0 },
-                    
+                    request_response_duration_ms: if response_end > request_start {
+                        response_end - request_start
+                    } else {
+                        0.0
+                    },
+
                     dom_interactive,
                     dom_content_loaded,
                     dom_complete,
-                    dom_processing_duration_ms: if dom_complete > response_end { dom_complete - response_end } else { 0.0 },
-                    
+                    dom_processing_duration_ms: if dom_complete > response_end {
+                        dom_complete - response_end
+                    } else {
+                        0.0
+                    },
+
                     load_event_start: load_start,
                     load_event_end: load_end,
-                    load_complete_duration_ms: if load_end > nav_start { load_end - nav_start } else { 0.0 },
-                    
+                    load_complete_duration_ms: if load_end > nav_start {
+                        load_end - nav_start
+                    } else {
+                        0.0
+                    },
+
                     // Optional metrics
                     redirect_start,
                     redirect_end,
-                    redirect_duration_ms: if let (Some(start), Some(end)) = (redirect_start, redirect_end) {
+                    redirect_duration_ms: if let (Some(start), Some(end)) =
+                        (redirect_start, redirect_end)
+                    {
                         Some(if end > start { end - start } else { 0.0 })
                     } else {
                         None
@@ -469,37 +551,45 @@ impl Tool for PerformanceMetricsTool {
         } else {
             None
         };
-        
+
         let paint_metrics = if input.include_paint_metrics {
             if let Some(paint_entries) = metrics_result.get("paint") {
                 if let Some(paint_array) = paint_entries.as_array() {
                     let mut first_paint = None;
                     let mut first_contentful_paint = None;
                     let mut paint_entries_list = Vec::new();
-                    
+
                     for entry in paint_array {
                         if let Some(name) = entry.get("name").and_then(|v| v.as_str()) {
-                            if let Some(start_time) = entry.get("startTime").and_then(|v| v.as_f64()) {
+                            if let Some(start_time) =
+                                entry.get("startTime").and_then(|v| v.as_f64())
+                            {
                                 match name {
                                     "first-paint" => first_paint = Some(start_time),
-                                    "first-contentful-paint" => first_contentful_paint = Some(start_time),
+                                    "first-contentful-paint" => {
+                                        first_contentful_paint = Some(start_time)
+                                    }
                                     _ => {}
                                 }
-                                
+
                                 paint_entries_list.push(PaintEntry {
                                     name: name.to_string(),
                                     start_time,
-                                    duration: entry.get("duration").and_then(|v| v.as_f64()).unwrap_or(0.0),
+                                    duration: entry
+                                        .get("duration")
+                                        .and_then(|v| v.as_f64())
+                                        .unwrap_or(0.0),
                                 });
                             }
                         }
                     }
-                    
+
                     // Get LCP from web vitals
-                    let lcp = metrics_result.get("webVitals")
+                    let lcp = metrics_result
+                        .get("webVitals")
                         .and_then(|wv| wv.get("lcp"))
                         .and_then(|v| v.as_f64());
-                    
+
                     Some(PaintMetrics {
                         first_paint_ms: first_paint,
                         first_contentful_paint_ms: first_contentful_paint,
@@ -515,65 +605,144 @@ impl Tool for PerformanceMetricsTool {
         } else {
             None
         };
-        
+
         // Collect resource timing entries
         let resource_timing = if input.include_resource_timing {
             if let Some(resources) = metrics_result.get("resources") {
                 if let Some(resources_array) = resources.as_array() {
-                    resources_array.iter().filter_map(|resource| {
-                        let name = resource.get("name").and_then(|v| v.as_str())?.to_string();
-                        let entry_type = resource.get("entryType").and_then(|v| v.as_str()).unwrap_or("resource").to_string();
-                        let start_time = resource.get("startTime").and_then(|v| v.as_f64()).unwrap_or(0.0);
-                        let duration = resource.get("duration").and_then(|v| v.as_f64()).unwrap_or(0.0);
-                        let initiator_type = resource.get("initiatorType").and_then(|v| v.as_str()).unwrap_or("other").to_string();
-                        let next_hop_protocol = resource.get("nextHopProtocol").and_then(|v| v.as_str()).unwrap_or("").to_string();
-                        
-                        // Server timing entries
-                        let server_timing = if let Some(st) = resource.get("serverTiming") {
-                            if let Some(st_array) = st.as_array() {
-                                st_array.iter().filter_map(|st_entry| {
-                                    let st_name = st_entry.get("name").and_then(|v| v.as_str())?.to_string();
-                                    let st_duration = st_entry.get("duration").and_then(|v| v.as_f64()).unwrap_or(0.0);
-                                    let st_description = st_entry.get("description").and_then(|v| v.as_str()).unwrap_or("").to_string();
-                                    
-                                    Some(ServerTimingEntry {
-                                        name: st_name,
-                                        duration: st_duration,
-                                        description: st_description,
-                                    })
-                                }).collect()
+                    resources_array
+                        .iter()
+                        .filter_map(|resource| {
+                            let name = resource.get("name").and_then(|v| v.as_str())?.to_string();
+                            let entry_type = resource
+                                .get("entryType")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("resource")
+                                .to_string();
+                            let start_time = resource
+                                .get("startTime")
+                                .and_then(|v| v.as_f64())
+                                .unwrap_or(0.0);
+                            let duration = resource
+                                .get("duration")
+                                .and_then(|v| v.as_f64())
+                                .unwrap_or(0.0);
+                            let initiator_type = resource
+                                .get("initiatorType")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("other")
+                                .to_string();
+                            let next_hop_protocol = resource
+                                .get("nextHopProtocol")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("")
+                                .to_string();
+
+                            // Server timing entries
+                            let server_timing = if let Some(st) = resource.get("serverTiming") {
+                                if let Some(st_array) = st.as_array() {
+                                    st_array
+                                        .iter()
+                                        .filter_map(|st_entry| {
+                                            let st_name = st_entry
+                                                .get("name")
+                                                .and_then(|v| v.as_str())?
+                                                .to_string();
+                                            let st_duration = st_entry
+                                                .get("duration")
+                                                .and_then(|v| v.as_f64())
+                                                .unwrap_or(0.0);
+                                            let st_description = st_entry
+                                                .get("description")
+                                                .and_then(|v| v.as_str())
+                                                .unwrap_or("")
+                                                .to_string();
+
+                                            Some(ServerTimingEntry {
+                                                name: st_name,
+                                                duration: st_duration,
+                                                description: st_description,
+                                            })
+                                        })
+                                        .collect()
+                                } else {
+                                    Vec::new()
+                                }
                             } else {
                                 Vec::new()
-                            }
-                        } else {
-                            Vec::new()
-                        };
-                        
-                        Some(ResourceTimingEntry {
-                            name,
-                            entry_type,
-                            start_time,
-                            duration,
-                            initiator_type,
-                            next_hop_protocol,
-                            worker_start: resource.get("workerStart").and_then(|v| v.as_f64()).unwrap_or(0.0),
-                            redirect_start: resource.get("redirectStart").and_then(|v| v.as_f64()).unwrap_or(0.0),
-                            redirect_end: resource.get("redirectEnd").and_then(|v| v.as_f64()).unwrap_or(0.0),
-                            fetch_start: resource.get("fetchStart").and_then(|v| v.as_f64()).unwrap_or(0.0),
-                            domain_lookup_start: resource.get("domainLookupStart").and_then(|v| v.as_f64()).unwrap_or(0.0),
-                            domain_lookup_end: resource.get("domainLookupEnd").and_then(|v| v.as_f64()).unwrap_or(0.0),
-                            connect_start: resource.get("connectStart").and_then(|v| v.as_f64()).unwrap_or(0.0),
-                            connect_end: resource.get("connectEnd").and_then(|v| v.as_f64()).unwrap_or(0.0),
-                            secure_connection_start: resource.get("secureConnectionStart").and_then(|v| v.as_f64()).unwrap_or(0.0),
-                            request_start: resource.get("requestStart").and_then(|v| v.as_f64()).unwrap_or(0.0),
-                            response_start: resource.get("responseStart").and_then(|v| v.as_f64()).unwrap_or(0.0),
-                            response_end: resource.get("responseEnd").and_then(|v| v.as_f64()).unwrap_or(0.0),
-                            transfer_size: resource.get("transferSize").and_then(|v| v.as_u64()).unwrap_or(0),
-                            encoded_body_size: resource.get("encodedBodySize").and_then(|v| v.as_u64()).unwrap_or(0),
-                            decoded_body_size: resource.get("decodedBodySize").and_then(|v| v.as_u64()).unwrap_or(0),
-                            server_timing,
+                            };
+
+                            Some(ResourceTimingEntry {
+                                name,
+                                entry_type,
+                                start_time,
+                                duration,
+                                initiator_type,
+                                next_hop_protocol,
+                                worker_start: resource
+                                    .get("workerStart")
+                                    .and_then(|v| v.as_f64())
+                                    .unwrap_or(0.0),
+                                redirect_start: resource
+                                    .get("redirectStart")
+                                    .and_then(|v| v.as_f64())
+                                    .unwrap_or(0.0),
+                                redirect_end: resource
+                                    .get("redirectEnd")
+                                    .and_then(|v| v.as_f64())
+                                    .unwrap_or(0.0),
+                                fetch_start: resource
+                                    .get("fetchStart")
+                                    .and_then(|v| v.as_f64())
+                                    .unwrap_or(0.0),
+                                domain_lookup_start: resource
+                                    .get("domainLookupStart")
+                                    .and_then(|v| v.as_f64())
+                                    .unwrap_or(0.0),
+                                domain_lookup_end: resource
+                                    .get("domainLookupEnd")
+                                    .and_then(|v| v.as_f64())
+                                    .unwrap_or(0.0),
+                                connect_start: resource
+                                    .get("connectStart")
+                                    .and_then(|v| v.as_f64())
+                                    .unwrap_or(0.0),
+                                connect_end: resource
+                                    .get("connectEnd")
+                                    .and_then(|v| v.as_f64())
+                                    .unwrap_or(0.0),
+                                secure_connection_start: resource
+                                    .get("secureConnectionStart")
+                                    .and_then(|v| v.as_f64())
+                                    .unwrap_or(0.0),
+                                request_start: resource
+                                    .get("requestStart")
+                                    .and_then(|v| v.as_f64())
+                                    .unwrap_or(0.0),
+                                response_start: resource
+                                    .get("responseStart")
+                                    .and_then(|v| v.as_f64())
+                                    .unwrap_or(0.0),
+                                response_end: resource
+                                    .get("responseEnd")
+                                    .and_then(|v| v.as_f64())
+                                    .unwrap_or(0.0),
+                                transfer_size: resource
+                                    .get("transferSize")
+                                    .and_then(|v| v.as_u64())
+                                    .unwrap_or(0),
+                                encoded_body_size: resource
+                                    .get("encodedBodySize")
+                                    .and_then(|v| v.as_u64())
+                                    .unwrap_or(0),
+                                decoded_body_size: resource
+                                    .get("decodedBodySize")
+                                    .and_then(|v| v.as_u64())
+                                    .unwrap_or(0),
+                                server_timing,
+                            })
                         })
-                    }).collect()
+                        .collect()
                 } else {
                     Vec::new()
                 }
@@ -583,43 +752,54 @@ impl Tool for PerformanceMetricsTool {
         } else {
             Vec::new()
         };
-        
+
         let resource_count = resource_timing.len() as u64;
-        
+
         // Calculate total load time from navigation timing
-        let total_load_time = navigation_timing.as_ref()
+        let total_load_time = navigation_timing
+            .as_ref()
             .map(|nt| nt.load_complete_duration_ms as u64)
             .unwrap_or(0);
-        
-        let dom_content_loaded = navigation_timing.as_ref()
+
+        let dom_content_loaded = navigation_timing
+            .as_ref()
             .map(|nt| (nt.dom_content_loaded - nt.navigation_start) as u64)
             .unwrap_or(0);
-        
+
         // Calculate performance score based on Core Web Vitals
         let performance_score = if let Some(nt) = &navigation_timing {
             let mut score: f64 = 100.0;
-            
+
             // LCP scoring (target: < 2.5s)
             if let Some(lcp) = nt.largest_contentful_paint_ms {
-                if lcp > 4000.0 { score -= 30.0; }
-                else if lcp > 2500.0 { score -= 15.0; }
+                if lcp > 4000.0 {
+                    score -= 30.0;
+                } else if lcp > 2500.0 {
+                    score -= 15.0;
+                }
             }
-            
+
             // FCP scoring (target: < 1.8s)
             if let Some(fcp) = nt.first_contentful_paint_ms {
-                if fcp > 3000.0 { score -= 20.0; }
-                else if fcp > 1800.0 { score -= 10.0; }
+                if fcp > 3000.0 {
+                    score -= 20.0;
+                } else if fcp > 1800.0 {
+                    score -= 10.0;
+                }
             }
-            
+
             // Load time scoring (target: < 3s)
-            if total_load_time > 5000 { score -= 25.0; }
-            else if total_load_time > 3000 { score -= 15.0; }
-            
+            if total_load_time > 5000 {
+                score -= 25.0;
+            } else if total_load_time > 3000 {
+                score -= 15.0;
+            }
+
             Some(score.max(0.0))
         } else {
             None
         };
-        
+
         // Extract Core Web Vitals
         let core_web_vitals = if let Some(web_vitals) = metrics_result.get("webVitals") {
             CoreWebVitals {
@@ -638,7 +818,7 @@ impl Tool for PerformanceMetricsTool {
                 ttfb: None,
             }
         };
-        
+
         Ok(PerformanceMetricsOutput {
             success: true,
             navigation_timing,
@@ -726,26 +906,27 @@ impl ConsoleLogsTool {
 impl Tool for ConsoleLogsTool {
     type Input = ConsoleLogsInput;
     type Output = ConsoleLogsOutput;
-    
+
     fn name(&self) -> &str {
         "capture_console_logs"
     }
-    
+
     fn description(&self) -> &str {
         "Capture and analyze browser console logs with performance impact assessment"
     }
-    
+
     fn category(&self) -> ToolCategory {
         ToolCategory::AdvancedAutomation
     }
-    
+
     async fn execute(&self, input: Self::Input) -> Result<Self::Output> {
         info!("Starting console logs capture for {}ms", input.duration_ms);
-        
+
         let start_time = std::time::Instant::now();
-        
+
         // Enhanced console monitoring script that captures logs with detailed context
-        let console_capture_script = format!(r#"
+        let console_capture_script = format!(
+            r#"
             (function() {{
                 const logs = [];
                 const originalConsole = {{}};
@@ -845,16 +1026,18 @@ impl Tool for ConsoleLogsTool {
                 
                 return {{ initialized: true, startTime: startTime }};
             }})();
-        "#, input.max_entries.unwrap_or(1000));
-        
+        "#,
+            input.max_entries.unwrap_or(1000)
+        );
+
         // Initialize console capture
         let init_result = self.browser.execute_script(&console_capture_script).await?;
         debug!("Console capture initialized: {:?}", init_result);
-        
+
         // Wait for the specified duration
         let monitor_duration = Duration::from_millis(input.duration_ms);
         tokio::time::sleep(monitor_duration).await;
-        
+
         // Collect captured logs
         let collect_script = r#"
             (function() {
@@ -881,25 +1064,26 @@ impl Tool for ConsoleLogsTool {
                 return result;
             })();
         "#;
-        
+
         let collect_result = self.browser.execute_script(collect_script).await?;
-        
+
         let monitoring_duration = start_time.elapsed().as_millis() as u64;
-        
+
         let mut logs = Vec::new();
         let mut error_count = 0u64;
         let mut warning_count = 0u64;
         let mut info_count = 0u64;
         let mut debug_count = 0u64;
-        
+
         if let Some(logs_data) = collect_result.get("logs") {
             if let Some(logs_array) = logs_data.as_array() {
                 for log_entry in logs_array {
-                    let level = log_entry.get("level")
+                    let level = log_entry
+                        .get("level")
                         .and_then(|v| v.as_str())
                         .unwrap_or("unknown")
                         .to_string();
-                    
+
                     // Apply level filters
                     let should_include = match level.as_str() {
                         "error" => input.include_errors,
@@ -909,23 +1093,24 @@ impl Tool for ConsoleLogsTool {
                         "log" => input.include_info, // Treat console.log as info
                         _ => true,
                     };
-                    
+
                     if !should_include {
                         continue;
                     }
-                    
-                    let message = log_entry.get("message")
+
+                    let message = log_entry
+                        .get("message")
                         .and_then(|v| v.as_str())
                         .unwrap_or("")
                         .to_string();
-                    
+
                     // Apply text filter if specified
                     if let Some(ref pattern) = input.filter_pattern {
                         if !message.contains(pattern) {
                             continue;
                         }
                     }
-                    
+
                     // Count by level
                     match level.as_str() {
                         "error" => error_count += 1,
@@ -934,77 +1119,86 @@ impl Tool for ConsoleLogsTool {
                         "debug" => debug_count += 1,
                         _ => {}
                     }
-                    
+
                     logs.push(ConsoleLogEntry {
                         level,
                         message,
-                        timestamp: log_entry.get("timestamp")
+                        timestamp: log_entry
+                            .get("timestamp")
                             .and_then(|v| v.as_f64())
                             .unwrap_or(0.0),
-                        source: log_entry.get("source")
+                        source: log_entry
+                            .get("source")
                             .and_then(|v| v.as_str())
                             .unwrap_or("unknown")
                             .to_string(),
-                        line_number: log_entry.get("line_number")
+                        line_number: log_entry
+                            .get("line_number")
                             .and_then(|v| v.as_u64())
                             .map(|v| v as u32),
-                        column_number: log_entry.get("column_number")
+                        column_number: log_entry
+                            .get("column_number")
                             .and_then(|v| v.as_u64())
                             .map(|v| v as u32),
-                        stack_trace: log_entry.get("stack_trace")
+                        stack_trace: log_entry
+                            .get("stack_trace")
                             .and_then(|v| v.as_str())
                             .map(|s| s.to_string()),
-                        args: log_entry.get("args")
+                        args: log_entry
+                            .get("args")
                             .and_then(|v| v.as_array())
-                            .map(|arr| arr.clone())
-                            .unwrap_or_else(Vec::new),
+                            .cloned()
+                            .unwrap_or_default(),
                     });
                 }
             }
         }
-        
+
         // Analyze performance impact
         let error_frequency = if monitoring_duration > 0 {
             (error_count as f64) / (monitoring_duration as f64 / 1000.0)
         } else {
             0.0
         };
-        
+
         let excessive_logging = logs.len() > 100; // More than 100 logs in monitoring period
         let mut performance_warnings = Vec::new();
-        
+
         if excessive_logging {
-            performance_warnings.push("Excessive console logging detected - may impact performance".to_string());
+            performance_warnings
+                .push("Excessive console logging detected - may impact performance".to_string());
         }
-        
+
         if error_frequency > 1.0 {
-            performance_warnings.push(format!("High error rate: {:.2} errors per second", error_frequency));
+            performance_warnings.push(format!(
+                "High error rate: {:.2} errors per second",
+                error_frequency
+            ));
         }
-        
+
         if warning_count > 20 {
             performance_warnings.push("High number of warnings detected".to_string());
         }
-        
+
         // Check for memory-related warnings
         let memory_warnings = logs.iter().any(|log| {
-            log.level == "warn" && (
-                log.message.contains("memory") || 
-                log.message.contains("leak") ||
-                log.message.contains("heap")
-            )
+            log.level == "warn"
+                && (log.message.contains("memory")
+                    || log.message.contains("leak")
+                    || log.message.contains("heap"))
         });
-        
+
         if memory_warnings {
             performance_warnings.push("Memory-related warnings detected".to_string());
         }
-        
+
         let performance_impact = PerformanceImpact {
             excessive_logging,
             error_frequency,
             memory_leaks_detected: memory_warnings,
             performance_warnings,
         };
-        
+
         Ok(ConsoleLogsOutput {
             success: true,
             total_logs: logs.len() as u64,
@@ -1017,12 +1211,13 @@ impl Tool for ConsoleLogsTool {
             performance_impact,
         })
     }
-    
+
     async fn validate_input(&self, input: &Self::Input) -> Result<()> {
         if input.duration_ms == 0 {
             return Err(anyhow!("Duration must be greater than 0"));
         }
-        if input.duration_ms > 300000 { // 5 minutes max
+        if input.duration_ms > 300000 {
+            // 5 minutes max
             return Err(anyhow!("Duration cannot exceed 5 minutes"));
         }
         if let Some(max_entries) = input.max_entries {
@@ -1060,7 +1255,8 @@ pub struct ElementStyleInfo {
     pub element_count: u32,
     pub computed_styles: std::collections::HashMap<String, String>,
     pub css_rules: Vec<CSSRuleInfo>,
-    pub pseudo_elements: Option<std::collections::HashMap<String, std::collections::HashMap<String, String>>>,
+    pub pseudo_elements:
+        Option<std::collections::HashMap<String, std::collections::HashMap<String, String>>>,
     pub performance_metrics: Option<StylePerformanceMetrics>,
 }
 
@@ -1114,26 +1310,30 @@ impl ComputedStylesTool {
 impl Tool for ComputedStylesTool {
     type Input = ComputedStylesInput;
     type Output = ComputedStylesOutput;
-    
+
     fn name(&self) -> &str {
         "extract_computed_styles"
     }
-    
+
     fn description(&self) -> &str {
         "Extract computed styles for specified elements with performance analysis"
     }
-    
+
     fn category(&self) -> ToolCategory {
         ToolCategory::AdvancedAutomation
     }
-    
+
     async fn execute(&self, input: Self::Input) -> Result<Self::Output> {
-        info!("Extracting computed styles for {} selectors", input.selectors.len());
-        
+        info!(
+            "Extracting computed styles for {} selectors",
+            input.selectors.len()
+        );
+
         let start_time = std::time::Instant::now();
-        
+
         // Enhanced style extraction script with performance monitoring
-        let style_extraction_script = format!(r#"
+        let style_extraction_script = format!(
+            r#"
             (function() {{
                 const startTime = performance.now();
                 const results = [];
@@ -1357,153 +1557,222 @@ impl Tool for ComputedStylesTool {
                     }}
                 }};
             }})();
-        "#, 
+        "#,
             serde_json::to_string(&input.selectors).unwrap(),
             serde_json::to_string(&input.properties).unwrap(),
             input.include_pseudo_elements,
             input.include_inherited,
             input.performance_analysis
         );
-        
-        let extraction_result = self.browser.execute_script(&style_extraction_script).await?;
-        
+
+        let extraction_result = self
+            .browser
+            .execute_script(&style_extraction_script)
+            .await?;
+
         let total_computation_time = start_time.elapsed().as_millis() as f64;
-        
+
         let mut elements = Vec::new();
         let mut total_elements_analyzed = 0u32;
         let mut potential_issues = Vec::new();
         let mut optimization_recommendations = Vec::new();
         let mut complexity_score = 0.0;
         let mut layout_thrashing_risk = false;
-        
+
         if let Some(results) = extraction_result.get("results") {
             if let Some(results_array) = results.as_array() {
                 for result in results_array {
-                    let selector = result.get("selector")
+                    let selector = result
+                        .get("selector")
                         .and_then(|v| v.as_str())
                         .unwrap_or("")
                         .to_string();
-                    
-                    let element_count = result.get("element_count")
+
+                    let element_count = result
+                        .get("element_count")
                         .and_then(|v| v.as_u64())
                         .unwrap_or(0) as u32;
-                    
+
                     total_elements_analyzed += element_count;
-                    
+
                     // Extract computed styles
                     let computed_styles = if let Some(styles) = result.get("computed_styles") {
                         if let Some(styles_obj) = styles.as_object() {
-                            styles_obj.iter().map(|(k, v)| {
-                                (k.clone(), v.as_str().unwrap_or("").to_string())
-                            }).collect()
+                            styles_obj
+                                .iter()
+                                .map(|(k, v)| (k.clone(), v.as_str().unwrap_or("").to_string()))
+                                .collect()
                         } else {
                             HashMap::new()
                         }
                     } else {
                         HashMap::new()
                     };
-                    
+
                     // Extract CSS rules
                     let css_rules = if let Some(rules) = result.get("css_rules") {
                         if let Some(rules_array) = rules.as_array() {
-                            rules_array.iter().filter_map(|rule| {
-                                let selector_text = rule.get("selector_text")?.as_str()?.to_string();
-                                let css_text = rule.get("css_text")?.as_str()?.to_string();
-                                let origin = rule.get("origin")?.as_str().unwrap_or("unknown").to_string();
-                                let media = rule.get("media").and_then(|v| v.as_str()).map(|s| s.to_string());
-                                let specificity = rule.get("specificity")?.as_u64().unwrap_or(0) as u32;
-                                let source_url = rule.get("source_url").and_then(|v| v.as_str()).map(|s| s.to_string());
-                                
-                                Some(CSSRuleInfo {
-                                    selector_text,
-                                    css_text,
-                                    origin,
-                                    media,
-                                    specificity,
-                                    source_url,
+                            rules_array
+                                .iter()
+                                .filter_map(|rule| {
+                                    let selector_text =
+                                        rule.get("selector_text")?.as_str()?.to_string();
+                                    let css_text = rule.get("css_text")?.as_str()?.to_string();
+                                    let origin = rule
+                                        .get("origin")?
+                                        .as_str()
+                                        .unwrap_or("unknown")
+                                        .to_string();
+                                    let media = rule
+                                        .get("media")
+                                        .and_then(|v| v.as_str())
+                                        .map(|s| s.to_string());
+                                    let specificity =
+                                        rule.get("specificity")?.as_u64().unwrap_or(0) as u32;
+                                    let source_url = rule
+                                        .get("source_url")
+                                        .and_then(|v| v.as_str())
+                                        .map(|s| s.to_string());
+
+                                    Some(CSSRuleInfo {
+                                        selector_text,
+                                        css_text,
+                                        origin,
+                                        media,
+                                        specificity,
+                                        source_url,
+                                    })
                                 })
-                            }).collect()
+                                .collect()
                         } else {
                             Vec::new()
                         }
                     } else {
                         Vec::new()
                     };
-                    
+
                     // Extract pseudo-element styles
                     let pseudo_elements = if input.include_pseudo_elements {
                         result.get("pseudo_elements").and_then(|pe| {
                             pe.as_object().map(|obj| {
-                                obj.iter().map(|(pseudo, styles)| {
-                                    let styles_map = styles.as_object()
-                                        .map(|s_obj| {
-                                            s_obj.iter().map(|(k, v)| {
-                                                (k.clone(), v.as_str().unwrap_or("").to_string())
-                                            }).collect()
-                                        })
-                                        .unwrap_or_else(HashMap::new);
-                                    (pseudo.clone(), styles_map)
-                                }).collect()
+                                obj.iter()
+                                    .map(|(pseudo, styles)| {
+                                        let styles_map = styles
+                                            .as_object()
+                                            .map(|s_obj| {
+                                                s_obj
+                                                    .iter()
+                                                    .map(|(k, v)| {
+                                                        (
+                                                            k.clone(),
+                                                            v.as_str().unwrap_or("").to_string(),
+                                                        )
+                                                    })
+                                                    .collect()
+                                            })
+                                            .unwrap_or_else(HashMap::new);
+                                        (pseudo.clone(), styles_map)
+                                    })
+                                    .collect()
                             })
                         })
                     } else {
                         None
                     };
-                    
+
                     // Extract performance metrics
                     let performance_metrics = if input.performance_analysis {
-                        result.get("performance_metrics").map(|pm| {
-                            StylePerformanceMetrics {
-                                style_computation_time_ms: pm.get("style_computation_time_ms")
-                                    .and_then(|v| v.as_f64()).unwrap_or(0.0),
-                                layout_invalidation_count: pm.get("layout_invalidation_count")
-                                    .and_then(|v| v.as_u64()).unwrap_or(0) as u32,
-                                paint_invalidation_count: pm.get("paint_invalidation_count")
-                                    .and_then(|v| v.as_u64()).unwrap_or(0) as u32,
-                                complex_selectors: pm.get("complex_selectors")
+                        result
+                            .get("performance_metrics")
+                            .map(|pm| StylePerformanceMetrics {
+                                style_computation_time_ms: pm
+                                    .get("style_computation_time_ms")
+                                    .and_then(|v| v.as_f64())
+                                    .unwrap_or(0.0),
+                                layout_invalidation_count: pm
+                                    .get("layout_invalidation_count")
+                                    .and_then(|v| v.as_u64())
+                                    .unwrap_or(0)
+                                    as u32,
+                                paint_invalidation_count: pm
+                                    .get("paint_invalidation_count")
+                                    .and_then(|v| v.as_u64())
+                                    .unwrap_or(0)
+                                    as u32,
+                                complex_selectors: pm
+                                    .get("complex_selectors")
                                     .and_then(|v| v.as_array())
-                                    .map(|arr| arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
-                                    .unwrap_or_else(Vec::new),
-                                expensive_properties: pm.get("expensive_properties")
+                                    .map(|arr| {
+                                        arr.iter()
+                                            .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                                            .collect()
+                                    })
+                                    .unwrap_or_default(),
+                                expensive_properties: pm
+                                    .get("expensive_properties")
                                     .and_then(|v| v.as_array())
-                                    .map(|arr| arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
-                                    .unwrap_or_else(Vec::new),
-                            }
-                        })
+                                    .map(|arr| {
+                                        arr.iter()
+                                            .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                                            .collect()
+                                    })
+                                    .unwrap_or_default(),
+                            })
                     } else {
                         None
                     };
-                    
+
                     // Analyze for performance issues
                     if let Some(ref perf) = performance_metrics {
                         complexity_score += perf.style_computation_time_ms;
-                        
+
                         if perf.style_computation_time_ms > 16.0 {
-                            potential_issues.push(format!("Slow style computation for '{}': {:.2}ms", selector, perf.style_computation_time_ms));
+                            potential_issues.push(format!(
+                                "Slow style computation for '{}': {:.2}ms",
+                                selector, perf.style_computation_time_ms
+                            ));
                         }
-                        
+
                         if !perf.complex_selectors.is_empty() {
-                            potential_issues.push(format!("Complex selectors detected in '{}': {:?}", selector, perf.complex_selectors));
-                            optimization_recommendations.push("Consider simplifying CSS selectors to improve performance".to_string());
+                            potential_issues.push(format!(
+                                "Complex selectors detected in '{}': {:?}",
+                                selector, perf.complex_selectors
+                            ));
+                            optimization_recommendations.push(
+                                "Consider simplifying CSS selectors to improve performance"
+                                    .to_string(),
+                            );
                         }
-                        
+
                         if !perf.expensive_properties.is_empty() {
-                            potential_issues.push(format!("Expensive CSS properties in '{}': {:?}", selector, perf.expensive_properties));
+                            potential_issues.push(format!(
+                                "Expensive CSS properties in '{}': {:?}",
+                                selector, perf.expensive_properties
+                            ));
                             optimization_recommendations.push("Consider using CSS containment or will-change for expensive properties".to_string());
                         }
-                        
+
                         if perf.layout_invalidation_count > 5 || perf.paint_invalidation_count > 5 {
                             layout_thrashing_risk = true;
                         }
                     }
-                    
+
                     // Check for high specificity
-                    let high_specificity_rules = css_rules.iter().filter(|rule| rule.specificity > 100).count();
+                    let high_specificity_rules = css_rules
+                        .iter()
+                        .filter(|rule| rule.specificity > 100)
+                        .count();
                     if high_specificity_rules > 0 {
-                        potential_issues.push(format!("High specificity CSS rules detected for '{}'", selector));
-                        optimization_recommendations.push("Consider reducing CSS specificity to improve maintainability".to_string());
+                        potential_issues.push(format!(
+                            "High specificity CSS rules detected for '{}'",
+                            selector
+                        ));
+                        optimization_recommendations.push(
+                            "Consider reducing CSS specificity to improve maintainability"
+                                .to_string(),
+                        );
                     }
-                    
+
                     elements.push(ElementStyleInfo {
                         selector,
                         element_count,
@@ -1515,25 +1784,25 @@ impl Tool for ComputedStylesTool {
                 }
             }
         }
-        
+
         // Normalize complexity score
         complexity_score = if !elements.is_empty() {
             complexity_score / elements.len() as f64
         } else {
             0.0
         };
-        
+
         // Deduplicate optimization recommendations
         optimization_recommendations.sort();
         optimization_recommendations.dedup();
-        
+
         let style_performance_insights = StylePerformanceInsights {
             potential_performance_issues: potential_issues,
             optimization_recommendations,
             css_complexity_score: complexity_score,
             layout_thrashing_risk,
         };
-        
+
         Ok(ComputedStylesOutput {
             success: true,
             elements,
@@ -1542,7 +1811,7 @@ impl Tool for ComputedStylesTool {
             style_performance_insights,
         })
     }
-    
+
     async fn validate_input(&self, input: &Self::Input) -> Result<()> {
         if input.selectors.is_empty() {
             return Err(anyhow!("At least one CSS selector must be provided"));
@@ -1550,7 +1819,7 @@ impl Tool for ComputedStylesTool {
         if input.selectors.len() > 50 {
             return Err(anyhow!("Maximum 50 selectors allowed"));
         }
-        
+
         // Validate CSS selectors
         for selector in &input.selectors {
             if selector.trim().is_empty() {
@@ -1560,13 +1829,13 @@ impl Tool for ComputedStylesTool {
                 return Err(anyhow!("Selector too long: maximum 500 characters"));
             }
         }
-        
+
         if let Some(ref properties) = input.properties {
             if properties.len() > 200 {
                 return Err(anyhow!("Maximum 200 CSS properties allowed"));
             }
         }
-        
+
         Ok(())
     }
 }
@@ -1595,7 +1864,7 @@ pub struct AccessibilityAnalysisInput {
 pub struct AccessibilityNode {
     pub tag_name: String,
     pub role: Option<String>,
-    pub name: Option<String>, // Accessible name
+    pub name: Option<String>,        // Accessible name
     pub description: Option<String>, // Accessible description
     pub value: Option<String>,
     pub level: u32, // Depth in the tree
@@ -1610,7 +1879,7 @@ pub struct ComputedA11yProperties {
     pub accessible_name: String,
     pub accessible_description: String,
     pub role: String,
-    pub states: Vec<String>, // expanded, checked, etc.
+    pub states: Vec<String>,     // expanded, checked, etc.
     pub properties: Vec<String>, // required, readonly, etc.
     pub color_contrast_ratio: Option<f64>,
     pub font_size: Option<f64>,
@@ -1686,26 +1955,27 @@ impl AccessibilityAnalysisTool {
 impl Tool for AccessibilityAnalysisTool {
     type Input = AccessibilityAnalysisInput;
     type Output = AccessibilityAnalysisOutput;
-    
+
     fn name(&self) -> &str {
         "analyze_accessibility"
     }
-    
+
     fn description(&self) -> &str {
         "Analyze accessibility tree structure and identify WCAG compliance issues"
     }
-    
+
     fn category(&self) -> ToolCategory {
         ToolCategory::AdvancedAutomation
     }
-    
+
     async fn execute(&self, input: Self::Input) -> Result<Self::Output> {
         info!("Starting accessibility tree analysis");
-        
+
         let start_time = std::time::Instant::now();
-        
+
         // Comprehensive accessibility analysis script
-        let accessibility_script = format!(r#"
+        let accessibility_script = format!(
+            r#"
             (function() {{
                 const rootSelector = {};
                 const includeAria = {};
@@ -2120,16 +2390,19 @@ impl Tool for AccessibilityAnalysisTool {
             input.validate_semantic_structure,
             serde_json::to_string(&input.max_depth).unwrap()
         );
-        
+
         let analysis_result = self.browser.execute_script(&accessibility_script).await?;
-        
+
         let _total_computation_time = start_time.elapsed().as_millis() as f64;
-        
+
         // Parse results
         if let Some(error) = analysis_result.get("error") {
-            return Err(anyhow!("Accessibility analysis failed: {}", error.as_str().unwrap_or("Unknown error")));
+            return Err(anyhow!(
+                "Accessibility analysis failed: {}",
+                error.as_str().unwrap_or("Unknown error")
+            ));
         }
-        
+
         // Extract accessibility tree (simplified implementation)
         let accessibility_tree = AccessibilityNode {
             tag_name: "html".to_string(),
@@ -2143,25 +2416,27 @@ impl Tool for AccessibilityAnalysisTool {
             accessibility_violations: Vec::new(),
             children: Vec::new(),
         };
-        
-        let total_nodes_analyzed = analysis_result.get("total_nodes")
+
+        let total_nodes_analyzed = analysis_result
+            .get("total_nodes")
             .and_then(|v| v.as_u64())
             .unwrap_or(0) as u32;
-        
-        let total_violations = analysis_result.get("total_violations")
+
+        let total_violations = analysis_result
+            .get("total_violations")
             .and_then(|v| v.as_u64())
             .unwrap_or(0) as u32;
-        
-        let violations_by_rule: std::collections::HashMap<String, u32> = 
-            analysis_result.get("violations_by_rule")
-                .and_then(|v| v.as_object())
-                .map(|obj| {
-                    obj.iter().map(|(k, v)| {
-                        (k.clone(), v.as_u64().unwrap_or(0) as u32)
-                    }).collect()
-                })
-                .unwrap_or_else(HashMap::new);
-        
+
+        let violations_by_rule: std::collections::HashMap<String, u32> = analysis_result
+            .get("violations_by_rule")
+            .and_then(|v| v.as_object())
+            .map(|obj| {
+                obj.iter()
+                    .map(|(k, v)| (k.clone(), v.as_u64().unwrap_or(0) as u32))
+                    .collect()
+            })
+            .unwrap_or_else(HashMap::new);
+
         // Calculate accessibility score (0-100)
         let accessibility_score = if total_nodes_analyzed > 0 {
             let violation_ratio = total_violations as f64 / total_nodes_analyzed as f64;
@@ -2169,44 +2444,52 @@ impl Tool for AccessibilityAnalysisTool {
         } else {
             100.0
         };
-        
+
         // Extract color contrast issues
-        let color_contrast_issues: Vec<ContrastIssue> = analysis_result.get("contrast_issues")
+        let color_contrast_issues: Vec<ContrastIssue> = analysis_result
+            .get("contrast_issues")
             .and_then(|v| v.as_array())
             .map(|arr| {
-                arr.iter().filter_map(|issue| {
-                    Some(ContrastIssue {
-                        element_selector: issue.get("element_selector")?.as_str()?.to_string(),
-                        foreground_color: "".to_string(), // Would need additional extraction
-                        background_color: "".to_string(),  // Would need additional extraction
-                        contrast_ratio: issue.get("contrast_ratio")?.as_f64()?,
-                        level: issue.get("level")?.as_str().unwrap_or("AA").to_string(),
-                        passes: issue.get("passes")?.as_bool().unwrap_or(false),
+                arr.iter()
+                    .filter_map(|issue| {
+                        Some(ContrastIssue {
+                            element_selector: issue.get("element_selector")?.as_str()?.to_string(),
+                            foreground_color: "".to_string(), // Would need additional extraction
+                            background_color: "".to_string(), // Would need additional extraction
+                            contrast_ratio: issue.get("contrast_ratio")?.as_f64()?,
+                            level: issue.get("level")?.as_str().unwrap_or("AA").to_string(),
+                            passes: issue.get("passes")?.as_bool().unwrap_or(false),
+                        })
                     })
-                }).collect()
+                    .collect()
             })
             .unwrap_or_else(Vec::new);
-        
+
         // Generate recommendations
         let mut recommendations = Vec::new();
-        
+
         if violations_by_rule.contains_key("image-alt") {
-            recommendations.push("Add alternative text to all images for screen readers".to_string());
+            recommendations
+                .push("Add alternative text to all images for screen readers".to_string());
         }
         if violations_by_rule.contains_key("label") {
             recommendations.push("Ensure all form elements have proper labels".to_string());
         }
         if violations_by_rule.contains_key("color-contrast") {
-            recommendations.push("Improve color contrast to meet WCAG AA standards (4.5:1 ratio)".to_string());
+            recommendations
+                .push("Improve color contrast to meet WCAG AA standards (4.5:1 ratio)".to_string());
         }
         if violations_by_rule.contains_key("heading-order") {
-            recommendations.push("Maintain proper heading hierarchy without skipping levels".to_string());
+            recommendations
+                .push("Maintain proper heading hierarchy without skipping levels".to_string());
         }
-        
+
         if accessibility_score < 90.0 {
-            recommendations.push("Consider running automated accessibility testing tools like axe-core".to_string());
+            recommendations.push(
+                "Consider running automated accessibility testing tools like axe-core".to_string(),
+            );
         }
-        
+
         let violations_summary = ViolationsSummary {
             total_violations,
             errors: violations_by_rule.values().sum::<u32>(), // Simplified - would need to categorize by severity
@@ -2214,7 +2497,7 @@ impl Tool for AccessibilityAnalysisTool {
             info: 0,
             by_rule: violations_by_rule,
         };
-        
+
         Ok(AccessibilityAnalysisOutput {
             success: true,
             accessibility_tree,
@@ -2226,10 +2509,10 @@ impl Tool for AccessibilityAnalysisTool {
             recommendations,
         })
     }
-    
+
     // Accessibility parsing temporarily disabled for CDP network idle focus
     // TODO: Implement comprehensive accessibility tree parsing
-    
+
     async fn validate_input(&self, input: &Self::Input) -> Result<()> {
         if let Some(ref selector) = input.root_selector {
             if selector.trim().is_empty() {
@@ -2239,13 +2522,13 @@ impl Tool for AccessibilityAnalysisTool {
                 return Err(anyhow!("Root selector too long: maximum 500 characters"));
             }
         }
-        
+
         if let Some(max_depth) = input.max_depth {
             if max_depth > 20 {
                 return Err(anyhow!("Maximum depth cannot exceed 20 levels"));
             }
         }
-        
+
         Ok(())
     }
 }
@@ -2315,22 +2598,22 @@ pub struct CDPNetworkIdleTool {
 
 impl CDPNetworkIdleTool {
     pub fn new(browser: Arc<Browser>) -> Self {
-        Self { 
+        Self {
             browser,
             active_requests: Arc::new(AtomicUsize::new(0)),
             network_events: Arc::new(Mutex::new(Vec::new())),
         }
     }
-    
+
     /// Set up enhanced Network monitoring using Performance API and Page lifecycle events  
     async fn setup_network_monitoring(&self) -> Result<()> {
         let page = self.browser.page.read().await;
-        
+
         // Enable Runtime domain for enhanced monitoring
         if let Err(e) = page.enable_runtime().await {
             debug!("Failed to enable Runtime domain: {}", e);
         }
-        
+
         // Install enhanced network activity tracking via JavaScript
         let tracking_script = r#"
             (function() {
@@ -2435,21 +2718,21 @@ impl CDPNetworkIdleTool {
                 return tracker;
             })()
         "#;
-        
+
         // Install the enhanced network tracking
         if let Err(e) = page.evaluate(tracking_script).await {
             debug!("Failed to install enhanced network tracking: {}", e);
         } else {
             debug!("Enhanced network tracking installed successfully");
         }
-        
+
         Ok(())
     }
-    
+
     /// Get enhanced network activity data from the JavaScript tracker
     async fn get_enhanced_network_data(&self) -> Result<(usize, Vec<NetworkActivity>)> {
         let page = self.browser.page.read().await;
-        
+
         // Query the enhanced network tracker
         let query_script = r#"
             (function() {
@@ -2459,30 +2742,32 @@ impl CDPNetworkIdleTool {
                 return window._networkTracker.getSummary();
             })()
         "#;
-        
+
         match page.evaluate(query_script).await {
             Ok(result) => {
                 if let Some(data) = result.value() {
-                    let active_count = data.get("active")
-                        .and_then(|v| v.as_u64())
-                        .unwrap_or(0) as usize;
-                    
-                    let recent_requests: Vec<NetworkActivity> = data.get("recent")
+                    let active_count =
+                        data.get("active").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+
+                    let recent_requests: Vec<NetworkActivity> = data
+                        .get("recent")
                         .and_then(|v| v.as_array())
                         .map(|arr| {
-                            arr.iter().filter_map(|req| {
-                                Some(NetworkActivity {
-                                    request_id: req.get("id")?.as_str()?.to_string(),
-                                    url: req.get("url")?.as_str()?.to_string(),
-                                    method: req.get("method")?.as_str()?.to_string(),
-                                    timestamp: req.get("startTime")?.as_f64()?,
-                                    resource_type: "xhr_or_fetch".to_string(),
-                                    status: req.get("status")?.as_str()?.to_string(),
+                            arr.iter()
+                                .filter_map(|req| {
+                                    Some(NetworkActivity {
+                                        request_id: req.get("id")?.as_str()?.to_string(),
+                                        url: req.get("url")?.as_str()?.to_string(),
+                                        method: req.get("method")?.as_str()?.to_string(),
+                                        timestamp: req.get("startTime")?.as_f64()?,
+                                        resource_type: "xhr_or_fetch".to_string(),
+                                        status: req.get("status")?.as_str()?.to_string(),
+                                    })
                                 })
-                            }).collect()
+                                .collect()
                         })
                         .unwrap_or_else(Vec::new);
-                    
+
                     return Ok((active_count, recent_requests));
                 }
             }
@@ -2490,18 +2775,18 @@ impl CDPNetworkIdleTool {
                 debug!("Failed to query enhanced network tracker: {}", e);
             }
         }
-        
+
         // Fallback to previous method if tracker not available
         Ok((0, Vec::new()))
     }
-    
+
     /// Check if network is currently idle based on enhanced tracking
     async fn is_network_idle(&self, max_concurrent: Option<usize>) -> bool {
         // Try to get data from enhanced JavaScript tracker first
         if let Ok((active_count, recent_activity)) = self.get_enhanced_network_data().await {
             // Update our atomic counter with the latest data
             self.active_requests.store(active_count, Ordering::SeqCst);
-            
+
             // Update our events log with recent activity
             if !recent_activity.is_empty() {
                 if let Ok(mut events_guard) = self.network_events.lock() {
@@ -2509,61 +2794,79 @@ impl CDPNetworkIdleTool {
                     events_guard.extend(recent_activity);
                 }
             }
-            
+
             let threshold = max_concurrent.unwrap_or(0);
-            debug!("Enhanced network idle check: {} active, threshold: {}", active_count, threshold);
+            debug!(
+                "Enhanced network idle check: {} active, threshold: {}",
+                active_count, threshold
+            );
             return active_count <= threshold;
         }
-        
+
         // Fallback to atomic counter
         let active_count = self.active_requests.load(Ordering::SeqCst);
         let threshold = max_concurrent.unwrap_or(0);
         active_count <= threshold
     }
-    
+
     /// Wait for network to become idle using CDP Network domain events
-    async fn wait_for_network_idle_cdp(&self, input: &CDPNetworkIdleInput) -> Result<CDPNetworkIdleOutput> {
+    async fn wait_for_network_idle_cdp(
+        &self,
+        input: &CDPNetworkIdleInput,
+    ) -> Result<CDPNetworkIdleOutput> {
         let start_time = std::time::Instant::now();
         let idle_duration = Duration::from_millis(input.idle_time_ms);
         let total_timeout = Duration::from_millis(input.timeout_ms);
         let check_interval = Duration::from_millis(50); // High frequency checking
-        
+
         self.setup_network_monitoring().await?;
-        
+
         let mut idle_periods = Vec::new();
         let mut current_idle_start: Option<std::time::Instant> = None;
         let mut consecutive_idle_time = Duration::ZERO;
-        
-        info!("Starting CDP-backed network idle detection: {}ms idle threshold, {}ms timeout", 
-              input.idle_time_ms, input.timeout_ms);
-        
+
+        info!(
+            "Starting CDP-backed network idle detection: {}ms idle threshold, {}ms timeout",
+            input.idle_time_ms, input.timeout_ms
+        );
+
         while start_time.elapsed() < total_timeout {
             let is_idle = self.is_network_idle(input.max_concurrent_requests).await;
             let active_count = self.active_requests.load(Ordering::SeqCst);
-            
+
             if is_idle {
                 if current_idle_start.is_none() {
                     current_idle_start = Some(std::time::Instant::now());
-                    debug!("Network idle period started (active requests: {})", active_count);
+                    debug!(
+                        "Network idle period started (active requests: {})",
+                        active_count
+                    );
                 }
-                
+
                 if let Some(idle_start) = current_idle_start {
                     consecutive_idle_time = idle_start.elapsed();
-                    
+
                     if consecutive_idle_time >= idle_duration {
                         // Network has been idle long enough!
                         let total_wait_time = start_time.elapsed().as_millis() as u64;
-                        let network_events = self.network_events.lock()
+                        let network_events = self
+                            .network_events
+                            .lock()
                             .map(|guard| guard.clone())
                             .unwrap_or_else(|_| Vec::new());
-                        
+
                         idle_periods.push(IdlePeriod {
-                            start_time_ms: (idle_start.elapsed().as_millis() - consecutive_idle_time.as_millis()) as u64,
+                            start_time_ms: (idle_start.elapsed().as_millis()
+                                - consecutive_idle_time.as_millis())
+                                as u64,
                             duration_ms: consecutive_idle_time.as_millis() as u64,
                             concurrent_requests_during_period: active_count,
                         });
-                        
-                        info!("Network idle achieved after {}ms (CDP-tracked)", total_wait_time);
+
+                        info!(
+                            "Network idle achieved after {}ms (CDP-tracked)",
+                            total_wait_time
+                        );
                         return Ok(CDPNetworkIdleOutput {
                             success: true,
                             network_idle_achieved: true,
@@ -2578,29 +2881,38 @@ impl CDPNetworkIdleTool {
             } else {
                 if let Some(_idle_start) = current_idle_start {
                     idle_periods.push(IdlePeriod {
-                        start_time_ms: (start_time.elapsed().as_millis() - consecutive_idle_time.as_millis()) as u64,
+                        start_time_ms: (start_time.elapsed().as_millis()
+                            - consecutive_idle_time.as_millis())
+                            as u64,
                         duration_ms: consecutive_idle_time.as_millis() as u64,
                         concurrent_requests_during_period: active_count,
                     });
-                    debug!("Network idle period ended (active requests: {})", active_count);
+                    debug!(
+                        "Network idle period ended (active requests: {})",
+                        active_count
+                    );
                 }
                 current_idle_start = None;
                 consecutive_idle_time = Duration::ZERO;
             }
-            
+
             tokio::time::sleep(check_interval).await;
         }
-        
+
         // Timeout reached
         let total_wait_time = input.timeout_ms;
-        let network_events = self.network_events.lock()
+        let network_events = self
+            .network_events
+            .lock()
             .map(|guard| guard.clone())
             .unwrap_or_else(|_| Vec::new());
         let final_active = self.active_requests.load(Ordering::SeqCst);
-        
-        info!("Network idle timeout after {}ms (CDP-tracked, {} active requests)", 
-              total_wait_time, final_active);
-              
+
+        info!(
+            "Network idle timeout after {}ms (CDP-tracked, {} active requests)",
+            total_wait_time, final_active
+        );
+
         Ok(CDPNetworkIdleOutput {
             success: false,
             network_idle_achieved: false,
@@ -2617,23 +2929,23 @@ impl CDPNetworkIdleTool {
 impl Tool for CDPNetworkIdleTool {
     type Input = CDPNetworkIdleInput;
     type Output = CDPNetworkIdleOutput;
-    
+
     fn name(&self) -> &str {
         "cdp_network_idle"
     }
-    
+
     fn description(&self) -> &str {
         "Wait for network to be idle using CDP Network domain event tracking for accurate idle detection"
     }
-    
+
     fn category(&self) -> ToolCategory {
         ToolCategory::Synchronization
     }
-    
+
     async fn execute(&self, input: Self::Input) -> Result<Self::Output> {
         self.wait_for_network_idle_cdp(&input).await
     }
-    
+
     async fn validate_input(&self, input: &Self::Input) -> Result<()> {
         if input.idle_time_ms == 0 {
             return Err(anyhow!("Idle time must be greater than 0"));
@@ -2644,7 +2956,8 @@ impl Tool for CDPNetworkIdleTool {
         if input.timeout_ms == 0 {
             return Err(anyhow!("Timeout must be greater than 0"));
         }
-        if input.timeout_ms > 300000 { // 5 minutes max
+        if input.timeout_ms > 300000 {
+            // 5 minutes max
             return Err(anyhow!("Timeout cannot exceed 300 seconds"));
         }
         if let Some(max_concurrent) = input.max_concurrent_requests {

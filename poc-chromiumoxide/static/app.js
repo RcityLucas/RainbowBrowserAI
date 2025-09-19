@@ -1,8 +1,8 @@
 // RainbowBrowserAI - Chromiumoxide Edition
 // JavaScript for tools interface
 
-// Use the current origin and port (makes it work regardless of port)
-const API_BASE = window.location.origin;
+// Resolve API base dynamically; default to current origin
+let API_BASE = window.location.origin;
 
 // Initialize the application
 document.addEventListener('DOMContentLoaded', function() {
@@ -24,7 +24,80 @@ document.addEventListener('DOMContentLoaded', function() {
     if (typeof updatePerceptionStats === 'function') {
         updatePerceptionStats();
     }
+
+    // Ensure session + binding for visual tests launched via start.sh
+    ensureSessionBinding();
 });
+
+// Helper: pick the best lightning-like view from various result shapes
+function pickLightningView(result) {
+    const r = result || {};
+    return (
+        r.lightning || r.Lightning || r.perception ||
+        (r.quick ? (r.quick.lightning || r.quick) : null) ||
+        (r.Quick ? (r.Quick.lightning || r.Quick) : null) ||
+        (r.standard ? (r.standard.quick?.lightning || r.standard.quick || r.standard) : null) ||
+        (r.Standard ? (r.Standard.quick?.lightning || r.Standard.quick || r.Standard) : null) ||
+        (r.deep ? (r.deep.standard?.quick?.lightning || r.deep.standard?.quick || r.deep.standard || r.deep) : null) ||
+        (r.Deep ? (r.Deep.standard?.quick?.lightning || r.Deep.standard?.quick || r.Deep.standard || r.Deep) : null) ||
+        r
+    );
+}
+
+// Global session tracking (kept very simple)
+window.currentSessionId = window.currentSessionId || null;
+window.bindToSession = window.bindToSession !== undefined ? window.bindToSession : true;
+function setCurrentSession(sessionId) {
+    window.currentSessionId = sessionId || null;
+    const el = document.getElementById('current-session');
+    if (el) {
+        el.textContent = window.currentSessionId || 'None';
+    }
+    updateServerBanner();
+}
+
+// Ensure we have a session and binding enabled for visual tests
+async function ensureSessionBinding() {
+    try {
+        // Respect saved settings; default to binding ON
+        const saved = localStorage.getItem('rainbow-settings');
+        if (saved) {
+            const s = JSON.parse(saved);
+            window.bindToSession = (s.bindToSession !== false);
+            API_BASE = s.apiEndpoint || window.location.origin;
+        } else {
+            window.bindToSession = true;
+            API_BASE = window.location.origin;
+        }
+        // Update Settings UI if present
+        const bindToggle = document.getElementById('bind-session-toggle');
+        if (bindToggle) bindToggle.checked = window.bindToSession;
+        const apiInput = document.getElementById('api-endpoint');
+        if (apiInput && !apiInput.value) apiInput.value = API_BASE;
+
+        if (!window.currentSessionId && window.bindToSession) {
+            const res = await fetch(`${API_BASE}/api/session/create`, { method: 'POST' });
+            const json = await res.json();
+            if (json && json.success && json.data && json.data.session_id) {
+                setCurrentSession(json.data.session_id);
+                showNotification(`Auto session created: ${json.data.session_id}`, 'success');
+            } else {
+                showNotification('Failed to auto-create session for visual test', 'warning');
+            }
+        }
+        updateServerBanner();
+    } catch (e) {
+        console.warn('ensureSessionBinding error:', e);
+    }
+}
+
+// Update small header banner with API endpoint and session
+function updateServerBanner() {
+    const ep = document.getElementById('server-endpoint');
+    if (ep) ep.textContent = API_BASE;
+    const sb = document.getElementById('session-badge');
+    if (sb) sb.textContent = `Session: ${window.currentSessionId || 'None'}${window.bindToSession ? '' : ' (not bound)'}`;
+}
 
 // Update connection status
 function updateStatus(status, isError = false) {
@@ -121,16 +194,26 @@ async function executeTool(toolName, parameters) {
         updateStatus('Executing...', false);
         showNotification(`Executing ${toolName}...`, 'info');
         
+        const payload = {
+            tool_name: toolName,
+            parameters: parameters || {}
+        };
+        // Attach session if selected so tools operate on the same page as perception
+        if (window.bindToSession && window.currentSessionId) {
+            payload.session_id = window.currentSessionId;
+        }
+
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 35000);
         const response = await fetch(`${API_BASE}/api/tools/execute`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({
-                tool_name: toolName,
-                parameters: parameters || {}
-            })
+            body: JSON.stringify(payload),
+            signal: controller.signal
         });
+        clearTimeout(timer);
         
         // Check if response is ok
         if (!response.ok) {
@@ -157,6 +240,14 @@ async function executeTool(toolName, parameters) {
         if (result && result.success) {
             showNotification(`${toolName} executed successfully`, 'success');
             displayResult(result.data);
+
+            // Track last navigated URL to help perception align with tools
+            try {
+                if (toolName === 'navigate_to_url' && parameters && parameters.url) {
+                    window.lastNavigatedUrl = parameters.url;
+                    updateServerBanner();
+                }
+            } catch (e) { /* noop */ }
         } else {
             const errorMsg = result?.error || 'Unknown error occurred';
             let helpMessage = '';
@@ -180,7 +271,9 @@ async function executeTool(toolName, parameters) {
         console.error('Tool execution failed:', error);
         
         let helpMessage = '';
-        if (error.message.includes('Element not found') || error.message.includes('Could not find node')) {
+        if (error.name === 'AbortError') {
+            helpMessage = '\n💡 Tip: The operation exceeded 35s. Try simpler pages or increase server-side timeout via RAINBOW_TOOL_TIMEOUT_SECS.';
+        } else if (error.message.includes('Element not found') || error.message.includes('Could not find node')) {
             helpMessage = '\n💡 Tip: Navigate to a webpage first (use Browse tab), then verify the element exists using F12 dev tools.';
         } else if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
             helpMessage = '\n💡 Tip: Check if the server is running on the correct port.';
@@ -201,6 +294,64 @@ function executeNavigateTool() {
         return;
     }
     executeTool('navigate_to_url', { url });
+}
+
+async function navigateAndPerceive() {
+    const url = document.getElementById('nav-url').value;
+    if (!url) {
+        showNotification('Please enter a URL', 'warning');
+        return;
+    }
+    const body = { url, mode: 'lightning' };
+    if (window.bindToSession && window.currentSessionId) {
+        body.session_id = window.currentSessionId;
+    }
+    try {
+        const res = await fetch(`${API_BASE}/api/navigate-perceive`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        if (res.status === 404) {
+            // Fallback for older servers: use /api/perception/analyze which can navigate when url is provided
+            const fb = await fetch(`${API_BASE}/api/perception/analyze`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url, session_id: body.session_id })
+            });
+            const fbData = await fb.json();
+            if (fbData && fbData.success && fbData.data) {
+                window.lastNavigatedUrl = url;
+                // Render minimal lightning-like view
+                renderPerceptionResult('lightning', { data: {
+                    url: fbData.data.url || url,
+                    title: fbData.data.title || '(unknown)',
+                    ready_state: 'complete',
+                    clickable_count: 0,
+                    input_count: 0,
+                    link_count: 0,
+                    form_count: 0,
+                    perception_time_ms: 0
+                }});
+                showNotification('Navigate + Perceive (fallback) completed', 'success');
+                return;
+            } else {
+                showNotification(`Fallback analyze failed: ${fbData?.error || 'Unknown error'}`, 'error');
+                return;
+            }
+        }
+        const data = await res.json();
+        if (data && data.success && data.data) {
+            window.lastNavigatedUrl = url;
+            // Reuse perception renderer for consistency
+            renderPerceptionResult('lightning', { data: data.data.perception || data.data });
+            showNotification('Navigate + Perceive completed', 'success');
+        } else {
+            showNotification(`Navigate + Perceive failed: ${data?.error || 'Unknown error'}`, 'error');
+        }
+    } catch (e) {
+        showNotification(`Network error: ${e.message}`, 'error');
+    }
 }
 
 // Quick navigation helper
@@ -437,8 +588,15 @@ async function createSession() {
         const result = await response.json();
         
         if (result.success) {
-            showNotification(`Session created: ${result.data.session_id}`, 'success');
-            displayResult(result.data);
+            const sid = result.data.session_id;
+            setCurrentSession(sid);
+            showNotification(`Session created: ${sid}`, 'success');
+            // Reflect in sessions UI
+            const countEl = document.getElementById('session-count');
+            if (countEl && !isNaN(parseInt(countEl.textContent))) {
+                countEl.textContent = (parseInt(countEl.textContent) + 1).toString();
+            }
+            displayResult({ current_session: sid, created: true });
         } else {
             showNotification(`Failed to create session: ${result.error}`, 'error');
         }
@@ -455,6 +613,11 @@ async function listSessions() {
         
         if (result.success) {
             displayResult(result.data);
+            // Update session count
+            const countEl = document.getElementById('session-count');
+            if (countEl) {
+                countEl.textContent = Array.isArray(result.data) ? result.data.length : 0;
+            }
         } else {
             showNotification(`Failed to list sessions: ${result.error}`, 'error');
         }
@@ -469,10 +632,15 @@ function saveSettings() {
     const settings = {
         apiEndpoint: document.getElementById('api-endpoint')?.value || API_BASE,
         timeout: parseInt(document.getElementById('timeout')?.value) || 30000,
-        headless: document.getElementById('headless-mode')?.checked || true
+        headless: document.getElementById('headless-mode')?.checked || true,
+        bindToSession: document.getElementById('bind-session-toggle')?.checked || false
     };
     
     localStorage.setItem('rainbow-settings', JSON.stringify(settings));
+    // Apply new API base + binding immediately
+    API_BASE = settings.apiEndpoint || window.location.origin;
+    window.bindToSession = settings.bindToSession === true;
+    updateServerBanner();
     showNotification('Settings saved successfully', 'success');
 }
 
@@ -490,11 +658,28 @@ function loadSettings() {
         if (document.getElementById('headless-mode')) {
             document.getElementById('headless-mode').checked = settings.headless !== false;
         }
+        if (document.getElementById('bind-session-toggle')) {
+            document.getElementById('bind-session-toggle').checked = settings.bindToSession === true;
+        }
+        window.bindToSession = settings.bindToSession === true;
+        // Apply saved API endpoint for cross-origin setups
+        API_BASE = settings.apiEndpoint || window.location.origin;
+    } else {
+        // Defaults if nothing saved yet
+        if (document.getElementById('api-endpoint')) {
+            document.getElementById('api-endpoint').value = window.location.origin;
+        }
+        if (document.getElementById('bind-session-toggle')) {
+            document.getElementById('bind-session-toggle').checked = true;
+        }
+        window.bindToSession = true;
+        API_BASE = window.location.origin;
     }
 }
 
 // Initialize settings on load
 loadSettings();
+updateServerBanner();
 
 // Test all tools function
 async function testAllTools() {
@@ -672,10 +857,14 @@ async function analyzePage() {
     resultDiv.innerHTML = '<div class="loading">Analyzing page...</div>';
     
     try {
+        const body = {};
+        if (window.bindToSession && window.currentSessionId) {
+            body.session_id = window.currentSessionId;
+        }
         const response = await fetch(`${API_BASE}/api/perception/analyze`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({})
+            body: JSON.stringify(body)
         });
         
         const data = await response.json();
@@ -739,10 +928,14 @@ async function findElement() {
     resultDiv.innerHTML = '<div class="loading">Finding element...</div>';
     
     try {
+        const body = { description };
+        if (window.currentSessionId) {
+            body.session_id = window.currentSessionId;
+        }
         const response = await fetch(`${API_BASE}/api/perception/find`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ description })
+            body: JSON.stringify(body)
         });
         
         const data = await response.json();
@@ -799,16 +992,20 @@ async function executeIntelligentCommand() {
     resultDiv.innerHTML = '<div class="loading">Executing command...</div>';
     
     try {
+        const payload = { 
+            command: {
+                action: 'execute',
+                description: command,
+                parameters: {}
+            }
+        };
+        if (window.currentSessionId) {
+            payload.session_id = window.currentSessionId;
+        }
         const response = await fetch(`${API_BASE}/api/perception/command`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                command: {
-                    action: 'execute',
-                    description: command,
-                    parameters: {}
-                }
-            })
+            body: JSON.stringify(payload)
         });
         
         const data = await response.json();
@@ -850,14 +1047,59 @@ async function perceiveWithMode(mode) {
     resultDiv.innerHTML = `<div class="loading">Running ${mode} perception...</div>`;
     
     try {
+        const body = { mode: mode };
+        if (window.bindToSession && window.currentSessionId) {
+            body.session_id = window.currentSessionId;
+        }
+        // If we know the last navigated URL, include it to pre-align browser state
+        if (window.lastNavigatedUrl) {
+            body.url = window.lastNavigatedUrl;
+        }
         const response = await fetch(`${API_BASE}/api/perceive-mode`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ mode: mode })
+            body: JSON.stringify(body)
         });
         
         const data = await response.json();
-        
+
+        // Helper to detect blank/placeholder payloads
+        const payloadLooksBlank = (res) => {
+            try {
+                const d = res && res.data ? res.data : res;
+                const u = (d.url || d.lightning?.url || d.Lightning?.url || '').toLowerCase();
+                const t = (d.title || d.lightning?.title || d.Lightning?.title || '').toLowerCase();
+                return u === 'about:blank' || t.includes('current session page');
+            } catch { return false; }
+        };
+
+        if (data.success && data.data && payloadLooksBlank(data) && window.lastNavigatedUrl) {
+            // Fallback alignment: align tool-registry browser and retry without session binding
+            showNotification('Perception saw blank page; retrying alignment...', 'warning');
+            try {
+                await fetch(`${API_BASE}/api/tools/execute`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        tool_name: 'navigate_to_url',
+                        parameters: { url: window.lastNavigatedUrl }
+                    })
+                });
+                const fbRes = await fetch(`${API_BASE}/api/perceive-mode`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ mode, url: window.lastNavigatedUrl })
+                });
+                const fbJson = await fbRes.json();
+                if (fbJson && fbJson.success && fbJson.data && !payloadLooksBlank(fbJson)) {
+                    renderPerceptionResult(mode, fbJson);
+                    return;
+                }
+            } catch (e) {
+                console.warn('Alignment retry failed:', e);
+            }
+        }
+
         if (data.success && data.data) {
             const result = data.data;
             let html = `
@@ -866,8 +1108,8 @@ async function perceiveWithMode(mode) {
             `;
             
             // Display results based on mode
-            if (mode === 'lightning' || result.lightning) {
-                const lightning = result.lightning || result;
+            if (mode === 'lightning' || result.lightning || result.Lightning || result.perception || result.quick || result.Quick || result.standard || result.Standard || result.deep || result.Deep) {
+                const lightning = pickLightningView(result);
                 html += `
                     <div class="perception-layer">
                         <h5><i class="fas fa-bolt"></i> Lightning Layer (${lightning.perception_time_ms || 0}ms)</h5>
@@ -948,16 +1190,49 @@ async function perceiveWithMode(mode) {
     }
 }
 
+function renderPerceptionResult(mode, data) {
+    const resultDiv = document.getElementById('layered-perception-result');
+    const result = data.data || data;
+    let html = `
+        <div class="success-result">
+            <h4>${mode.charAt(0).toUpperCase() + mode.slice(1)} Perception Results</h4>
+    `;
+    if (mode === 'lightning' || result.lightning || result.Lightning || result.perception || result.quick || result.Quick || result.standard || result.Standard || result.deep || result.Deep) {
+        const lightning = pickLightningView(result);
+        html += `
+            <div class="perception-layer">
+                <h5><i class="fas fa-bolt"></i> Lightning Layer (${lightning.perception_time_ms || 0}ms)</h5>
+                <div class="detail-grid">
+                    <div class="detail-item"><strong>URL:</strong> ${lightning.url}</div>
+                    <div class="detail-item"><strong>Title:</strong> ${lightning.title}</div>
+                    <div class="detail-item"><strong>Ready State:</strong> ${lightning.ready_state}</div>
+                    <div class="detail-item"><strong>Clickable:</strong> ${lightning.clickable_count}</div>
+                    <div class="detail-item"><strong>Inputs:</strong> ${lightning.input_count}</div>
+                    <div class="detail-item"><strong>Links:</strong> ${lightning.link_count}</div>
+                    <div class="detail-item"><strong>Forms:</strong> ${lightning.form_count}</div>
+                </div>
+            </div>
+        `;
+    }
+    html += '</div>';
+    resultDiv.innerHTML = html;
+    showNotification(`${mode} perception completed`, 'success');
+}
+
 // Quick Scan function
 async function quickScan() {
     const resultDiv = document.getElementById('quick-scan-result');
     resultDiv.innerHTML = '<div class="loading">Performing quick scan...</div>';
     
     try {
+        const body = {};
+        if (window.bindToSession && window.currentSessionId) {
+            body.session_id = window.currentSessionId;
+        }
         const response = await fetch(`${API_BASE}/api/quick-scan`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({})
+            body: JSON.stringify(body)
         });
         
         const data = await response.json();
@@ -1034,13 +1309,17 @@ async function smartElementSearch() {
     resultDiv.innerHTML = '<div class="loading">Searching for elements...</div>';
     
     try {
+        const body = { 
+            query: query,
+            max_results: maxResults
+        };
+        if (window.bindToSession && window.currentSessionId) {
+            body.session_id = window.currentSessionId;
+        }
         const response = await fetch(`${API_BASE}/api/smart-element-search`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                query: query,
-                max_results: maxResults
-            })
+            body: JSON.stringify(body)
         });
         
         const data = await response.json();
@@ -1104,6 +1383,84 @@ async function smartElementSearch() {
     }
 }
 
+// Verification: ensure perception sees the page navigated by tools using the same session
+async function verifyPerceptionSeesTools() {
+    const out = document.getElementById('verify-perception-result');
+    out.innerHTML = '<div class="loading">Running verification...</div>';
+
+    try {
+        // Make sure binding is enabled and we have a session
+        if (!window.bindToSession) {
+            showNotification('Binding is OFF. Enabling it for this test.', 'info');
+            window.bindToSession = true;
+            const toggle = document.getElementById('bind-session-toggle');
+            if (toggle) toggle.checked = true;
+        }
+        if (!window.currentSessionId) {
+            const res = await fetch(`${API_BASE}/api/session/create`, { method: 'POST' });
+            const json = await res.json();
+            if (!json.success) throw new Error('Failed to create session');
+            setCurrentSession(json.data.session_id);
+        }
+
+        // 1) Navigate via tools with session
+        const sid = window.currentSessionId;
+        const navRes = await fetch(`${API_BASE}/api/tools/execute`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                tool_name: 'navigate_to_url',
+                parameters: { url: 'https://example.com' },
+                session_id: sid
+            })
+        });
+        const navJson = await navRes.json();
+        if (!navJson.success) throw new Error('Navigation tool failed: ' + (navJson.error || 'unknown'));
+
+        // 1.1) Wait for document readyState complete (use tool to ensure same session)
+        try {
+            await fetch(`${API_BASE}/api/tools/execute`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    tool_name: 'wait_for_condition',
+                    parameters: { condition: 'document.readyState === "complete"', timeout: 5000 },
+                    session_id: sid
+                })
+            });
+        } catch (e) {
+            // Non-fatal; continue
+        }
+
+        // Small extra wait to let page stabilize
+        await new Promise(r => setTimeout(r, 1200));
+
+        // 2) Perception with same session
+        const perRes = await fetch(`${API_BASE}/api/perceive-mode`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ mode: 'quick', session_id: sid })
+        });
+        const perJson = await perRes.json();
+        if (!perJson.success) throw new Error('Perception failed: ' + (perJson.error || 'unknown'));
+
+        // 3) Evaluate
+        const data = perJson.data || {};
+        const url = data.url || '';
+        const source = data.source || '';
+        const pass = url.startsWith('https://example.com') && source !== 'browser_pool_fallback';
+
+        out.innerHTML = pass
+            ? `<div class="success-result"><strong>PASS</strong> — Perception observed tools page.<br>URL: ${url}<br>Source: ${source || '(session-bound)'}</div>`
+            : `<div class="error-result"><strong>FAIL</strong> — Perception did not observe tools page.<br>Observed URL: ${url || '(none)'}<br>Source: ${source || '(none)'}<br>Expected URL to start with https://example.com and source != browser_pool_fallback.</div>`;
+
+        showNotification(pass ? 'Verification PASS' : 'Verification FAIL', pass ? 'success' : 'error');
+    } catch (e) {
+        out.innerHTML = `<div class="error-result">Verification error: ${e.message}</div>`;
+        showNotification('Verification error', 'error');
+    }
+}
+
 // Analyze form
 async function analyzeForm() {
     const formSelector = document.getElementById('form-selector').value.trim();
@@ -1112,12 +1469,16 @@ async function analyzeForm() {
     resultDiv.innerHTML = '<div class="loading">Analyzing form...</div>';
     
     try {
+        const payload = { 
+            form_selector: formSelector || null 
+        };
+        if (window.currentSessionId) {
+            payload.session_id = window.currentSessionId;
+        }
         const response = await fetch(`${API_BASE}/api/perception/forms/analyze`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                form_selector: formSelector || null 
-            })
+            body: JSON.stringify(payload)
         });
         
         const data = await response.json();

@@ -1,22 +1,29 @@
+use anyhow::{anyhow, Result};
+use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
-use anyhow::{Result, anyhow};
-use serde_json::Value;
-use tracing::{info, debug, error, warn};
 use std::time::Instant;
 use tokio::sync::RwLock;
+use tokio::time::{timeout, Duration};
+use tracing::{debug, error, info, warn};
 
-use super::traits::{DynamicTool, DynamicToolWrapper, ToolCategory, ToolMetadata};
-use super::navigation::{NavigateTool, ScrollTool, RefreshTool, GoBackTool, GoForwardTool};
-use super::interaction::{ClickTool, TypeTextTool, SelectOptionTool, HoverTool, FocusTool};
-use super::extraction::{ExtractTextTool, ExtractLinksTool, ExtractDataTool, ExtractTableTool, ExtractFormTool};
-use super::synchronization::{WaitForElementTool, WaitForConditionTool, WaitForNavigationTool, WaitForNetworkIdleTool};
-use super::memory::{ScreenshotTool, SessionMemoryTool, GetElementInfoTool, HistoryTrackerTool, PersistentCacheTool};
-use super::cdp_monitoring::{NetworkMonitorTool, PerformanceMetricsTool, CDPNetworkIdleTool};
-use super::intelligent_action::IntelligentActionTool;
-use super::synthetic_fixtures::CreateTestFixtureTool;
 use super::cache::ToolCache;
-use super::dependencies::{DependencyManager, ExecutionPlan, ExecutionContext, ExecutionStats};
+use super::cdp_monitoring::{CDPNetworkIdleTool, NetworkMonitorTool, PerformanceMetricsTool};
+use super::dependencies::{DependencyManager, ExecutionContext, ExecutionPlan, ExecutionStats};
+use super::extraction::{
+    ExtractDataTool, ExtractFormTool, ExtractLinksTool, ExtractTableTool, ExtractTextTool,
+};
+use super::intelligent_action::IntelligentActionTool;
+use super::interaction::{ClickTool, FocusTool, HoverTool, SelectOptionTool, TypeTextTool};
+use super::memory::{
+    GetElementInfoTool, HistoryTrackerTool, PersistentCacheTool, ScreenshotTool, SessionMemoryTool,
+};
+use super::navigation::{GoBackTool, GoForwardTool, NavigateTool, RefreshTool, ScrollTool};
+use super::synchronization::{
+    WaitForConditionTool, WaitForElementTool, WaitForNavigationTool, WaitForNetworkIdleTool,
+};
+use super::synthetic_fixtures::CreateTestFixtureTool;
+use super::traits::{DynamicTool, DynamicToolWrapper, ToolCategory, ToolMetadata};
 use crate::browser::Browser;
 
 /// Performance metrics for tool execution
@@ -54,6 +61,32 @@ pub struct ToolRegistry {
 }
 
 impl ToolRegistry {
+    fn execution_timeout() -> Duration {
+        std::env::var("RAINBOW_TOOL_TIMEOUT_SECS")
+            .ok()
+            .and_then(|s| s.parse::<u64>().ok())
+            .map(Duration::from_secs)
+            .unwrap_or_else(|| Duration::from_secs(30))
+    }
+
+    fn execution_timeout_for(name: &str) -> Duration {
+        // Longer default for navigation/waits; override via env RAINBOW_NAV_TIMEOUT_SECS
+        let nav_default = Duration::from_secs(60);
+        let nav_timeout = std::env::var("RAINBOW_NAV_TIMEOUT_SECS")
+            .ok()
+            .and_then(|s| s.parse::<u64>().ok())
+            .map(Duration::from_secs)
+            .unwrap_or(nav_default);
+
+        match name {
+            "navigate_to_url"
+            | "wait_for_element"
+            | "wait_for_navigation"
+            | "wait_for_condition"
+            | "wait_for_network_idle" => nav_timeout,
+            _ => Self::execution_timeout(),
+        }
+    }
     /// Create a new ToolRegistry and populate it with all available tools
     pub fn new(browser: Arc<Browser>) -> Self {
         let mut registry = Self {
@@ -85,7 +118,7 @@ impl ToolRegistry {
         self.register_tool(SelectOptionTool::new(browser.clone()));
         self.register_tool(HoverTool::new(browser.clone()));
         self.register_tool(FocusTool::new(browser.clone()));
-        
+
         // Intelligent Action Engine
         self.register_tool(IntelligentActionTool::new(browser.clone()));
 
@@ -117,28 +150,31 @@ impl ToolRegistry {
         // Synthetic Test Fixtures
         self.register_tool(CreateTestFixtureTool::new(browser.clone()));
 
-        info!("Registered {} tools across {} categories", 
-              self.tools.len(), self.categories.len());
+        info!(
+            "Registered {} tools across {} categories",
+            self.tools.len(),
+            self.categories.len()
+        );
     }
 
     /// Register a single tool
-    pub fn register_tool<T>(&mut self, tool: T) 
-    where 
-        T: super::traits::Tool + 'static 
+    pub fn register_tool<T>(&mut self, tool: T)
+    where
+        T: super::traits::Tool + 'static,
     {
         let wrapped = DynamicToolWrapper::new(tool);
         let name = wrapped.name().to_string();
         let category = wrapped.category();
-        
+
         debug!("Registering tool: {} (category: {:?})", name, category);
-        
+
         // Add to tools map
         self.tools.insert(name.clone(), Arc::new(wrapped));
-        
+
         // Add to category index
         self.categories
             .entry(category)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(name.clone());
 
         // Register category with dependency manager for intelligent dependency inference
@@ -147,7 +183,9 @@ impl ToolRegistry {
             let tool_name = name;
             let tool_category = category;
             async move {
-                dependency_manager.register_tool_category(tool_name, tool_category).await;
+                dependency_manager
+                    .register_tool_category(tool_name, tool_category)
+                    .await;
             }
         });
     }
@@ -165,11 +203,12 @@ impl ToolRegistry {
             return Ok(cached_result);
         }
 
-        let tool = self.get_tool(name)
+        let tool = self
+            .get_tool(name)
             .ok_or_else(|| anyhow!("Tool '{}' not found", name))?;
-        
+
         debug!("Executing tool: {} with input: {}", name, input);
-        
+
         let start_time = Instant::now();
         let input_size = input.to_string().len();
         let mut success = false;
@@ -185,18 +224,24 @@ impl ToolRegistry {
         let result = match validation_result {
             Ok(_) => {
                 // Execute tool
-                match tool.execute_json(input.clone()).await {
-                    Ok(result) => {
+                let exec = tool.execute_json(input.clone());
+                match timeout(Self::execution_timeout_for(name), exec).await {
+                    Err(_) => {
+                        error_message = Some("Execution timed out".to_string());
+                        error!("Tool '{}' execution timed out", name);
+                        Err(anyhow!("Tool '{}' timed out", name))
+                    }
+                    Ok(Ok(result)) => {
                         success = true;
                         output_size = result.to_string().len();
                         debug!("Tool '{}' executed successfully", name);
-                        
+
                         // Cache successful results
                         self.cache.set(name, &input, &result).await;
-                        
+
                         Ok(result)
                     }
-                    Err(e) => {
+                    Ok(Err(e)) => {
                         error_message = Some(e.to_string());
                         error!("Tool '{}' execution failed: {}", name, e);
                         Err(anyhow!("Tool '{}' execution failed: {}", name, e))
@@ -224,7 +269,7 @@ impl ToolRegistry {
         // Add metric to performance history (async)
         if let Ok(mut metrics) = self.performance_metrics.try_write() {
             metrics.push(metric);
-            
+
             // Keep only last 1000 metrics to prevent memory growth
             if metrics.len() > 1000 {
                 metrics.drain(0..100); // Remove oldest 100 metrics
@@ -279,9 +324,13 @@ impl ToolRegistry {
     }
 
     /// Get performance statistics for a specific tool
-    pub async fn get_tool_performance_stats(&self, tool_name: &str) -> Option<ToolPerformanceStats> {
+    pub async fn get_tool_performance_stats(
+        &self,
+        tool_name: &str,
+    ) -> Option<ToolPerformanceStats> {
         let metrics = self.performance_metrics.read().await;
-        let tool_metrics: Vec<_> = metrics.iter()
+        let tool_metrics: Vec<_> = metrics
+            .iter()
             .filter(|m| m.tool_name == tool_name)
             .collect();
 
@@ -293,16 +342,13 @@ impl ToolRegistry {
         let successful_executions = tool_metrics.iter().filter(|m| m.success).count() as u64;
         let failed_executions = total_executions - successful_executions;
 
-        let execution_times: Vec<u64> = tool_metrics.iter()
-            .map(|m| m.execution_time_ms)
-            .collect();
+        let execution_times: Vec<u64> = tool_metrics.iter().map(|m| m.execution_time_ms).collect();
 
-        let avg_execution_time_ms = execution_times.iter().sum::<u64>() as f64 / execution_times.len() as f64;
+        let avg_execution_time_ms =
+            execution_times.iter().sum::<u64>() as f64 / execution_times.len() as f64;
         let min_execution_time_ms = *execution_times.iter().min().unwrap_or(&0);
         let max_execution_time_ms = *execution_times.iter().max().unwrap_or(&0);
-        let last_execution = tool_metrics.iter()
-            .map(|m| m.timestamp)
-            .max();
+        let last_execution = tool_metrics.iter().map(|m| m.timestamp).max();
 
         Some(ToolPerformanceStats {
             tool_name: tool_name.to_string(),
@@ -375,17 +421,30 @@ impl ToolRegistry {
 
     /// Create execution plan for multiple tools considering dependencies
     pub async fn create_execution_plan(&self, tool_names: Vec<String>) -> Result<ExecutionPlan> {
-        self.dependency_manager.create_execution_plan(tool_names).await
+        self.dependency_manager
+            .create_execution_plan(tool_names)
+            .await
     }
 
     /// Register dependencies for a tool
-    pub async fn register_tool_dependencies(&self, tool_name: String, dependencies: Vec<super::dependencies::ToolDependency>) {
-        self.dependency_manager.register_dependencies(tool_name, dependencies).await;
+    pub async fn register_tool_dependencies(
+        &self,
+        tool_name: String,
+        dependencies: Vec<super::dependencies::ToolDependency>,
+    ) {
+        self.dependency_manager
+            .register_dependencies(tool_name, dependencies)
+            .await;
     }
 
     /// Get dependency information for a tool
-    pub async fn get_tool_dependencies(&self, tool_name: &str) -> Vec<super::dependencies::ToolDependency> {
-        self.dependency_manager.get_tool_dependencies(tool_name).await
+    pub async fn get_tool_dependencies(
+        &self,
+        tool_name: &str,
+    ) -> Vec<super::dependencies::ToolDependency> {
+        self.dependency_manager
+            .get_tool_dependencies(tool_name)
+            .await
     }
 
     /// Get tools that depend on a specific tool
@@ -394,7 +453,10 @@ impl ToolRegistry {
     }
 
     /// Execute multiple tools with dependency resolution
-    pub async fn execute_tools_with_dependencies(&self, tool_names: Vec<String>) -> Result<ExecutionContext> {
+    pub async fn execute_tools_with_dependencies(
+        &self,
+        tool_names: Vec<String>,
+    ) -> Result<ExecutionContext> {
         // Create execution plan
         let plan = self.create_execution_plan(tool_names).await?;
         let mut context = ExecutionContext {
@@ -404,7 +466,10 @@ impl ToolRegistry {
             stage_results: Vec::new(),
         };
 
-        info!("Executing {} stages with dependency resolution", plan.stages.len());
+        info!(
+            "Executing {} stages with dependency resolution",
+            plan.stages.len()
+        );
 
         // Execute each stage
         for (stage_idx, stage) in plan.stages.iter().enumerate() {
@@ -412,8 +477,12 @@ impl ToolRegistry {
             let mut stage_completed = Vec::new();
             let mut stage_failed = Vec::new();
 
-            debug!("Executing stage {} with {} tools (parallel: {})", 
-                   stage_idx, stage.tools.len(), stage.can_run_parallel);
+            debug!(
+                "Executing stage {} with {} tools (parallel: {})",
+                stage_idx,
+                stage.tools.len(),
+                stage.can_run_parallel
+            );
 
             if stage.can_run_parallel && stage.tools.len() > 1 {
                 // Execute tools in parallel
@@ -460,7 +529,7 @@ impl ToolRegistry {
                 for tool_name in &stage.tools {
                     let start = Instant::now();
                     let input = serde_json::json!({}); // Default empty input
-                    
+
                     match self.execute_tool(tool_name, input).await {
                         Ok(value) => {
                             let duration = start.elapsed().as_millis() as u64;
@@ -480,24 +549,35 @@ impl ToolRegistry {
             }
 
             let stage_duration = stage_start.elapsed().as_millis() as u64;
-            context.stage_results.push(super::dependencies::StageResult {
-                stage_number: stage_idx,
-                completed_tools: stage_completed,
-                failed_tools: stage_failed,
-                stage_duration_ms: stage_duration,
-            });
+            context
+                .stage_results
+                .push(super::dependencies::StageResult {
+                    stage_number: stage_idx,
+                    completed_tools: stage_completed,
+                    failed_tools: stage_failed,
+                    stage_duration_ms: stage_duration,
+                });
 
             // Check if we should continue if some tools failed
             if !context.failed_tools.is_empty() {
-                warn!("Stage {} completed with {} failed tools", stage_idx, context.failed_tools.len());
+                warn!(
+                    "Stage {} completed with {} failed tools",
+                    stage_idx,
+                    context.failed_tools.len()
+                );
             }
         }
 
         // Record execution for analytics
-        self.dependency_manager.record_execution(context.clone()).await;
+        self.dependency_manager
+            .record_execution(context.clone())
+            .await;
 
-        info!("Dependency execution completed: {} successful, {} failed tools", 
-              context.completed_tools.len(), context.failed_tools.len());
+        info!(
+            "Dependency execution completed: {} successful, {} failed tools",
+            context.completed_tools.len(),
+            context.failed_tools.len()
+        );
 
         Ok(context)
     }
@@ -522,9 +602,14 @@ impl ToolRegistry {
     }
 
     /// Get performance metrics for a specific tool (last N executions)
-    pub async fn get_tool_metrics(&self, tool_name: &str, limit: Option<usize>) -> Vec<ToolPerformanceMetric> {
+    pub async fn get_tool_metrics(
+        &self,
+        tool_name: &str,
+        limit: Option<usize>,
+    ) -> Vec<ToolPerformanceMetric> {
         let metrics = self.performance_metrics.read().await;
-        let tool_metrics: Vec<_> = metrics.iter()
+        let tool_metrics: Vec<_> = metrics
+            .iter()
             .filter(|m| m.tool_name == tool_name)
             .cloned()
             .collect();
@@ -613,8 +698,8 @@ pub struct RegistryValidationReport {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::Arc;
     use crate::browser::Browser;
+    use std::sync::Arc;
 
     #[tokio::test]
     async fn test_registry_creation() {

@@ -6,19 +6,19 @@ use std::time::Duration;
 pub struct ToolConfig {
     /// Default timeout for tool operations
     pub default_timeout: Duration,
-    
+
     /// Maximum number of retries for failed operations
     pub max_retries: u32,
-    
+
     /// Delay between retries
     pub retry_delay: Duration,
-    
+
     /// Enable debug logging for tools
     pub debug_mode: bool,
-    
+
     /// Maximum execution time for a single tool
     pub max_execution_time: Duration,
-    
+
     /// Enable performance tracking
     pub track_performance: bool,
 }

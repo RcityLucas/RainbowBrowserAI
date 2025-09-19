@@ -1,12 +1,12 @@
 use super::traits::{Tool, ToolCategory};
 use crate::browser::Browser;
-use anyhow::{Result, anyhow};
-use serde::{Deserialize, Serialize};
+use anyhow::{anyhow, Result};
 use async_trait::async_trait;
-use std::sync::Arc;
-use std::collections::HashMap;
-use tracing::{info, debug};
 use base64::Engine;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::sync::Arc;
+use tracing::{debug, info};
 
 // ============================================================================
 // Screenshot Tool
@@ -24,17 +24,12 @@ pub struct ScreenshotInput {
     pub format: ScreenshotFormat,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum ScreenshotFormat {
+    #[default]
     Png,
     Jpeg,
-}
-
-impl Default for ScreenshotFormat {
-    fn default() -> Self {
-        ScreenshotFormat::Png
-    }
 }
 
 fn default_quality() -> u8 {
@@ -85,11 +80,11 @@ impl ScreenshotTool {
                 height: Math.max(document.documentElement.scrollHeight, document.body.scrollHeight)
             })
         "#;
-        
+
         let dimensions_result = self.browser.execute_script(dimensions_script).await?;
         let width = dimensions_result["width"].as_u64().unwrap_or(1920) as u32;
         let height = dimensions_result["height"].as_u64().unwrap_or(1080) as u32;
-        
+
         let options = crate::browser::ScreenshotOptions {
             full_page: true,
             format: match input.format {
@@ -110,7 +105,9 @@ impl ScreenshotTool {
 
     async fn screenshot_element(&self, selector: &str, input: &ScreenshotInput) -> Result<Vec<u8>> {
         // First ensure the element exists and is visible
-        self.browser.wait_for_selector(selector, std::time::Duration::from_secs(5)).await
+        self.browser
+            .wait_for_selector(selector, std::time::Duration::from_secs(5))
+            .await
             .map_err(|_| anyhow!("Element not found: {}", selector))?;
 
         // Scroll element into view
@@ -141,7 +138,7 @@ impl ScreenshotTool {
             "#,
             selector
         );
-        
+
         let rect_result = self.browser.execute_script(&rect_script).await?;
         let x = rect_result["x"].as_f64().unwrap_or(0.0) as i32;
         let y = rect_result["y"].as_f64().unwrap_or(0.0) as i32;
@@ -168,14 +165,17 @@ impl ScreenshotTool {
             viewport_height: 1080,
             wait_after_load: std::time::Duration::from_millis(200),
         };
-        
+
         let viewport_screenshot = self.browser.screenshot(viewport_options).await?;
-        
+
         // For now, return the full screenshot with element info in debug
         // TODO: Implement actual image cropping when image processing crate is available
-        debug!("Element bounds: x={}, y={}, width={}, height={}", x, y, width, height);
+        debug!(
+            "Element bounds: x={}, y={}, width={}, height={}",
+            x, y, width, height
+        );
         debug!("Note: Element cropping not yet implemented, returning full viewport");
-        
+
         Ok(viewport_screenshot)
     }
 }
@@ -184,23 +184,25 @@ impl ScreenshotTool {
 impl Tool for ScreenshotTool {
     type Input = ScreenshotInput;
     type Output = ScreenshotOutput;
-    
+
     fn name(&self) -> &str {
         "screenshot"
     }
-    
+
     fn description(&self) -> &str {
         "Capture screenshots of the page or specific elements"
     }
-    
+
     fn category(&self) -> ToolCategory {
         ToolCategory::Memory
     }
-    
+
     async fn execute(&self, input: Self::Input) -> Result<Self::Output> {
-        info!("Taking screenshot with options: full_page={}, format={:?}, quality={}", 
-              input.full_page, input.format, input.quality);
-        
+        info!(
+            "Taking screenshot with options: full_page={}, format={:?}, quality={}",
+            input.full_page, input.format, input.quality
+        );
+
         let screenshot_data = if let Some(selector) = &input.selector {
             debug!("Taking element screenshot for selector: {}", selector);
             self.screenshot_element(selector, &input).await?
@@ -211,10 +213,10 @@ impl Tool for ScreenshotTool {
             debug!("Taking viewport screenshot");
             self.screenshot_viewport(&input).await?
         };
-        
+
         let size = screenshot_data.len();
         let data_base64 = base64::engine::general_purpose::STANDARD.encode(&screenshot_data);
-        
+
         Ok(ScreenshotOutput {
             success: true,
             data_base64,
@@ -231,9 +233,16 @@ impl Tool for ScreenshotTool {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "action")]
 pub enum SessionMemoryInput {
-    Store { key: String, value: serde_json::Value },
-    Retrieve { key: String },
-    Delete { key: String },
+    Store {
+        key: String,
+        value: serde_json::Value,
+    },
+    Retrieve {
+        key: String,
+    },
+    Delete {
+        key: String,
+    },
     List,
     Clear,
 }
@@ -265,19 +274,19 @@ impl SessionMemoryTool {
 impl Tool for SessionMemoryTool {
     type Input = SessionMemoryInput;
     type Output = SessionMemoryOutput;
-    
+
     fn name(&self) -> &str {
         "session_memory"
     }
-    
+
     fn description(&self) -> &str {
         "Store and retrieve data within the current session"
     }
-    
+
     fn category(&self) -> ToolCategory {
         ToolCategory::Memory
     }
-    
+
     async fn execute(&self, input: Self::Input) -> Result<Self::Output> {
         match input {
             SessionMemoryInput::Store { key, value } => {
@@ -397,22 +406,22 @@ impl GetElementInfoTool {
 impl Tool for GetElementInfoTool {
     type Input = GetElementInfoInput;
     type Output = GetElementInfoOutput;
-    
+
     fn name(&self) -> &str {
         "get_element_info"
     }
-    
+
     fn description(&self) -> &str {
         "Get detailed information about an element"
     }
-    
+
     fn category(&self) -> ToolCategory {
         ToolCategory::Memory
     }
-    
+
     async fn execute(&self, input: Self::Input) -> Result<Self::Output> {
         info!("Getting element info: {}", input.selector);
-        
+
         let script = format!(
             r#"
             (function() {{
@@ -471,24 +480,24 @@ impl Tool for GetElementInfoTool {
             input.include_computed_styles,
             input.include_position
         );
-        
+
         let result = self.browser.execute_script(&script).await?;
-        
+
         if result.is_null() {
             return Ok(GetElementInfoOutput {
                 success: false,
                 element_info: None,
             });
         }
-        
+
         let element_info: ElementInfo = serde_json::from_value(result)?;
-        
+
         Ok(GetElementInfoOutput {
             success: true,
             element_info: Some(element_info),
         })
     }
-    
+
     async fn validate_input(&self, input: &Self::Input) -> Result<()> {
         if input.selector.is_empty() {
             return Err(anyhow!("Selector cannot be empty"));
@@ -537,21 +546,25 @@ impl HistoryTrackerTool {
             current_index: Arc::new(tokio::sync::RwLock::new(0)),
         }
     }
-    
+
     pub async fn add_entry(&self, url: String, title: Option<String>) {
         let timestamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_secs();
-        
-        let entry = HistoryEntry { url, title, timestamp };
-        
+
+        let entry = HistoryEntry {
+            url,
+            title,
+            timestamp,
+        };
+
         let mut history = self.history.write().await;
         let mut index = self.current_index.write().await;
-        
+
         // Remove forward history if we're not at the end
         history.truncate(*index + 1);
-        
+
         history.push(entry);
         *index = history.len() - 1;
     }
@@ -561,26 +574,26 @@ impl HistoryTrackerTool {
 impl Tool for HistoryTrackerTool {
     type Input = HistoryTrackerInput;
     type Output = HistoryTrackerOutput;
-    
+
     fn name(&self) -> &str {
         "history_tracker"
     }
-    
+
     fn description(&self) -> &str {
         "Track and manage browser navigation history"
     }
-    
+
     fn category(&self) -> ToolCategory {
         ToolCategory::Memory
     }
-    
+
     async fn execute(&self, input: Self::Input) -> Result<Self::Output> {
         match input {
             HistoryTrackerInput::Get => {
                 info!("Getting navigation history");
                 let history = self.history.read().await;
                 let current_index = *self.current_index.read().await;
-                
+
                 Ok(HistoryTrackerOutput {
                     success: true,
                     history: history.clone(),
@@ -591,10 +604,10 @@ impl Tool for HistoryTrackerTool {
                 info!("Clearing navigation history");
                 let mut history = self.history.write().await;
                 let mut index = self.current_index.write().await;
-                
+
                 history.clear();
                 *index = 0;
-                
+
                 Ok(HistoryTrackerOutput {
                     success: true,
                     history: Vec::new(),
@@ -604,17 +617,17 @@ impl Tool for HistoryTrackerTool {
             HistoryTrackerInput::GoToIndex { index } => {
                 info!("Going to history index: {}", index);
                 let history = self.history.read().await;
-                
+
                 if index >= history.len() {
                     return Err(anyhow!("History index out of bounds"));
                 }
-                
+
                 let entry = &history[index];
                 self.browser.navigate_to(&entry.url).await?;
-                
+
                 let mut current_index = self.current_index.write().await;
                 *current_index = index;
-                
+
                 Ok(HistoryTrackerOutput {
                     success: true,
                     history: history.clone(),
@@ -632,15 +645,22 @@ impl Tool for HistoryTrackerTool {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "action")]
 pub enum PersistentCacheInput {
-    Store { 
-        key: String, 
+    Store {
+        key: String,
         value: serde_json::Value,
         #[serde(default)]
         ttl_seconds: Option<u64>,
     },
-    Retrieve { key: String },
-    Delete { key: String },
-    List { #[serde(default)] prefix: Option<String> },
+    Retrieve {
+        key: String,
+    },
+    Delete {
+        key: String,
+    },
+    List {
+        #[serde(default)]
+        prefix: Option<String>,
+    },
     Clear,
 }
 
@@ -671,7 +691,7 @@ impl PersistentCacheTool {
             cache: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
         }
     }
-    
+
     fn is_expired(entry: &CacheEntry) -> bool {
         if let Some(expires_at) = entry.expires_at {
             let now = std::time::SystemTime::now()
@@ -689,35 +709,43 @@ impl PersistentCacheTool {
 impl Tool for PersistentCacheTool {
     type Input = PersistentCacheInput;
     type Output = PersistentCacheOutput;
-    
+
     fn name(&self) -> &str {
         "persistent_cache"
     }
-    
+
     fn description(&self) -> &str {
         "Store and retrieve data persistently across sessions"
     }
-    
+
     fn category(&self) -> ToolCategory {
         ToolCategory::Memory
     }
-    
+
     async fn execute(&self, input: Self::Input) -> Result<Self::Output> {
         match input {
-            PersistentCacheInput::Store { key, value, ttl_seconds } => {
+            PersistentCacheInput::Store {
+                key,
+                value,
+                ttl_seconds,
+            } => {
                 info!("Storing cache data: {}", key);
                 let expires_at = ttl_seconds.map(|ttl| {
                     std::time::SystemTime::now()
                         .duration_since(std::time::UNIX_EPOCH)
                         .unwrap()
-                        .as_secs() + ttl
+                        .as_secs()
+                        + ttl
                 });
-                
-                let entry = CacheEntry { value: value.clone(), expires_at };
-                
+
+                let entry = CacheEntry {
+                    value: value.clone(),
+                    expires_at,
+                };
+
                 let mut cache = self.cache.write().await;
                 cache.insert(key.clone(), entry);
-                
+
                 Ok(PersistentCacheOutput {
                     success: true,
                     action: "store".to_string(),
@@ -728,7 +756,7 @@ impl Tool for PersistentCacheTool {
             PersistentCacheInput::Retrieve { key } => {
                 info!("Retrieving cache data: {}", key);
                 let mut cache = self.cache.write().await;
-                
+
                 if let Some(entry) = cache.get(&key) {
                     if Self::is_expired(entry) {
                         cache.remove(&key);
@@ -759,7 +787,7 @@ impl Tool for PersistentCacheTool {
                 info!("Deleting cache data: {}", key);
                 let mut cache = self.cache.write().await;
                 let removed = cache.remove(&key);
-                
+
                 Ok(PersistentCacheOutput {
                     success: removed.is_some(),
                     action: "delete".to_string(),
@@ -770,16 +798,17 @@ impl Tool for PersistentCacheTool {
             PersistentCacheInput::List { prefix } => {
                 info!("Listing cache keys");
                 let cache = self.cache.read().await;
-                
+
                 let keys: Vec<String> = if let Some(prefix) = prefix {
-                    cache.keys()
+                    cache
+                        .keys()
                         .filter(|k| k.starts_with(&prefix))
                         .cloned()
                         .collect()
                 } else {
                     cache.keys().cloned().collect()
                 };
-                
+
                 Ok(PersistentCacheOutput {
                     success: true,
                     action: "list".to_string(),
@@ -791,7 +820,7 @@ impl Tool for PersistentCacheTool {
                 info!("Clearing cache");
                 let mut cache = self.cache.write().await;
                 cache.clear();
-                
+
                 Ok(PersistentCacheOutput {
                     success: true,
                     action: "clear".to_string(),

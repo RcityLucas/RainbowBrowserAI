@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// Makes intelligent decisions for browser automation
+#[allow(dead_code)]
 #[derive(Debug)]
 pub struct DecisionMaker {
     decision_history: Vec<Decision>,
@@ -49,7 +50,7 @@ impl DecisionMaker {
             confidence_threshold: 0.7,
         }
     }
-    
+
     pub async fn make_decision(
         &self,
         user_intent: &str,
@@ -60,7 +61,7 @@ impl DecisionMaker {
         // Simple decision making logic
         let action_type = self.infer_action_type(user_intent);
         let target_element = self.select_best_element(perception_result);
-        
+
         let confidence = Confidence {
             value: perception_result.confidence * 0.8, // Adjust based on perception confidence
             factors: {
@@ -71,7 +72,7 @@ impl DecisionMaker {
             },
             uncertainty_sources: vec!["Limited pattern data".to_string()],
         };
-        
+
         Ok(Decision {
             action_type,
             target_element,
@@ -83,7 +84,7 @@ impl DecisionMaker {
             timestamp: chrono::Utc::now(),
         })
     }
-    
+
     fn infer_action_type(&self, intent: &str) -> String {
         let intent_lower = intent.to_lowercase();
         if intent_lower.contains("click") {
@@ -96,9 +97,15 @@ impl DecisionMaker {
             "generic_action".to_string()
         }
     }
-    
-    fn select_best_element(&self, perception_result: &super::organic_perception::PerceptionResult) -> Option<String> {
-        perception_result.elements.first().map(|e| e.selector.clone())
+
+    fn select_best_element(
+        &self,
+        perception_result: &super::organic_perception::PerceptionResult,
+    ) -> Option<String> {
+        perception_result
+            .elements
+            .first()
+            .map(|e| e.selector.clone())
     }
 }
 

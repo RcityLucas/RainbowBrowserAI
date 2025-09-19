@@ -1,7 +1,8 @@
+#![allow(clippy::upper_case_acronyms)]
 // Smart form handling with intelligent field detection and auto-fill capabilities
 
 use anyhow::Result;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// Smart form handler that can intelligently fill forms
@@ -142,17 +143,24 @@ impl SmartFormHandler {
             field_patterns: HashMap::new(),
             user_profiles: HashMap::new(),
         };
-        
+
         handler.initialize_field_patterns();
         handler
     }
 
+    // Default implementation provided via std::default::Default
+
     /// Analyze a form on the current page
-    pub async fn analyze_form(&self, browser: &crate::browser::Browser, form_selector: Option<&str>) -> Result<SmartFormAnalysis> {
+    pub async fn analyze_form(
+        &self,
+        browser: &crate::browser::Browser,
+        form_selector: Option<&str>,
+    ) -> Result<SmartFormAnalysis> {
         let selector = form_selector.unwrap_or("form");
-        
+
         // Get form structure using JavaScript
-        let form_analysis_script = format!(r#"
+        let form_analysis_script = format!(
+            r#"
             const form = document.querySelector('{}');
             if (!form) return null;
             
@@ -183,10 +191,12 @@ impl SmartFormHandler {
                 action: form.action || '',
                 method: form.method || 'get'
             }};
-        "#, selector);
+        "#,
+            selector
+        );
 
         let result = browser.execute_script(&form_analysis_script).await?;
-        
+
         if result.is_null() {
             return Err(anyhow::anyhow!("No form found with selector: {}", selector));
         }
@@ -194,40 +204,77 @@ impl SmartFormHandler {
         // Parse the form analysis result
         let form_data: serde_json::Value = result;
         let empty_vec = vec![];
-        let fields_data = form_data.get("fields").and_then(|f| f.as_array()).unwrap_or(&empty_vec);
-        
+        let fields_data = form_data
+            .get("fields")
+            .and_then(|f| f.as_array())
+            .unwrap_or(&empty_vec);
+
         let mut fields = Vec::new();
         let mut required_fields = Vec::new();
-        
+
         for field_data in fields_data {
             let field_type = self.classify_field_type(
-                field_data.get("type").and_then(|t| t.as_str()).unwrap_or(""),
-                field_data.get("name").and_then(|n| n.as_str()).unwrap_or(""),
-                field_data.get("label").and_then(|l| l.as_str()).unwrap_or(""),
-                field_data.get("placeholder").and_then(|p| p.as_str()).unwrap_or(""),
+                field_data
+                    .get("type")
+                    .and_then(|t| t.as_str())
+                    .unwrap_or(""),
+                field_data
+                    .get("name")
+                    .and_then(|n| n.as_str())
+                    .unwrap_or(""),
+                field_data
+                    .get("label")
+                    .and_then(|l| l.as_str())
+                    .unwrap_or(""),
+                field_data
+                    .get("placeholder")
+                    .and_then(|p| p.as_str())
+                    .unwrap_or(""),
             );
-            
-            let selector = field_data.get("selector").and_then(|s| s.as_str()).unwrap_or("").to_string();
-            let required = field_data.get("required").and_then(|r| r.as_bool()).unwrap_or(false);
-            
+
+            let selector = field_data
+                .get("selector")
+                .and_then(|s| s.as_str())
+                .unwrap_or("")
+                .to_string();
+            let required = field_data
+                .get("required")
+                .and_then(|r| r.as_bool())
+                .unwrap_or(false);
+
             if required {
                 required_fields.push(selector.clone());
             }
-            
+
             fields.push(FormField {
                 selector,
                 field_type,
-                label: field_data.get("label").and_then(|l| l.as_str()).map(|s| s.to_string()),
-                placeholder: field_data.get("placeholder").and_then(|p| p.as_str()).map(|s| s.to_string()),
+                label: field_data
+                    .get("label")
+                    .and_then(|l| l.as_str())
+                    .map(|s| s.to_string()),
+                placeholder: field_data
+                    .get("placeholder")
+                    .and_then(|p| p.as_str())
+                    .map(|s| s.to_string()),
                 required,
-                current_value: field_data.get("value").and_then(|v| v.as_str()).map(|s| s.to_string()),
+                current_value: field_data
+                    .get("value")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string()),
                 validation: None, // TODO: Implement validation rule detection
             });
         }
 
-        let submit_elements = form_data.get("submitButtons")
+        let submit_elements = form_data
+            .get("submitButtons")
             .and_then(|s| s.as_array())
-            .map(|arr| arr.iter().filter_map(|v| v.as_str()).map(|s| s.to_string()).collect())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str())
+                    .map(|s| s.to_string())
+                    .collect()
+            })
             .unwrap_or_default();
 
         // Classify form type based on fields
@@ -250,7 +297,9 @@ impl SmartFormHandler {
         form_analysis: &SmartFormAnalysis,
         profile_name: &str,
     ) -> Result<FillResult> {
-        let profile = self.user_profiles.get(profile_name)
+        let profile = self
+            .user_profiles
+            .get(profile_name)
             .ok_or_else(|| anyhow::anyhow!("User profile not found: {}", profile_name))?;
 
         let mut filled_fields = Vec::new();
@@ -259,19 +308,20 @@ impl SmartFormHandler {
 
         for field in &form_analysis.fields {
             match self.get_fill_value(&field.field_type, profile) {
-                Some(value) => {
-                    match self.fill_field(browser, &field.selector, &value).await {
-                        Ok(_) => {
-                            filled_fields.push(field.selector.clone());
-                        }
-                        Err(e) => {
-                            failed_fields.push(field.selector.clone());
-                            warnings.push(format!("Failed to fill {}: {}", field.selector, e));
-                        }
+                Some(value) => match self.fill_field(browser, &field.selector, &value).await {
+                    Ok(_) => {
+                        filled_fields.push(field.selector.clone());
                     }
-                }
+                    Err(e) => {
+                        failed_fields.push(field.selector.clone());
+                        warnings.push(format!("Failed to fill {}: {}", field.selector, e));
+                    }
+                },
                 None => {
-                    warnings.push(format!("No suitable value found for field type: {:?}", field.field_type));
+                    warnings.push(format!(
+                        "No suitable value found for field type: {:?}",
+                        field.field_type
+                    ));
                 }
             }
         }
@@ -312,58 +362,88 @@ impl SmartFormHandler {
         }
 
         // Email patterns
-        self.field_patterns.insert("email".to_string(), FieldPattern {
-            labels: string_vec!["email", "e-mail", "email address"],
-            names: string_vec!["email", "emailAddress", "user_email", "mail"],
-            placeholders: string_vec!["email", "your email", "email address"],
-            types: string_vec!["email"],
-            field_type: FieldType::Email,
-        });
+        self.field_patterns.insert(
+            "email".to_string(),
+            FieldPattern {
+                labels: string_vec!["email", "e-mail", "email address"],
+                names: string_vec!["email", "emailAddress", "user_email", "mail"],
+                placeholders: string_vec!["email", "your email", "email address"],
+                types: string_vec!["email"],
+                field_type: FieldType::Email,
+            },
+        );
 
         // Password patterns
-        self.field_patterns.insert("password".to_string(), FieldPattern {
-            labels: string_vec!["password", "pass", "pwd"],
-            names: string_vec!["password", "pass", "pwd", "passwd"],
-            placeholders: string_vec!["password", "enter password"],
-            types: string_vec!["password"],
-            field_type: FieldType::Password,
-        });
+        self.field_patterns.insert(
+            "password".to_string(),
+            FieldPattern {
+                labels: string_vec!["password", "pass", "pwd"],
+                names: string_vec!["password", "pass", "pwd", "passwd"],
+                placeholders: string_vec!["password", "enter password"],
+                types: string_vec!["password"],
+                field_type: FieldType::Password,
+            },
+        );
 
         // Name patterns
-        self.field_patterns.insert("name".to_string(), FieldPattern {
-            labels: string_vec!["name", "full name", "your name", "first name", "last name"],
-            names: string_vec!["name", "fullName", "firstName", "lastName", "fname", "lname"],
-            placeholders: string_vec!["name", "your name", "full name"],
-            types: string_vec!["text"],
-            field_type: FieldType::Name,
-        });
+        self.field_patterns.insert(
+            "name".to_string(),
+            FieldPattern {
+                labels: string_vec!["name", "full name", "your name", "first name", "last name"],
+                names: string_vec![
+                    "name",
+                    "fullName",
+                    "firstName",
+                    "lastName",
+                    "fname",
+                    "lname"
+                ],
+                placeholders: string_vec!["name", "your name", "full name"],
+                types: string_vec!["text"],
+                field_type: FieldType::Name,
+            },
+        );
 
         // Phone patterns
-        self.field_patterns.insert("phone".to_string(), FieldPattern {
-            labels: string_vec!["phone", "telephone", "phone number", "mobile"],
-            names: string_vec!["phone", "phoneNumber", "telephone", "mobile", "tel"],
-            placeholders: string_vec!["phone", "phone number", "mobile number"],
-            types: string_vec!["tel", "phone"],
-            field_type: FieldType::Phone,
-        });
+        self.field_patterns.insert(
+            "phone".to_string(),
+            FieldPattern {
+                labels: string_vec!["phone", "telephone", "phone number", "mobile"],
+                names: string_vec!["phone", "phoneNumber", "telephone", "mobile", "tel"],
+                placeholders: string_vec!["phone", "phone number", "mobile number"],
+                types: string_vec!["tel", "phone"],
+                field_type: FieldType::Phone,
+            },
+        );
 
         // Add more patterns as needed...
     }
 
-    fn classify_field_type(&self, input_type: &str, name: &str, label: &str, placeholder: &str) -> FieldType {
-        let combined_text = format!("{} {} {} {}", input_type, name, label, placeholder).to_lowercase();
+    fn classify_field_type(
+        &self,
+        input_type: &str,
+        name: &str,
+        label: &str,
+        placeholder: &str,
+    ) -> FieldType {
+        let combined_text =
+            format!("{} {} {} {}", input_type, name, label, placeholder).to_lowercase();
 
         // Check against known patterns
-        for (_, pattern) in &self.field_patterns {
+        for pattern in self.field_patterns.values() {
             // Check type match
             if pattern.types.iter().any(|t| t == input_type) {
                 return pattern.field_type.clone();
             }
 
             // Check text matches
-            if pattern.labels.iter().any(|l| combined_text.contains(l)) ||
-               pattern.names.iter().any(|n| combined_text.contains(n)) ||
-               pattern.placeholders.iter().any(|p| combined_text.contains(p)) {
+            if pattern.labels.iter().any(|l| combined_text.contains(l))
+                || pattern.names.iter().any(|n| combined_text.contains(n))
+                || pattern
+                    .placeholders
+                    .iter()
+                    .any(|p| combined_text.contains(p))
+            {
                 return pattern.field_type.clone();
             }
         }
@@ -384,10 +464,18 @@ impl SmartFormHandler {
     }
 
     fn classify_form_type(&self, fields: &[FormField]) -> FormType {
-        let has_password = fields.iter().any(|f| matches!(f.field_type, FieldType::Password));
-        let has_email = fields.iter().any(|f| matches!(f.field_type, FieldType::Email));
-        let has_credit_card = fields.iter().any(|f| matches!(f.field_type, FieldType::CreditCard));
-        let has_address = fields.iter().any(|f| matches!(f.field_type, FieldType::Address));
+        let has_password = fields
+            .iter()
+            .any(|f| matches!(f.field_type, FieldType::Password));
+        let has_email = fields
+            .iter()
+            .any(|f| matches!(f.field_type, FieldType::Email));
+        let has_credit_card = fields
+            .iter()
+            .any(|f| matches!(f.field_type, FieldType::CreditCard));
+        let has_address = fields
+            .iter()
+            .any(|f| matches!(f.field_type, FieldType::Address));
 
         if has_password && has_email && fields.len() == 2 {
             FormType::Login
@@ -410,7 +498,10 @@ impl SmartFormHandler {
         match field_type {
             FieldType::Email => Some(profile.contact_info.email.clone()),
             FieldType::Phone => Some(profile.contact_info.phone.clone()),
-            FieldType::Name => Some(format!("{} {}", profile.personal_info.first_name, profile.personal_info.last_name)),
+            FieldType::Name => Some(format!(
+                "{} {}",
+                profile.personal_info.first_name, profile.personal_info.last_name
+            )),
             FieldType::Address => Some(profile.address_info.street_address.clone()),
             FieldType::City => Some(profile.address_info.city.clone()),
             FieldType::State => Some(profile.address_info.state.clone()),
@@ -420,24 +511,38 @@ impl SmartFormHandler {
         }
     }
 
-    async fn fill_field(&self, browser: &crate::browser::Browser, selector: &str, value: &str) -> Result<()> {
+    async fn fill_field(
+        &self,
+        browser: &crate::browser::Browser,
+        selector: &str,
+        value: &str,
+    ) -> Result<()> {
         // Click to focus the field
         browser.click(selector).await?;
-        
+
         // Clear existing content
-        let clear_script = format!(r#"
+        let clear_script = format!(
+            r#"
             const element = document.querySelector('{}');
             if (element) {{
                 element.select();
                 element.value = '';
                 element.dispatchEvent(new Event('input', {{ bubbles: true }}));
             }}
-        "#, selector);
+        "#,
+            selector
+        );
         browser.execute_script(&clear_script).await?;
-        
+
         // Type the new value
         browser.type_text(selector, value).await?;
-        
+
         Ok(())
+    }
+}
+
+impl Default for SmartFormHandler {
+    fn default() -> Self {
+        Self::new()
     }
 }

@@ -2,12 +2,12 @@
 // 基于设计文档：分层感知系统，结合chromiumoxide的高级功能
 
 use anyhow::{anyhow, Result};
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::time::timeout;
-use tracing::{info, debug};
+use tracing::{debug, info};
 // Note: Some CDP features may not be available in chromiumoxide 0.5
 // This is a design template - actual CDP access may need adjustment based on chromiumoxide version
 
@@ -23,10 +23,10 @@ pub struct LayeredPerception {
 /// 感知配置
 #[derive(Debug, Clone)]
 pub struct PerceptionConfig {
-    pub lightning_timeout: Duration,  // <50ms
-    pub quick_timeout: Duration,      // <200ms  
-    pub standard_timeout: Duration,   // <1000ms
-    pub deep_timeout: Duration,       // <5000ms
+    pub lightning_timeout: Duration, // <50ms
+    pub quick_timeout: Duration,     // <200ms
+    pub standard_timeout: Duration,  // <1000ms
+    pub deep_timeout: Duration,      // <5000ms
     pub enable_cache: bool,
     pub cache_ttl: Duration,
     pub max_cache_size: usize,
@@ -68,32 +68,32 @@ pub struct LightningPerception {
     pub url: String,
     pub title: String,
     pub ready_state: String,
-    
+
     /// 关键元素计数
     pub clickable_count: usize,
     pub input_count: usize,
     pub link_count: usize,
     pub form_count: usize,
-    
+
     /// 响应时间统计
     pub perception_time_ms: u64,
-    
+
     /// 缓存状态
     #[serde(skip)]
     pub from_cache: bool,
 }
 
-/// Quick - 快速感知层 (<200ms) 
+/// Quick - 快速感知层 (<200ms)
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct QuickPerception {
     #[serde(flatten)]
     pub lightning: LightningPerception,
-    
+
     /// 可交互元素列表
     pub interactive_elements: Vec<InteractiveElement>,
     pub visible_text_blocks: Vec<TextBlock>,
     pub form_fields: Vec<FormField>,
-    
+
     /// 页面布局信息
     pub layout_info: LayoutInfo,
 }
@@ -103,12 +103,12 @@ pub struct QuickPerception {
 pub struct StandardPerception {
     #[serde(flatten)]
     pub quick: QuickPerception,
-    
+
     /// 语义分析结果
     pub semantic_structure: SemanticStructure,
     pub accessibility_info: AccessibilityInfo,
     pub computed_styles: HashMap<String, ComputedStyleInfo>,
-    
+
     /// 页面性能指标
     pub performance_metrics: PerformanceMetrics,
 }
@@ -118,12 +118,12 @@ pub struct StandardPerception {
 pub struct DeepPerception {
     #[serde(flatten)]
     pub standard: StandardPerception,
-    
+
     /// 完整的DOM树分析
     pub dom_analysis: DomAnalysis,
     pub visual_analysis: VisualAnalysis,
     pub behavioral_patterns: BehaviorPatterns,
-    
+
     /// AI分析结果
     pub ai_insights: AiInsights,
 }
@@ -140,11 +140,11 @@ pub enum PerceptionResult {
 /// 感知模式枚举
 #[derive(Debug, Clone, Copy)]
 pub enum PerceptionMode {
-    Lightning,  // 极速模式
-    Quick,      // 快速模式  
-    Standard,   // 标准模式
-    Deep,       // 深度模式
-    Adaptive,   // 自适应模式
+    Lightning, // 极速模式
+    Quick,     // 快速模式
+    Standard,  // 标准模式
+    Deep,      // 深度模式
+    Adaptive,  // 自适应模式
 }
 
 impl LayeredPerception {
@@ -169,10 +169,10 @@ impl LayeredPerception {
     /// 主感知接口 - 自适应选择最佳模式
     pub async fn perceive(&mut self, mode: PerceptionMode) -> Result<PerceptionResult> {
         let _start_time = Instant::now();
-        
+
         // 获取当前页面URL作为缓存键
         let cache_key = self.get_cache_key().await?;
-        
+
         // 检查缓存
         if self.config.enable_cache {
             if let Some(cached) = self.cache.get(&cache_key) {
@@ -183,18 +183,16 @@ impl LayeredPerception {
 
         // 根据模式执行相应的感知
         let result = match mode {
-            PerceptionMode::Lightning => {
-                self.perceive_lightning().await.map(PerceptionResult::Lightning)
-            },
-            PerceptionMode::Quick => {
-                self.perceive_quick().await.map(PerceptionResult::Quick)
-            },
-            PerceptionMode::Standard => {
-                self.perceive_standard().await.map(PerceptionResult::Standard)
-            },
-            PerceptionMode::Deep => {
-                self.perceive_deep().await.map(PerceptionResult::Deep)
-            },
+            PerceptionMode::Lightning => self
+                .perceive_lightning()
+                .await
+                .map(PerceptionResult::Lightning),
+            PerceptionMode::Quick => self.perceive_quick().await.map(PerceptionResult::Quick),
+            PerceptionMode::Standard => self
+                .perceive_standard()
+                .await
+                .map(PerceptionResult::Standard),
+            PerceptionMode::Deep => self.perceive_deep().await.map(PerceptionResult::Deep),
             PerceptionMode::Adaptive => {
                 // Inline adaptive logic to avoid recursion
                 let complexity = self.estimate_page_complexity().await?;
@@ -205,28 +203,31 @@ impl LayeredPerception {
                     PageComplexity::VeryComplex => PerceptionMode::Deep,
                 };
 
-                info!("Adaptive mode selected {:?} based on complexity {:?}", selected_mode, complexity);
-                
+                info!(
+                    "Adaptive mode selected {:?} based on complexity {:?}",
+                    selected_mode, complexity
+                );
+
                 // Call the appropriate perceive method directly
                 match selected_mode {
-                    PerceptionMode::Lightning => {
-                        self.perceive_lightning().await.map(PerceptionResult::Lightning)
-                    },
+                    PerceptionMode::Lightning => self
+                        .perceive_lightning()
+                        .await
+                        .map(PerceptionResult::Lightning),
                     PerceptionMode::Quick => {
                         self.perceive_quick().await.map(PerceptionResult::Quick)
-                    },
-                    PerceptionMode::Standard => {
-                        self.perceive_standard().await.map(PerceptionResult::Standard)
-                    },
-                    PerceptionMode::Deep => {
-                        self.perceive_deep().await.map(PerceptionResult::Deep)
-                    },
+                    }
+                    PerceptionMode::Standard => self
+                        .perceive_standard()
+                        .await
+                        .map(PerceptionResult::Standard),
+                    PerceptionMode::Deep => self.perceive_deep().await.map(PerceptionResult::Deep),
                     PerceptionMode::Adaptive => {
                         // Fallback to Quick to prevent infinite recursion
                         self.perceive_quick().await.map(PerceptionResult::Quick)
-                    },
+                    }
                 }
-            },
+            }
         }?;
 
         // 缓存结果
@@ -235,7 +236,10 @@ impl LayeredPerception {
         }
 
         let elapsed = _start_time.elapsed();
-        info!("Perception completed in {:?} using mode {:?}", elapsed, mode);
+        info!(
+            "Perception completed in {:?} using mode {:?}",
+            elapsed, mode
+        );
 
         Ok(result)
     }
@@ -243,7 +247,7 @@ impl LayeredPerception {
     /// Lightning感知 - 极速基础信息 (<50ms)
     async fn perceive_lightning(&self) -> Result<LightningPerception> {
         let _start_time = Instant::now();
-        
+
         let perception_future = async {
             // 并行获取基础页面信息
             let (url, title, ready_state) = tokio::try_join!(
@@ -254,7 +258,9 @@ impl LayeredPerception {
 
             // 快速计算关键元素数量（使用优化的选择器）
             let (clickable_count, input_count, link_count, form_count) = tokio::try_join!(
-                self.count_elements("button,input[type=button],input[type=submit],.btn,[role=button]"),
+                self.count_elements(
+                    "button,input[type=button],input[type=submit],.btn,[role=button]"
+                ),
                 self.count_elements("input,textarea,select"),
                 self.count_elements("a[href]"),
                 self.count_elements("form")
@@ -276,17 +282,22 @@ impl LayeredPerception {
         // 应用超时限制
         timeout(self.config.lightning_timeout, perception_future)
             .await
-            .map_err(|_| anyhow!("Lightning perception timed out after {:?}", self.config.lightning_timeout))?
+            .map_err(|_| {
+                anyhow!(
+                    "Lightning perception timed out after {:?}",
+                    self.config.lightning_timeout
+                )
+            })?
     }
 
     /// Quick感知 - 快速交互信息 (<200ms)
     async fn perceive_quick(&self) -> Result<QuickPerception> {
         let _start_time = Instant::now();
-        
+
         let perception_future = async {
             // 先执行Lightning感知
             let lightning = self.perceive_lightning().await?;
-            
+
             // 并行获取交互元素信息
             let (interactive_elements, visible_text_blocks, form_fields, layout_info) = tokio::try_join!(
                 self.get_interactive_elements(),
@@ -306,17 +317,22 @@ impl LayeredPerception {
 
         timeout(self.config.quick_timeout, perception_future)
             .await
-            .map_err(|_| anyhow!("Quick perception timed out after {:?}", self.config.quick_timeout))?
+            .map_err(|_| {
+                anyhow!(
+                    "Quick perception timed out after {:?}",
+                    self.config.quick_timeout
+                )
+            })?
     }
 
     /// Standard感知 - 标准语义分析 (<1000ms)
     async fn perceive_standard(&self) -> Result<StandardPerception> {
         let _start_time = Instant::now();
-        
+
         let perception_future = async {
             // 先执行Quick感知
             let quick = self.perceive_quick().await?;
-            
+
             // 并行获取语义和样式信息
             let (semantic_structure, accessibility_info, computed_styles, performance_metrics) = tokio::try_join!(
                 self.analyze_semantic_structure(),
@@ -336,17 +352,22 @@ impl LayeredPerception {
 
         timeout(self.config.standard_timeout, perception_future)
             .await
-            .map_err(|_| anyhow!("Standard perception timed out after {:?}", self.config.standard_timeout))?
+            .map_err(|_| {
+                anyhow!(
+                    "Standard perception timed out after {:?}",
+                    self.config.standard_timeout
+                )
+            })?
     }
 
     /// Deep感知 - 深度全面分析 (<5000ms)
     async fn perceive_deep(&self) -> Result<DeepPerception> {
         let _start_time = Instant::now();
-        
+
         let perception_future = async {
             // 先执行Standard感知
             let standard = self.perceive_standard().await?;
-            
+
             // 并行执行深度分析
             let (dom_analysis, visual_analysis, behavioral_patterns, ai_insights) = tokio::try_join!(
                 self.analyze_dom_structure(),
@@ -366,7 +387,12 @@ impl LayeredPerception {
 
         timeout(self.config.deep_timeout, perception_future)
             .await
-            .map_err(|_| anyhow!("Deep perception timed out after {:?}", self.config.deep_timeout))?
+            .map_err(|_| {
+                anyhow!(
+                    "Deep perception timed out after {:?}",
+                    self.config.deep_timeout
+                )
+            })?
     }
 
     /// 自适应感知 - 根据场景自动选择最佳模式
@@ -374,7 +400,7 @@ impl LayeredPerception {
     async fn perceive_adaptive(&mut self) -> Result<PerceptionResult> {
         // 快速分析页面复杂度
         let complexity = self.estimate_page_complexity().await?;
-        
+
         // 根据复杂度和性能要求选择合适的模式
         let selected_mode = match complexity {
             PageComplexity::Simple => PerceptionMode::Lightning,
@@ -383,7 +409,10 @@ impl LayeredPerception {
             PageComplexity::VeryComplex => PerceptionMode::Deep,
         };
 
-        info!("Adaptive mode selected {:?} based on complexity {:?}", selected_mode, complexity);
+        info!(
+            "Adaptive mode selected {:?} based on complexity {:?}",
+            selected_mode, complexity
+        );
         self.perceive(selected_mode).await
     }
 
@@ -431,10 +460,10 @@ impl LayeredPerception {
                 };
             })()
         "#;
-        
+
         let result = self.browser.execute_script(script).await?;
         let score = result["score"].as_f64().unwrap_or(0.0);
-        
+
         Ok(match score {
             s if s < 50.0 => PageComplexity::Simple,
             s if s < 150.0 => PageComplexity::Moderate,
@@ -514,9 +543,9 @@ impl LayeredPerception {
             }
             analyzeDom();
         "#;
-        
+
         let result = self.browser.execute_script(script).await?;
-        
+
         Ok(DomAnalysis {
             total_nodes: result["total_nodes"].as_u64().unwrap_or(0) as u32,
             max_depth: result["max_depth"].as_u64().unwrap_or(0) as u32,
@@ -570,22 +599,26 @@ impl LayeredPerception {
             }
             analyzeVisual();
         "#;
-        
+
         let result = self.browser.execute_script(script).await?;
-        
+
         Ok(VisualAnalysis {
             screenshot_hash: result["screenshot_hash"].as_str().unwrap_or("").to_string(),
             color_palette: result["color_palette"]
                 .as_array()
-                .map(|arr| arr.iter()
-                    .filter_map(|v| v.as_str().map(String::from))
-                    .collect())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_str().map(String::from))
+                        .collect()
+                })
                 .unwrap_or_default(),
             visual_elements: result["visual_elements"]
                 .as_array()
-                .map(|arr| arr.iter()
-                    .filter_map(|v| v.as_str().map(String::from))
-                    .collect())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_str().map(String::from))
+                        .collect()
+                })
                 .unwrap_or_default(),
         })
     }
@@ -644,21 +677,25 @@ impl LayeredPerception {
             }
             analyzeBehavior();
         "#;
-        
+
         let result = self.browser.execute_script(script).await?;
-        
+
         Ok(BehaviorPatterns {
             user_flows: result["user_flows"]
                 .as_array()
-                .map(|arr| arr.iter()
-                    .filter_map(|v| v.as_str().map(String::from))
-                    .collect())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_str().map(String::from))
+                        .collect()
+                })
                 .unwrap_or_default(),
             interaction_hotspots: result["interaction_hotspots"]
                 .as_array()
-                .map(|arr| arr.iter()
-                    .filter_map(|v| v.as_str().map(String::from))
-                    .collect())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_str().map(String::from))
+                        .collect()
+                })
                 .unwrap_or_default(),
         })
     }
@@ -731,16 +768,21 @@ impl LayeredPerception {
             }
             generateInsights();
         "#;
-        
+
         let result = self.browser.execute_script(script).await?;
-        
+
         Ok(AiInsights {
-            page_purpose: result["page_purpose"].as_str().unwrap_or("unknown").to_string(),
+            page_purpose: result["page_purpose"]
+                .as_str()
+                .unwrap_or("unknown")
+                .to_string(),
             recommended_actions: result["recommended_actions"]
                 .as_array()
-                .map(|arr| arr.iter()
-                    .filter_map(|v| v.as_str().map(String::from))
-                    .collect())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_str().map(String::from))
+                        .collect()
+                })
                 .unwrap_or_default(),
             usability_score: result["usability_score"].as_f64().unwrap_or(0.5),
         })
@@ -758,7 +800,7 @@ impl PerceptionCache {
 
     fn get(&mut self, key: &str) -> Option<PerceptionResult> {
         self.cleanup_if_needed();
-        
+
         if let Some(entry) = self.entries.get_mut(key) {
             if entry.created_at.elapsed() <= self.config.cache_ttl {
                 entry.access_count += 1;
@@ -770,16 +812,19 @@ impl PerceptionCache {
 
     fn set(&mut self, key: String, data: PerceptionResult) {
         self.cleanup_if_needed();
-        
+
         if self.entries.len() >= self.config.max_cache_size {
             self.evict_lru();
         }
-        
-        self.entries.insert(key, CacheEntry {
-            data,
-            created_at: Instant::now(),
-            access_count: 1,
-        });
+
+        self.entries.insert(
+            key,
+            CacheEntry {
+                data,
+                created_at: Instant::now(),
+                access_count: 1,
+            },
+        );
     }
 
     fn cleanup_if_needed(&mut self) {
@@ -791,14 +836,17 @@ impl PerceptionCache {
 
     fn cleanup_expired(&mut self) {
         let ttl = self.config.cache_ttl;
-        self.entries.retain(|_, entry| entry.created_at.elapsed() <= ttl);
+        self.entries
+            .retain(|_, entry| entry.created_at.elapsed() <= ttl);
     }
 
     fn evict_lru(&mut self) {
-        if let Some(lru_key) = self.entries
+        if let Some(lru_key) = self
+            .entries
             .iter()
             .min_by_key(|(_, entry)| entry.access_count)
-            .map(|(key, _)| key.clone()) {
+            .map(|(key, _)| key.clone())
+        {
             self.entries.remove(&lru_key);
         }
     }

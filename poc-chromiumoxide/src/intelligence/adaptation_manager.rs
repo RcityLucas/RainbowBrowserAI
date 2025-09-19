@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// Manages adaptation strategies for different contexts
+#[allow(dead_code)]
 #[derive(Debug)]
 pub struct AdaptationManager {
     strategies: HashMap<String, AdaptationStrategy>,
@@ -39,7 +40,7 @@ impl AdaptationManager {
             environment_contexts: HashMap::new(),
         }
     }
-    
+
     pub async fn suggest_adaptations(
         &self,
         _page_context: &super::organic_perception::PageContext,

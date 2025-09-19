@@ -139,10 +139,26 @@ static/                  # Web interface
 ├── app.js              # Tool execution & AI features
 └── styles.css          # Modern styling
 
+scripts/                 # Dev/test utilities
+├── run_comprehensive_tests.sh
+├── test_navigate_perceive.sh
+├── manual_coordination_test.sh
+├── quick_coordination_test.sh
+├── windows/
+├── maintenance/
+└── legacy/
+
 docs/                    # Complete documentation
-├── TOOL_PARAMETERS_REFERENCE.md
 ├── API_DOCUMENTATION.md
-└── PERCEPTION_MODULE_PLAN.md
+├── MIGRATION_GUIDE.md
+├── TOOL_PARAMETERS_REFERENCE.md
+├── PERCEPTION_TESTING_GUIDE.md
+└── PROJECT_SUMMARY.md
+
+examples/                # Usage samples and clients
+├── simple_tools_test.rs
+├── v2_client_examples.rs
+└── v2_client_examples.py
 ```
 
 ## 🔌 API Reference
@@ -198,7 +214,7 @@ POST /api/perception/analyze
 
 ## Migration from thirtyfour
 
-See [MIGRATION_GUIDE.md](MIGRATION_GUIDE.md) for detailed migration instructions.
+See [MIGRATION_GUIDE.md](docs/MIGRATION_GUIDE.md) for detailed migration instructions.
 
 ## Examples
 

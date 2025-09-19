@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// Recognizes and matches successful automation patterns
+#[allow(dead_code)]
 #[derive(Debug)]
 pub struct PatternRecognizer {
     patterns: HashMap<String, SuccessPattern>,
@@ -53,7 +54,7 @@ impl PatternRecognizer {
             action_sequences: Vec::new(),
         }
     }
-    
+
     pub async fn find_relevant_patterns(
         &self,
         _intent: &str,
@@ -61,11 +62,11 @@ impl PatternRecognizer {
     ) -> Vec<SuccessPattern> {
         vec![]
     }
-    
+
     pub async fn reinforce_successful_pattern(&mut self, _action_type: &str) {
         // Implementation for reinforcing patterns
     }
-    
+
     pub async fn get_statistics(&self) -> PatternStatistics {
         PatternStatistics {
             total_patterns: self.patterns.len(),

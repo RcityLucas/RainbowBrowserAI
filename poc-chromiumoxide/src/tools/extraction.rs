@@ -1,10 +1,10 @@
 use super::traits::{Tool, ToolCategory};
 use crate::browser::Browser;
-use anyhow::{Result, anyhow};
-use serde::{Deserialize, Serialize};
+use anyhow::{anyhow, Result};
 use async_trait::async_trait;
-use std::sync::Arc;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::sync::Arc;
 use tracing::info;
 
 // ============================================================================
@@ -41,22 +41,22 @@ impl ExtractTextTool {
 impl Tool for ExtractTextTool {
     type Input = ExtractTextInput;
     type Output = ExtractTextOutput;
-    
+
     fn name(&self) -> &str {
         "extract_text"
     }
-    
+
     fn description(&self) -> &str {
         "Extract text content from elements"
     }
-    
+
     fn category(&self) -> ToolCategory {
         ToolCategory::DataExtraction
     }
-    
+
     async fn execute(&self, input: Self::Input) -> Result<Self::Output> {
         info!("Extracting text from: {}", input.selector);
-        
+
         let script = format!(
             r#"
             (function() {{
@@ -83,20 +83,18 @@ impl Tool for ExtractTextTool {
                     count: count
                 }};
             }})()"#,
-            input.selector,
-            input.include_hidden,
-            input.trim
+            input.selector, input.include_hidden, input.trim
         );
-        
+
         let result = self.browser.execute_script(&script).await?;
-        
+
         Ok(ExtractTextOutput {
             success: true,
             text: result["text"].as_str().unwrap_or("").to_string(),
             element_count: result["count"].as_u64().unwrap_or(0) as usize,
         })
     }
-    
+
     async fn validate_input(&self, input: &Self::Input) -> Result<()> {
         if input.selector.is_empty() {
             return Err(anyhow!("Selector cannot be empty"));
@@ -161,23 +159,23 @@ impl Default for ExtractLinksInput {
 impl Tool for ExtractLinksTool {
     type Input = ExtractLinksInput;
     type Output = ExtractLinksOutput;
-    
+
     fn name(&self) -> &str {
         "extract_links"
     }
-    
+
     fn description(&self) -> &str {
         "Extract all links from the page or specific elements"
     }
-    
+
     fn category(&self) -> ToolCategory {
         ToolCategory::DataExtraction
     }
-    
+
     async fn execute(&self, input: Self::Input) -> Result<Self::Output> {
         let selector = input.selector.as_deref().unwrap_or("a");
         info!("Extracting links from: {}", selector);
-        
+
         let script = format!(
             r#"
             (function() {{
@@ -210,17 +208,14 @@ impl Tool for ExtractLinksTool {
                 
                 return results;
             }})()"#,
-            selector,
-            input.absolute_urls,
-            input.include_external,
-            input.include_internal
+            selector, input.absolute_urls, input.include_external, input.include_internal
         );
-        
+
         let result = self.browser.execute_script(&script).await?;
-        
+
         let links: Vec<LinkInfo> = serde_json::from_value(result)?;
         let total_count = links.len();
-        
+
         Ok(ExtractLinksOutput {
             success: true,
             links,
@@ -271,24 +266,24 @@ impl ExtractDataTool {
 impl Tool for ExtractDataTool {
     type Input = ExtractDataInput;
     type Output = ExtractDataOutput;
-    
+
     fn name(&self) -> &str {
         "extract_data"
     }
-    
+
     fn description(&self) -> &str {
         "Extract structured data from elements"
     }
-    
+
     fn category(&self) -> ToolCategory {
         ToolCategory::DataExtraction
     }
-    
+
     async fn execute(&self, input: Self::Input) -> Result<Self::Output> {
         info!("Extracting data from: {}", input.selector);
-        
+
         let attributes_json = serde_json::to_string(&input.attributes)?;
-        
+
         let script = format!(
             r#"
             (function() {{
@@ -314,23 +309,20 @@ impl Tool for ExtractDataTool {
                 
                 return results;
             }})()"#,
-            input.selector,
-            attributes_json,
-            input.include_text,
-            input.include_html
+            input.selector, attributes_json, input.include_text, input.include_html
         );
-        
+
         let result = self.browser.execute_script(&script).await?;
         let data: Vec<ElementData> = serde_json::from_value(result)?;
         let total_count = data.len();
-        
+
         Ok(ExtractDataOutput {
             success: true,
             data,
             total_count,
         })
     }
-    
+
     async fn validate_input(&self, input: &Self::Input) -> Result<()> {
         if input.selector.is_empty() {
             return Err(anyhow!("Selector cannot be empty"));
@@ -381,22 +373,22 @@ impl ExtractTableTool {
 impl Tool for ExtractTableTool {
     type Input = ExtractTableInput;
     type Output = ExtractTableOutput;
-    
+
     fn name(&self) -> &str {
         "extract_table"
     }
-    
+
     fn description(&self) -> &str {
         "Extract data from HTML tables"
     }
-    
+
     fn category(&self) -> ToolCategory {
         ToolCategory::DataExtraction
     }
-    
+
     async fn execute(&self, input: Self::Input) -> Result<Self::Output> {
         info!("Extracting table from: {}", input.selector);
-        
+
         let script = format!(
             r#"
             (function() {{
@@ -450,31 +442,30 @@ impl Tool for ExtractTableTool {
                 
                 return {{ headers, rows }};
             }})()"#,
-            input.selector,
-            input.include_headers,
-            input.include_headers,
-            input.as_objects
+            input.selector, input.include_headers, input.include_headers, input.as_objects
         );
-        
+
         let result = self.browser.execute_script(&script).await?;
-        
+
         let headers: Vec<String> = serde_json::from_value(result["headers"].clone())?;
         let rows: Vec<TableRow> = if input.as_objects {
-            result["rows"].as_array()
+            result["rows"]
+                .as_array()
                 .unwrap_or(&Vec::new())
                 .iter()
                 .map(|r| TableRow::Object(serde_json::from_value(r.clone()).unwrap_or_default()))
                 .collect()
         } else {
-            result["rows"].as_array()
+            result["rows"]
+                .as_array()
                 .unwrap_or(&Vec::new())
                 .iter()
                 .map(|r| TableRow::Array(serde_json::from_value(r.clone()).unwrap_or_default()))
                 .collect()
         };
-        
+
         let total_rows = rows.len();
-        
+
         Ok(ExtractTableOutput {
             success: true,
             headers,
@@ -482,7 +473,7 @@ impl Tool for ExtractTableTool {
             total_rows,
         })
     }
-    
+
     async fn validate_input(&self, input: &Self::Input) -> Result<()> {
         if input.selector.is_empty() {
             return Err(anyhow!("Selector cannot be empty"));
@@ -541,22 +532,22 @@ impl ExtractFormTool {
 impl Tool for ExtractFormTool {
     type Input = ExtractFormInput;
     type Output = ExtractFormOutput;
-    
+
     fn name(&self) -> &str {
         "extract_form"
     }
-    
+
     fn description(&self) -> &str {
         "Extract form structure and data"
     }
-    
+
     fn category(&self) -> ToolCategory {
         ToolCategory::DataExtraction
     }
-    
+
     async fn execute(&self, input: Self::Input) -> Result<Self::Output> {
         info!("Extracting form from: {}", input.selector);
-        
+
         let script = format!(
             r#"
             (function() {{
@@ -599,20 +590,18 @@ impl Tool for ExtractFormTool {
                 
                 return formData;
             }})()"#,
-            input.selector,
-            input.include_values,
-            input.include_options
+            input.selector, input.include_values, input.include_options
         );
-        
+
         let result = self.browser.execute_script(&script).await?;
         let form_data: FormData = serde_json::from_value(result)?;
-        
+
         Ok(ExtractFormOutput {
             success: true,
             form_data,
         })
     }
-    
+
     async fn validate_input(&self, input: &Self::Input) -> Result<()> {
         if input.selector.is_empty() {
             return Err(anyhow!("Selector cannot be empty"));

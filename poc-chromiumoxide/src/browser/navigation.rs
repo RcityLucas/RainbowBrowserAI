@@ -1,11 +1,11 @@
-use anyhow::{Result, anyhow};
-use chromiumoxide::cdp::browser_protocol::network::{Cookie, CookieParam};
-use std::time::{Duration, Instant};
-use std::sync::Arc;
-use tokio::sync::RwLock;
-use std::collections::HashSet;
-use tracing::{info, warn, debug};
 use super::core::Browser;
+use anyhow::{anyhow, Result};
+use chromiumoxide::cdp::browser_protocol::network::{Cookie, CookieParam};
+use std::collections::HashSet;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
+use tokio::sync::RwLock;
+use tracing::{debug, info, warn};
 
 /// Advanced navigation options
 #[derive(Debug, Clone, Default)]
@@ -67,12 +67,18 @@ impl NetworkRequestTracker {
         let active_count = self.active_requests.read().await.len();
         let last_activity = *self.last_activity.read().await;
         let elapsed = last_activity.elapsed();
-        
+
         active_count == 0 && elapsed >= idle_threshold
     }
 
     pub async fn active_count(&self) -> usize {
         self.active_requests.read().await.len()
+    }
+}
+
+impl Default for NetworkRequestTracker {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -85,31 +91,32 @@ impl Browser {
     ) -> Result<NavigationResult> {
         let start_time = std::time::Instant::now();
         info!("Navigating to {} with options: {:?}", url, options);
-        
+
         // Use the BrowserOps trait method for navigation
         self.navigate_to(url).await?;
-        
+
         // Wait for network idle if requested
         if options.wait_for_idle {
             debug!("Waiting for network idle");
             self.wait_for_network_idle(Duration::from_secs(2)).await?;
         }
-        
+
         // Wait for selector if specified
         if let Some(selector) = &options.wait_for_selector {
             debug!("Waiting for selector: {}", selector);
-            self.wait_for_selector(selector, Duration::from_secs(10)).await?;
+            self.wait_for_selector(selector, Duration::from_secs(10))
+                .await?;
         }
-        
+
         let load_time = start_time.elapsed();
         let current_url = self.current_url().await?;
-        
+
         Ok(NavigationResult {
             url: current_url,
             status: 200, // TODO: Get actual status from response
             load_time_ms: load_time.as_millis() as u64,
             dom_content_loaded_ms: 0, // TODO: Get actual timing
-            redirects: Vec::new(), // TODO: Track redirects
+            redirects: Vec::new(),    // TODO: Track redirects
         })
     }
 
@@ -117,8 +124,7 @@ impl Browser {
     pub async fn reload(&self) -> Result<()> {
         info!("Reloading current page");
         let page = self.page.read().await;
-        page.reload().await?
-            .wait_for_navigation().await?;
+        page.reload().await?.wait_for_navigation().await?;
         Ok(())
     }
 
@@ -127,62 +133,75 @@ impl Browser {
         info!("Hard reloading current page (bypass cache)");
         // Simple reload for now - chromiumoxide may handle cache differently
         let page = self.page.read().await;
-        page.reload().await?
-            .wait_for_navigation().await?;
+        page.reload().await?.wait_for_navigation().await?;
         Ok(())
     }
 
     /// Wait for network to be idle using CDP Network domain events
     pub async fn wait_for_network_idle(&self, idle_time: Duration) -> Result<()> {
-        debug!("Waiting for network idle ({:?}) using CDP Network domain", idle_time);
-        
+        debug!(
+            "Waiting for network idle ({:?}) using CDP Network domain",
+            idle_time
+        );
+
         let page = self.page.read().await;
         let start = Instant::now();
         let max_wait = Duration::from_secs(30);
         let check_interval = Duration::from_millis(50); // High frequency checking
-        
+
         // Enable Runtime domain for network activity monitoring
         if let Err(e) = page.enable_runtime().await {
             warn!("Failed to enable Runtime domain: {}", e);
         }
-        
+
         // Track active network requests using CDP
         let mut active_requests = 0usize;
         let mut last_activity = Instant::now();
         let mut consecutive_idle_time = Duration::ZERO;
-        
-        info!("Starting CDP-backed network idle detection: {:?} threshold, {:?} timeout", 
-              idle_time, max_wait);
-        
+
+        info!(
+            "Starting CDP-backed network idle detection: {:?} threshold, {:?} timeout",
+            idle_time, max_wait
+        );
+
         while start.elapsed() < max_wait {
             // Check current network activity
             let current_activity = self.check_network_activity().await?;
-            
+
             if current_activity == 0 {
                 // Network is currently idle
                 let idle_duration = last_activity.elapsed();
-                
+
                 if idle_duration >= idle_time {
                     // Network has been idle long enough!
-                    debug!("Network idle achieved after {:?} (CDP-tracked)", start.elapsed());
+                    debug!(
+                        "Network idle achieved after {:?} (CDP-tracked)",
+                        start.elapsed()
+                    );
                     return Ok(());
                 }
-                
+
                 consecutive_idle_time += check_interval;
             } else {
                 // Network activity detected, reset idle timer
                 active_requests = current_activity;
                 last_activity = Instant::now();
                 consecutive_idle_time = Duration::ZERO;
-                debug!("Network activity detected: {} active requests", active_requests);
+                debug!(
+                    "Network activity detected: {} active requests",
+                    active_requests
+                );
             }
-            
+
             tokio::time::sleep(check_interval).await;
         }
-        
+
         // Timeout reached
-        warn!("Network idle timeout after {:?} (CDP-tracked, {} active requests)", 
-              start.elapsed(), active_requests);
+        warn!(
+            "Network idle timeout after {:?} (CDP-tracked, {} active requests)",
+            start.elapsed(),
+            active_requests
+        );
         Ok(()) // Don't fail on timeout, just warn
     }
 
@@ -191,7 +210,7 @@ impl Browser {
         // In a real implementation, this would track actual CDP Network events
         // For now, use a simplified approach that mimics CDP behavior
         let page = self.page.read().await;
-        
+
         // Use JavaScript to check for active network requests if CDP events aren't fully available
         let script = r#"
             (function() {
@@ -228,7 +247,7 @@ impl Browser {
                 return 0; // No active network activity detected
             })()
         "#;
-        
+
         match page.evaluate(script).await {
             Ok(result) => {
                 if let Some(value) = result.value() {
@@ -265,25 +284,25 @@ impl Browser {
         timeout: Duration,
     ) -> Result<()> {
         info!("Navigating to {} and waiting for text: {}", url, text);
-        
+
         // Navigate
         self.navigate_to(url).await?;
-        
+
         // Wait for text to appear
         let start = std::time::Instant::now();
         let page = self.page.read().await;
-        
+
         loop {
             let body_text = page.content().await?;
             if body_text.contains(text) {
                 info!("Found text: {}", text);
                 return Ok(());
             }
-            
+
             if start.elapsed() > timeout {
                 return Err(anyhow!("Timeout waiting for text: {}", text));
             }
-            
+
             tokio::time::sleep(Duration::from_millis(500)).await;
         }
     }
@@ -322,10 +341,12 @@ impl Browser {
     /// Emulate device (simplified version)
     pub async fn emulate_device(&self, device_name: &str) -> Result<()> {
         let page = self.page.read().await;
-        
+
         // Common device user agents
         let user_agent = match device_name {
-            "iPhone 12" => "Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15",
+            "iPhone 12" => {
+                "Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15"
+            }
             "iPad" => "Mozilla/5.0 (iPad; CPU OS 14_0 like Mac OS X) AppleWebKit/605.1.15",
             "Pixel 5" => "Mozilla/5.0 (Linux; Android 11; Pixel 5) AppleWebKit/537.36",
             _ => {
@@ -333,7 +354,7 @@ impl Browser {
                 return Ok(());
             }
         };
-        
+
         page.set_user_agent(user_agent).await?;
         info!("Emulating device: {}", device_name);
         Ok(())
@@ -342,7 +363,7 @@ impl Browser {
     /// Get page metrics (performance, memory, etc.)
     pub async fn get_metrics(&self) -> Result<PageMetrics> {
         let page = self.page.read().await;
-        
+
         // Get performance metrics via JavaScript
         let timing_result = page.evaluate(r#"
             JSON.stringify({
@@ -353,7 +374,7 @@ impl Browser {
             })
         "#).await?;
         let timing: serde_json::Value = timing_result.into_value()?;
-        
+
         Ok(PageMetrics {
             load_time_ms: timing["loadTime"].as_u64().unwrap_or(0),
             dom_content_loaded_ms: timing["domContentLoaded"].as_u64().unwrap_or(0),

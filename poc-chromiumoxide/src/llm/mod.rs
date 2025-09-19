@@ -2,16 +2,16 @@
 // Provides intelligent task planning and AI-driven automation
 
 pub mod client;
-pub mod task_planner;
 pub mod cost_tracker;
 pub mod prompt_engine;
 pub mod providers;
+pub mod task_planner;
 
-pub use client::{LLMClient, LLMResponse, LLMError, TokenUsage};
-pub use task_planner::{TaskPlan, TaskStep, TaskPlanExecutor};
+pub use client::{LLMClient, LLMError, LLMResponse, TokenUsage};
 pub use cost_tracker::{CostTracker, UsageMetrics};
-pub use prompt_engine::{PromptEngine, PromptTemplate, ContextAwarePrompt};
-pub use providers::{OpenAIProvider, ClaudeProvider, LLMProvider};
+pub use prompt_engine::{ContextAwarePrompt, PromptEngine, PromptTemplate};
+pub use providers::{ClaudeProvider, LLMProvider, OpenAIProvider};
+pub use task_planner::{TaskPlan, TaskPlanExecutor, TaskStep};
 
 use anyhow::Result;
 use serde::Deserialize;
@@ -52,13 +52,19 @@ pub struct LLMService {
 impl LLMService {
     pub fn new(config: LLMConfig) -> Result<Self> {
         let mut providers: HashMap<String, Box<dyn LLMProvider>> = HashMap::new();
-        
+
         // Initialize providers based on available API keys
         if config.openai_api_key.is_some() {
-            providers.insert("openai".to_string(), Box::new(OpenAIProvider::new(&config)?));
+            providers.insert(
+                "openai".to_string(),
+                Box::new(OpenAIProvider::new(&config)?),
+            );
         }
         if config.claude_api_key.is_some() {
-            providers.insert("claude".to_string(), Box::new(ClaudeProvider::new(&config)?));
+            providers.insert(
+                "claude".to_string(),
+                Box::new(ClaudeProvider::new(&config)?),
+            );
         }
 
         Ok(Self {
@@ -69,10 +75,17 @@ impl LLMService {
         })
     }
 
-    pub async fn plan_task(&mut self, user_instruction: &str, context: &HashMap<String, serde_json::Value>) -> Result<TaskPlan> {
-        let prompt = self.prompt_engine.create_task_planning_prompt(user_instruction, context)?;
+    pub async fn plan_task(
+        &mut self,
+        user_instruction: &str,
+        context: &HashMap<String, serde_json::Value>,
+    ) -> Result<TaskPlan> {
+        let prompt = self
+            .prompt_engine
+            .create_task_planning_prompt(user_instruction, context)?;
         let response = self.query(&prompt.final_prompt).await?;
-        TaskPlan::from_llm_response(&response).map_err(|e| anyhow::anyhow!("Task planning failed: {}", e))
+        TaskPlan::from_llm_response(&response)
+            .map_err(|e| anyhow::anyhow!("Task planning failed: {}", e))
     }
 
     pub async fn query(&mut self, prompt: &str) -> Result<LLMResponse> {
@@ -82,7 +95,10 @@ impl LLMService {
             self.cost_tracker.track_usage(&response);
             Ok(response)
         } else {
-            Err(anyhow::anyhow!("No LLM provider available: {}", provider_name))
+            Err(anyhow::anyhow!(
+                "No LLM provider available: {}",
+                provider_name
+            ))
         }
     }
 

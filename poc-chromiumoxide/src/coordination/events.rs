@@ -2,11 +2,10 @@
 // Provides event-driven communication between modules
 
 use anyhow::Result;
-use serde::{Serialize, Deserialize};
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
-use tokio::sync::RwLock;
 use std::time::Instant;
+use tokio::sync::RwLock;
 use tracing::{debug, error, info};
 use uuid::Uuid;
 
@@ -14,19 +13,19 @@ use uuid::Uuid;
 #[derive(Debug, Clone)]
 pub enum Event {
     // Browser Events
-    NavigationStarted { 
-        session_id: String, 
+    NavigationStarted {
+        session_id: String,
         url: String,
         timestamp: Instant,
     },
-    NavigationCompleted { 
-        session_id: String, 
-        url: String, 
+    NavigationCompleted {
+        session_id: String,
+        url: String,
         load_time_ms: u64,
         timestamp: Instant,
     },
-    PageContentChanged { 
-        session_id: String, 
+    PageContentChanged {
+        session_id: String,
         change_type: ContentChangeType,
         timestamp: Instant,
     },
@@ -35,7 +34,7 @@ pub enum Event {
         error: String,
         timestamp: Instant,
     },
-    
+
     // Perception Events
     PerceptionAnalysisStarted {
         session_id: String,
@@ -69,7 +68,7 @@ pub enum Event {
         duration_ms: u64,
         timestamp: Instant,
     },
-    
+
     // Intelligence Events
     PlanningCompleted {
         session_id: String,
@@ -84,7 +83,7 @@ pub enum Event {
         patterns_updated: usize,
         timestamp: Instant,
     },
-    
+
     // Tool Events
     ToolExecutionStarted {
         session_id: String,
@@ -107,7 +106,7 @@ pub enum Event {
         error: String,
         timestamp: Instant,
     },
-    
+
     // Session Events
     SessionCreated {
         session_id: String,
@@ -123,7 +122,7 @@ pub enum Event {
         idle_duration_ms: u64,
         timestamp: Instant,
     },
-    
+
     // Cache Events
     CacheInvalidated {
         cache_type: String,
@@ -141,7 +140,7 @@ pub enum Event {
         key: String,
         timestamp: Instant,
     },
-    
+
     // System Events
     ResourceWarning {
         resource_type: String,
@@ -229,29 +228,29 @@ impl Event {
             Event::SessionContextCreated { .. } => EventType::SessionContextCreated,
         }
     }
-    
+
     pub fn session_id(&self) -> Option<&str> {
         match self {
-            Event::NavigationStarted { session_id, .. } |
-            Event::NavigationCompleted { session_id, .. } |
-            Event::PageContentChanged { session_id, .. } |
-            Event::BrowserError { session_id, .. } |
-            Event::PerceptionAnalysisStarted { session_id, .. } |
-            Event::PerceptionAnalysisCompleted { session_id, .. } |
-            Event::ElementFound { session_id, .. } |
-            Event::PageClassified { session_id, .. } |
-            Event::AnalysisCompleted { session_id, .. } |
-            Event::PlanningCompleted { session_id, .. } |
-            Event::LearningCompleted { session_id, .. } |
-            Event::ToolExecutionStarted { session_id, .. } |
-            Event::ToolExecutionCompleted { session_id, .. } |
-            Event::ToolExecutionFailed { session_id, .. } |
-            Event::SessionCreated { session_id, .. } |
-            Event::SessionClosed { session_id, .. } |
-            Event::SessionTimeout { session_id, .. } |
-            Event::ModuleInitialized { session_id, .. } |
-            Event::ModuleShutdown { session_id, .. } |
-            Event::SessionContextCreated { session_id, .. } => Some(session_id),
+            Event::NavigationStarted { session_id, .. }
+            | Event::NavigationCompleted { session_id, .. }
+            | Event::PageContentChanged { session_id, .. }
+            | Event::BrowserError { session_id, .. }
+            | Event::PerceptionAnalysisStarted { session_id, .. }
+            | Event::PerceptionAnalysisCompleted { session_id, .. }
+            | Event::ElementFound { session_id, .. }
+            | Event::PageClassified { session_id, .. }
+            | Event::AnalysisCompleted { session_id, .. }
+            | Event::PlanningCompleted { session_id, .. }
+            | Event::LearningCompleted { session_id, .. }
+            | Event::ToolExecutionStarted { session_id, .. }
+            | Event::ToolExecutionCompleted { session_id, .. }
+            | Event::ToolExecutionFailed { session_id, .. }
+            | Event::SessionCreated { session_id, .. }
+            | Event::SessionClosed { session_id, .. }
+            | Event::SessionTimeout { session_id, .. }
+            | Event::ModuleInitialized { session_id, .. }
+            | Event::ModuleShutdown { session_id, .. }
+            | Event::SessionContextCreated { session_id, .. } => Some(session_id),
             _ => None,
         }
     }
@@ -277,6 +276,7 @@ pub trait EventHandler: Send + Sync {
 pub struct EventSubscriber {
     id: String,
     handler: Box<dyn EventHandler>,
+    #[allow(clippy::type_complexity)]
     filter: Option<Box<dyn Fn(&Event) -> bool + Send + Sync>>,
 }
 
@@ -310,29 +310,31 @@ impl EventBus {
     pub fn new() -> Self {
         Self::with_config(EventBusConfig::default())
     }
-    
+
     pub fn with_config(config: EventBusConfig) -> Self {
         Self {
             subscribers: Arc::new(RwLock::new(HashMap::new())),
-            event_history: Arc::new(RwLock::new(VecDeque::with_capacity(config.max_history_size))),
+            event_history: Arc::new(RwLock::new(VecDeque::with_capacity(
+                config.max_history_size,
+            ))),
             metrics: Arc::new(RwLock::new(EventMetrics::default())),
             sequence_counter: Arc::new(RwLock::new(0)),
             max_history_size: config.max_history_size,
         }
     }
-    
+
     /// Emit an event to all subscribers
     pub async fn emit(&self, event: Event) -> Result<()> {
         let start_time = Instant::now();
         let event_type = event.event_type();
-        
+
         // Get next sequence ID
         let sequence_id = {
             let mut counter = self.sequence_counter.write().await;
             *counter += 1;
             *counter
         };
-        
+
         // Store in history
         {
             let mut history = self.event_history.write().await;
@@ -345,14 +347,14 @@ impl EventBus {
                 sequence_id,
             });
         }
-        
+
         // Update metrics
         {
             let mut metrics = self.metrics.write().await;
             metrics.total_events += 1;
             *metrics.events_by_type.entry(event_type).or_insert(0) += 1;
         }
-        
+
         // Notify subscribers
         let subscribers = self.subscribers.read().await;
         if let Some(handlers) = subscribers.get(&event_type) {
@@ -363,7 +365,7 @@ impl EventBus {
                         continue;
                     }
                 }
-                
+
                 // Handle event
                 if let Err(e) = subscriber.handler.handle(&event).await {
                     error!("Event handler {} failed: {}", subscriber.id, e);
@@ -372,35 +374,43 @@ impl EventBus {
                 }
             }
         }
-        
+
         // Update average handling time
         let duration = start_time.elapsed();
         {
             let mut metrics = self.metrics.write().await;
             let total = metrics.total_events as f64;
             let current_avg = metrics.average_handling_time_ms;
-            metrics.average_handling_time_ms = 
+            metrics.average_handling_time_ms =
                 (current_avg * (total - 1.0) + duration.as_millis() as f64) / total;
         }
-        
-        debug!("Event {:?} emitted to {} subscribers in {:?}", 
-               event_type, 
-               subscribers.get(&event_type).map(|s| s.len()).unwrap_or(0),
-               duration);
-        
+
+        debug!(
+            "Event {:?} emitted to {} subscribers in {:?}",
+            event_type,
+            subscribers.get(&event_type).map(|s| s.len()).unwrap_or(0),
+            duration
+        );
+
         Ok(())
     }
-    
+
     /// Subscribe to events of a specific type
     pub async fn subscribe<H>(&self, event_type: EventType, handler: H) -> String
     where
         H: EventHandler + 'static,
     {
-        self.subscribe_with_filter(event_type, handler, None::<fn(&Event) -> bool>).await
+        self.subscribe_with_filter(event_type, handler, None::<fn(&Event) -> bool>)
+            .await
     }
-    
+
     /// Subscribe with a filter function
-    pub async fn subscribe_with_filter<H, F>(&self, event_type: EventType, handler: H, filter: Option<F>) -> String
+    pub async fn subscribe_with_filter<H, F>(
+        &self,
+        event_type: EventType,
+        handler: H,
+        filter: Option<F>,
+    ) -> String
     where
         H: EventHandler + 'static,
         F: Fn(&Event) -> bool + Send + Sync + 'static,
@@ -411,14 +421,17 @@ impl EventBus {
             handler: Box::new(handler),
             filter: filter.map(|f| Box::new(f) as Box<dyn Fn(&Event) -> bool + Send + Sync>),
         });
-        
+
         let mut subscribers = self.subscribers.write().await;
         subscribers.entry(event_type).or_default().push(subscriber);
-        
-        info!("New subscriber {} registered for {:?} events", subscriber_id, event_type);
+
+        info!(
+            "New subscriber {} registered for {:?} events",
+            subscriber_id, event_type
+        );
         subscriber_id
     }
-    
+
     /// Unsubscribe from events
     pub async fn unsubscribe(&self, subscriber_id: &str) -> Result<()> {
         let mut subscribers = self.subscribers.write().await;
@@ -427,7 +440,7 @@ impl EventBus {
         }
         Ok(())
     }
-    
+
     /// Get event history
     pub async fn get_history(&self, limit: Option<usize>) -> Vec<TimestampedEvent> {
         let history = self.event_history.read().await;
@@ -436,15 +449,21 @@ impl EventBus {
             None => history.iter().cloned().collect(),
         }
     }
-    
+
     /// Get metrics
     pub async fn get_metrics(&self) -> EventMetrics {
         self.metrics.read().await.clone()
     }
-    
+
     /// Clear event history
     pub async fn clear_history(&self) {
         self.event_history.write().await.clear();
+    }
+}
+
+impl Default for EventBus {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

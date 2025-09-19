@@ -1,54 +1,45 @@
 // Unified Error Handling and Recovery Strategy
 // Addresses inconsistent error handling across modules
 
-use anyhow::{Result, Context};
+use anyhow::{Context, Result};
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tracing::{error, warn, info, debug};
-use serde::{Serialize, Deserialize};
+use tracing::{error, info, warn};
 
-use super::{EventBus, Event};
+use super::{Event, EventBus};
 
 /// Unified error types for coordination
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum CoordinationError {
     /// Browser-related errors
-    BrowserError {
-        message: String,
-        recoverable: bool,
-    },
-    
+    BrowserError { message: String, recoverable: bool },
+
     /// Perception analysis errors
     PerceptionError {
         message: String,
         fallback_available: bool,
     },
-    
+
     /// Tool execution errors
     ToolError {
         tool_name: String,
         message: String,
         can_retry: bool,
     },
-    
+
     /// Resource exhaustion errors
     ResourceError {
         resource_type: String,
         message: String,
     },
-    
+
     /// Session-related errors
-    SessionError {
-        session_id: String,
-        message: String,
-    },
-    
+    SessionError { session_id: String, message: String },
+
     /// Timeout errors
-    TimeoutError {
-        operation: String,
-        timeout_ms: u64,
-    },
-    
+    TimeoutError { operation: String, timeout_ms: u64 },
+
     /// Coordination errors
     CoordinationError {
         message: String,
@@ -67,17 +58,32 @@ impl std::fmt::Display for CoordinationError {
             CoordinationError::PerceptionError { message, .. } => {
                 write!(f, "Perception error: {}", message)
             }
-            CoordinationError::ToolError { tool_name, message, .. } => {
+            CoordinationError::ToolError {
+                tool_name, message, ..
+            } => {
                 write!(f, "Tool {} error: {}", tool_name, message)
             }
-            CoordinationError::ResourceError { resource_type, message } => {
+            CoordinationError::ResourceError {
+                resource_type,
+                message,
+            } => {
                 write!(f, "Resource {} error: {}", resource_type, message)
             }
-            CoordinationError::SessionError { session_id, message } => {
+            CoordinationError::SessionError {
+                session_id,
+                message,
+            } => {
                 write!(f, "Session {} error: {}", session_id, message)
             }
-            CoordinationError::TimeoutError { operation, timeout_ms } => {
-                write!(f, "Operation {} timed out after {}ms", operation, timeout_ms)
+            CoordinationError::TimeoutError {
+                operation,
+                timeout_ms,
+            } => {
+                write!(
+                    f,
+                    "Operation {} timed out after {}ms",
+                    operation, timeout_ms
+                )
             }
             CoordinationError::CoordinationError { message, .. } => {
                 write!(f, "Coordination error: {}", message)
@@ -137,7 +143,7 @@ impl UnifiedErrorHandler {
             fallback_strategies: FallbackStrategies::default(),
         }
     }
-    
+
     /// Handle perception errors with consistent fallback
     pub async fn handle_perception_error<T>(
         &self,
@@ -145,14 +151,16 @@ impl UnifiedErrorHandler {
         fallback: impl FnOnce() -> Result<T>,
     ) -> Result<T> {
         error!("Perception error occurred: {}", error);
-        
+
         // Emit error event
-        self.event_bus.emit(Event::ModuleError {
-            module_type: "perception".to_string(),
-            error: error.to_string(),
-            timestamp: Instant::now(),
-        }).await?;
-        
+        self.event_bus
+            .emit(Event::ModuleError {
+                module_type: "perception".to_string(),
+                error: error.to_string(),
+                timestamp: Instant::now(),
+            })
+            .await?;
+
         // Try fallback if enabled
         if self.fallback_strategies.enable_legacy_fallback {
             info!("Attempting legacy fallback for perception error");
@@ -166,40 +174,41 @@ impl UnifiedErrorHandler {
                 }
             }
         }
-        
+
         Err(error).context("Perception operation failed with no successful fallback")
     }
-    
+
     /// Handle tool errors with retry logic
     pub async fn handle_tool_error<T>(
         &self,
         tool_name: &str,
         error: anyhow::Error,
-        retry_fn: impl Fn() -> Result<T>,
+        retry_fn: impl FnMut() -> Result<T>,
     ) -> Result<T> {
         error!("Tool {} error occurred: {}", tool_name, error);
-        
+
         // Check if error is retryable
-        let can_retry = !error.to_string().contains("not found") 
-            && !error.to_string().contains("invalid");
-        
+        let can_retry =
+            !error.to_string().contains("not found") && !error.to_string().contains("invalid");
+
         if can_retry {
-            return self.retry_with_backoff(
-                || retry_fn(),
-                &format!("tool_{}", tool_name),
-            ).await;
+            return self
+                .retry_with_backoff(retry_fn, &format!("tool_{}", tool_name))
+                .await;
         }
-        
+
         // Emit error event
-        self.event_bus.emit(Event::ModuleError {
-            module_type: "tools".to_string(),
-            error: format!("{}: {}", tool_name, error),
-            timestamp: Instant::now(),
-        }).await?;
-        
+        self.event_bus
+            .emit(Event::ModuleError {
+                module_type: "tools".to_string(),
+                error: format!("{}: {}", tool_name, error),
+                timestamp: Instant::now(),
+            })
+            .await?;
+
         Err(error).context(format!("Tool {} execution failed", tool_name))
     }
-    
+
     /// Retry with exponential backoff
     pub async fn retry_with_backoff<T>(
         &self,
@@ -208,28 +217,35 @@ impl UnifiedErrorHandler {
     ) -> Result<T> {
         let mut attempt = 0;
         let mut delay = Duration::from_millis(self.retry_config.initial_delay_ms);
-        
+
         loop {
             match operation() {
                 Ok(result) => {
                     if attempt > 0 {
-                        info!("Operation {} succeeded after {} retries", operation_name, attempt);
+                        info!(
+                            "Operation {} succeeded after {} retries",
+                            operation_name, attempt
+                        );
                     }
                     return Ok(result);
                 }
                 Err(error) if attempt < self.retry_config.max_retries => {
                     warn!(
                         "Operation {} failed (attempt {}/{}): {}",
-                        operation_name, attempt + 1, self.retry_config.max_retries, error
+                        operation_name,
+                        attempt + 1,
+                        self.retry_config.max_retries,
+                        error
                     );
-                    
+
                     tokio::time::sleep(delay).await;
-                    
+
                     // Exponential backoff
                     delay = Duration::from_millis(
-                        (delay.as_millis() as f64 * self.retry_config.exponential_base) as u64
-                    ).min(Duration::from_millis(self.retry_config.max_delay_ms));
-                    
+                        (delay.as_millis() as f64 * self.retry_config.exponential_base) as u64,
+                    )
+                    .min(Duration::from_millis(self.retry_config.max_delay_ms));
+
                     attempt += 1;
                 }
                 Err(error) => {
@@ -245,7 +261,7 @@ impl UnifiedErrorHandler {
             }
         }
     }
-    
+
     /// Handle resource errors with graceful degradation
     pub async fn handle_resource_error<T>(
         &self,
@@ -254,9 +270,12 @@ impl UnifiedErrorHandler {
         degraded_fn: impl FnOnce() -> Result<T>,
     ) -> Result<T> {
         error!("Resource {} error: {}", resource_type, error);
-        
+
         if self.fallback_strategies.enable_graceful_degradation {
-            info!("Attempting graceful degradation for resource {}", resource_type);
+            info!(
+                "Attempting graceful degradation for resource {}",
+                resource_type
+            );
             match degraded_fn() {
                 Ok(result) => {
                     warn!("Operating in degraded mode for resource {}", resource_type);
@@ -267,13 +286,14 @@ impl UnifiedErrorHandler {
                 }
             }
         }
-        
+
         Err(CoordinationError::ResourceError {
             resource_type: resource_type.to_string(),
             message: error.to_string(),
-        }.into())
+        }
+        .into())
     }
-    
+
     /// Unified error recovery strategy
     pub async fn recover_from_error(
         &self,
@@ -284,18 +304,14 @@ impl UnifiedErrorHandler {
             CoordinationError::BrowserError { recoverable, .. } if *recoverable => {
                 Ok(RecoveryAction::RetryWithNewBrowser)
             }
-            CoordinationError::PerceptionError { fallback_available, .. } if *fallback_available => {
-                Ok(RecoveryAction::UseFallback)
-            }
+            CoordinationError::PerceptionError {
+                fallback_available, ..
+            } if *fallback_available => Ok(RecoveryAction::UseFallback),
             CoordinationError::ToolError { can_retry, .. } if *can_retry => {
                 Ok(RecoveryAction::RetryOperation)
             }
-            CoordinationError::ResourceError { .. } => {
-                Ok(RecoveryAction::GracefulDegradation)
-            }
-            CoordinationError::TimeoutError { .. } => {
-                Ok(RecoveryAction::ExtendTimeout)
-            }
+            CoordinationError::ResourceError { .. } => Ok(RecoveryAction::GracefulDegradation),
+            CoordinationError::TimeoutError { .. } => Ok(RecoveryAction::ExtendTimeout),
             CoordinationError::SessionError { .. } => {
                 if let Some(sid) = session_id {
                     Ok(RecoveryAction::RecreateSession(sid.to_string()))
@@ -345,28 +361,25 @@ impl CircuitBreaker {
             timeout,
         }
     }
-    
+
     pub async fn call<T>(&self, operation: impl FnOnce() -> Result<T>) -> Result<T> {
         // Check circuit state
         let state = *self.state.read().await;
-        
-        match state {
-            CircuitState::Open => {
-                // Check if timeout has passed
-                if let Some(last) = *self.last_failure.read().await {
-                    if last.elapsed() > self.timeout {
-                        // Try half-open
-                        *self.state.write().await = CircuitState::HalfOpen;
-                    } else {
-                        return Err(anyhow::anyhow!("Circuit breaker is open"));
-                    }
+
+        if let CircuitState::Open = state {
+            // Check if timeout has passed
+            if let Some(last) = *self.last_failure.read().await {
+                if last.elapsed() > self.timeout {
+                    // Try half-open
+                    *self.state.write().await = CircuitState::HalfOpen;
                 } else {
                     return Err(anyhow::anyhow!("Circuit breaker is open"));
                 }
+            } else {
+                return Err(anyhow::anyhow!("Circuit breaker is open"));
             }
-            _ => {}
         }
-        
+
         // Execute operation
         match operation() {
             Ok(result) => {
@@ -382,18 +395,18 @@ impl CircuitBreaker {
                 let mut count = self.failure_count.write().await;
                 *count += 1;
                 *self.last_failure.write().await = Some(Instant::now());
-                
+
                 // Check if threshold exceeded
                 if *count >= self.threshold {
                     *self.state.write().await = CircuitState::Open;
                     warn!("Circuit breaker opened after {} failures", count);
                 }
-                
+
                 Err(error)
             }
         }
     }
-    
+
     pub async fn reset(&self) {
         *self.state.write().await = CircuitState::Closed;
         *self.failure_count.write().await = 0;
@@ -417,7 +430,7 @@ impl<T> CoordinationResultExt<T> for Result<T> {
             }
         }
     }
-    
+
     fn or_degraded<F: FnOnce() -> Result<T>>(self, degraded: F) -> Result<T> {
         match self {
             Ok(value) => Ok(value),

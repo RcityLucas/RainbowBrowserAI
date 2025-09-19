@@ -208,5 +208,5 @@ fi
 echo ""
 echo "For more detailed testing, you can also run:"
 echo "  • cargo test coordination_integration_test"
-echo "  • python3 test_perception_tool_coordination.py"
+echo "  • python3 scripts/test_perception_tool_coordination.py"
 echo "================================================================"

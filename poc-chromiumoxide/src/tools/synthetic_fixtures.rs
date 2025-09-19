@@ -1,8 +1,8 @@
 use super::traits::{Tool, ToolCategory};
 use crate::browser::Browser;
-use anyhow::{Result, anyhow};
-use serde::{Deserialize, Serialize};
+use anyhow::{anyhow, Result};
 use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tracing::info;
 
@@ -67,7 +67,10 @@ impl CreateTestFixtureTool {
         Self { browser }
     }
 
-    async fn create_simple_form(&self, options: &TestFixtureOptions) -> Result<CreateTestFixtureOutput> {
+    async fn create_simple_form(
+        &self,
+        options: &TestFixtureOptions,
+    ) -> Result<CreateTestFixtureOutput> {
         let html = self.generate_simple_form_html(options);
         self.inject_test_html(&html).await?;
 
@@ -88,7 +91,10 @@ impl CreateTestFixtureTool {
         })
     }
 
-    async fn create_complex_form(&self, options: &TestFixtureOptions) -> Result<CreateTestFixtureOutput> {
+    async fn create_complex_form(
+        &self,
+        options: &TestFixtureOptions,
+    ) -> Result<CreateTestFixtureOutput> {
         let html = self.generate_complex_form_html(options);
         self.inject_test_html(&html).await?;
 
@@ -111,7 +117,10 @@ impl CreateTestFixtureTool {
         })
     }
 
-    async fn create_data_table(&self, options: &TestFixtureOptions) -> Result<CreateTestFixtureOutput> {
+    async fn create_data_table(
+        &self,
+        options: &TestFixtureOptions,
+    ) -> Result<CreateTestFixtureOutput> {
         let html = self.generate_data_table_html(options);
         self.inject_test_html(&html).await?;
 
@@ -130,11 +139,17 @@ impl CreateTestFixtureTool {
                 "tr:nth-child(even)".to_string(),
                 ".sortable".to_string(),
             ],
-            fixture_description: format!("Data table with {} rows of sample data", options.element_count),
+            fixture_description: format!(
+                "Data table with {} rows of sample data",
+                options.element_count
+            ),
         })
     }
 
-    async fn create_navigation_menu(&self, options: &TestFixtureOptions) -> Result<CreateTestFixtureOutput> {
+    async fn create_navigation_menu(
+        &self,
+        options: &TestFixtureOptions,
+    ) -> Result<CreateTestFixtureOutput> {
         let html = self.generate_navigation_html(options);
         self.inject_test_html(&html).await?;
 
@@ -152,7 +167,10 @@ impl CreateTestFixtureTool {
                 ".active".to_string(),
                 ".nav-brand".to_string(),
             ],
-            fixture_description: format!("Navigation menu with {} items and dropdowns", options.element_count),
+            fixture_description: format!(
+                "Navigation menu with {} items and dropdowns",
+                options.element_count
+            ),
         })
     }
 
@@ -162,13 +180,13 @@ impl CreateTestFixtureTool {
             "document.documentElement.innerHTML = {};",
             serde_json::to_string(html)?
         );
-        
+
         // First navigate to a blank page
         self.browser.navigate_to("about:blank").await?;
-        
+
         // Then inject the test HTML
         self.browser.execute_script(&script).await?;
-        
+
         // Wait for page to load
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         Ok(())
@@ -199,7 +217,8 @@ impl CreateTestFixtureTool {
             ""
         };
 
-        format!(r#"
+        format!(
+        r#"
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -241,11 +260,14 @@ impl CreateTestFixtureTool {
     {validation_script}
 </body>
 </html>
-        "#, accessibility_attrs=accessibility_attrs, validation_script=validation_script)
+        "#,
+            accessibility_attrs = accessibility_attrs,
+            validation_script = validation_script
+        )
     }
 
     fn generate_complex_form_html(&self, _options: &TestFixtureOptions) -> String {
-        format!(r#"
+        r#"
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -379,13 +401,14 @@ impl CreateTestFixtureTool {
     </div>
 </body>
 </html>
-        "#)
+        "#.to_string()
     }
 
     fn generate_data_table_html(&self, options: &TestFixtureOptions) -> String {
         let mut rows = String::new();
         for i in 1..=options.element_count {
-            rows.push_str(&format!(r#"
+            rows.push_str(&format!(
+                r#"
                 <tr>
                     <td>{}</td>
                     <td>User {}</td>
@@ -397,15 +420,26 @@ impl CreateTestFixtureTool {
                         <button class="btn-delete" onclick="deleteRow({})">Delete</button>
                     </td>
                 </tr>
-            "#, i, i, i, 
-                if i % 3 == 0 { "Admin" } else if i % 2 == 0 { "User" } else { "Guest" },
+            "#,
+                i,
+                i,
+                i,
+                if i % 3 == 0 {
+                    "Admin"
+                } else if i % 2 == 0 {
+                    "User"
+                } else {
+                    "Guest"
+                },
                 if i % 4 == 0 { "inactive" } else { "active" },
                 if i % 4 == 0 { "Inactive" } else { "Active" },
-                i, i
+                i,
+                i
             ));
         }
 
-        format!(r#"
+        format!(
+            r#"
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -478,7 +512,9 @@ impl CreateTestFixtureTool {
     </script>
 </body>
 </html>
-        "#, rows=rows)
+        "#,
+            rows = rows
+        )
     }
 
     fn generate_navigation_html(&self, options: &TestFixtureOptions) -> String {
@@ -486,7 +522,8 @@ impl CreateTestFixtureTool {
         for i in 1..=options.element_count {
             if i <= 3 {
                 // Create dropdown menus for first 3 items
-                let menu_html = format!("
+                let menu_html = format!(
+                    "
                     <li class=\"nav-item dropdown\">
                         <a href=\"#\" class=\"nav-link dropdown-toggle\">Menu {}</a>
                         <ul class=\"dropdown-menu\">
@@ -495,19 +532,25 @@ impl CreateTestFixtureTool {
                             <li><a href=\"/menu{}/item3\">Submenu 3</a></li>
                         </ul>
                     </li>
-                ", i, i, i, i);
+                ",
+                    i, i, i, i
+                );
                 nav_items.push_str(&menu_html);
             } else {
-                let page_html = format!("
+                let page_html = format!(
+                    "
                     <li class=\"nav-item\">
                         <a href=\"/page{}\" class=\"nav-link\">Page {}</a>
                     </li>
-                ", i, i);
+                ",
+                    i, i
+                );
                 nav_items.push_str(&page_html);
             }
         }
 
-        format!(r#"
+        format!(
+            r#"
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -599,7 +642,9 @@ impl CreateTestFixtureTool {
     </script>
 </body>
 </html>
-        "#, nav_items=nav_items)
+        "#,
+            nav_items = nav_items
+        )
     }
 }
 
@@ -607,22 +652,22 @@ impl CreateTestFixtureTool {
 impl Tool for CreateTestFixtureTool {
     type Input = CreateTestFixtureInput;
     type Output = CreateTestFixtureOutput;
-    
+
     fn name(&self) -> &str {
         "create_test_fixture"
     }
-    
+
     fn description(&self) -> &str {
         "Create synthetic HTML test fixtures for testing browser automation tools"
     }
-    
+
     fn category(&self) -> ToolCategory {
         ToolCategory::AdvancedAutomation
     }
-    
+
     async fn execute(&self, input: Self::Input) -> Result<Self::Output> {
         info!("Creating test fixture: {:?}", input.fixture_type);
-        
+
         match input.fixture_type {
             TestFixtureType::SimpleForm => self.create_simple_form(&input.options).await,
             TestFixtureType::ComplexForm => self.create_complex_form(&input.options).await,
@@ -646,7 +691,7 @@ impl Tool for CreateTestFixtureTool {
             }
         }
     }
-    
+
     async fn validate_input(&self, input: &Self::Input) -> Result<()> {
         if input.options.element_count == 0 {
             return Err(anyhow!("Element count must be greater than 0"));

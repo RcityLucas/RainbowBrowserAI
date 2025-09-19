@@ -181,7 +181,7 @@ pub struct IntelligentActionOutput {
 
 ### New Files
 - `src/tools/intelligent_action.rs` - Core intelligent action implementation
-- `test_intelligent_action.py` - Test script for action validation
+- `scripts/test_intelligent_action.py` - Test script for action validation
 - `ACTION_ENGINE_INTEGRATION_SUMMARY.md` - This documentation
 
 ### Modified Files  

@@ -2,12 +2,12 @@
 // This provides high-level intelligent automation capabilities
 
 use anyhow::Result;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tracing::info;
 
 use crate::browser::Browser;
-use crate::perception::{PerceptionEngine, PerceivedElement, ElementType, PageType};
+use crate::perception::{ElementType, PageType, PerceivedElement, PerceptionEngine};
 
 /// Enhanced browser automation with perception capabilities
 pub struct PerceptionAwareBrowser {
@@ -67,7 +67,10 @@ impl PerceptionAwareBrowser {
     }
 
     /// Execute an intelligent command using natural language
-    pub async fn execute_intelligent_command(&mut self, command: IntelligentCommand) -> Result<IntelligentCommandResult> {
+    pub async fn execute_intelligent_command(
+        &mut self,
+        command: IntelligentCommand,
+    ) -> Result<IntelligentCommandResult> {
         info!("Executing intelligent command: {:?}", command.action);
 
         // Classify the current page first
@@ -75,8 +78,14 @@ impl PerceptionAwareBrowser {
 
         // Take screenshot if requested
         let screenshot = if command.options.take_screenshot {
-            let screenshot_data = self.browser.screenshot(crate::browser::ScreenshotOptions::default()).await?;
-            Some(base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &screenshot_data))
+            let screenshot_data = self
+                .browser
+                .screenshot(crate::browser::ScreenshotOptions::default())
+                .await?;
+            Some(base64::Engine::encode(
+                &base64::engine::general_purpose::STANDARD,
+                &screenshot_data,
+            ))
         } else {
             None
         };
@@ -110,24 +119,28 @@ impl PerceptionAwareBrowser {
                 extracted_data: None,
                 page_type,
                 confidence: 0.0,
-            })
+            }),
         }
     }
 
     /// Intelligent click that finds elements by description
-    async fn intelligent_click(&mut self, command: IntelligentCommand) -> Result<IntelligentCommandResult> {
-        let description = command.target_description
+    async fn intelligent_click(
+        &mut self,
+        command: IntelligentCommand,
+    ) -> Result<IntelligentCommandResult> {
+        let description = command
+            .target_description
             .ok_or_else(|| anyhow::anyhow!("No target description provided for click"))?;
 
         // Find the element using perception
         let element = self.perception.find_element(&description).await?;
-        
+
         // Check confidence threshold
         if let Some(threshold) = command.options.confidence_threshold {
             if element.confidence < threshold {
                 return Err(anyhow::anyhow!(
-                    "Element confidence ({:.2}) below threshold ({:.2})", 
-                    element.confidence, 
+                    "Element confidence ({:.2}) below threshold ({:.2})",
+                    element.confidence,
                     threshold
                 ));
             }
@@ -135,9 +148,10 @@ impl PerceptionAwareBrowser {
 
         // Perform the click
         self.browser.click(&element.selector).await?;
-        
+
         // Update context
-        self.perception.update_context("click", Some(&element.selector));
+        self.perception
+            .update_context("click", Some(&element.selector));
 
         // Clone values we need before moving element
         let element_text = element.text.clone();
@@ -156,40 +170,55 @@ impl PerceptionAwareBrowser {
     }
 
     /// Intelligent text input with smart field detection
-    async fn intelligent_type(&mut self, command: IntelligentCommand) -> Result<IntelligentCommandResult> {
-        let text = command.input_text
+    async fn intelligent_type(
+        &mut self,
+        command: IntelligentCommand,
+    ) -> Result<IntelligentCommandResult> {
+        let text = command
+            .input_text
             .ok_or_else(|| anyhow::anyhow!("No input text provided"))?;
 
-        let description = command.target_description
+        let description = command
+            .target_description
             .unwrap_or_else(|| "input field".to_string());
 
         // Find the input element
         let element = self.perception.find_element(&description).await?;
 
         // Verify it's an input element
-        if !matches!(element.element_type, ElementType::Input | ElementType::TextArea) {
-            return Err(anyhow::anyhow!("Target element is not an input field: {:?}", element.element_type));
+        if !matches!(
+            element.element_type,
+            ElementType::Input | ElementType::TextArea
+        ) {
+            return Err(anyhow::anyhow!(
+                "Target element is not an input field: {:?}",
+                element.element_type
+            ));
         }
 
         // Clear and type
         self.browser.click(&element.selector).await?; // Focus first
-        
+
         // Clear existing content (Ctrl+A, Delete)
-        let clear_script = format!(r#"
+        let clear_script = format!(
+            r#"
             const element = document.querySelector('{}');
             if (element) {{
                 element.select();
                 element.value = '';
                 element.dispatchEvent(new Event('input', {{ bubbles: true }}));
             }}
-        "#, element.selector);
+        "#,
+            element.selector
+        );
         self.browser.execute_script(&clear_script).await?;
 
         // Type the new text
         self.browser.type_text(&element.selector, &text).await?;
 
         // Update context
-        self.perception.update_context("type", Some(&element.selector));
+        self.perception
+            .update_context("type", Some(&element.selector));
 
         // Clone values we need before moving element
         let element_text = element.text.clone();
@@ -208,11 +237,16 @@ impl PerceptionAwareBrowser {
     }
 
     /// Intelligent dropdown selection
-    async fn intelligent_select(&mut self, command: IntelligentCommand) -> Result<IntelligentCommandResult> {
-        let value = command.input_text
+    async fn intelligent_select(
+        &mut self,
+        command: IntelligentCommand,
+    ) -> Result<IntelligentCommandResult> {
+        let value = command
+            .input_text
             .ok_or_else(|| anyhow::anyhow!("No option value provided"))?;
 
-        let description = command.target_description
+        let description = command
+            .target_description
             .unwrap_or_else(|| "dropdown".to_string());
 
         // Find the select element
@@ -220,14 +254,20 @@ impl PerceptionAwareBrowser {
 
         // Verify it's a select element
         if element.element_type != ElementType::Select {
-            return Err(anyhow::anyhow!("Target element is not a dropdown: {:?}", element.element_type));
+            return Err(anyhow::anyhow!(
+                "Target element is not a dropdown: {:?}",
+                element.element_type
+            ));
         }
 
         // Select the option
-        self.browser.select_option(&element.selector, &value).await?;
+        self.browser
+            .select_option(&element.selector, &value)
+            .await?;
 
         // Update context
-        self.perception.update_context("select", Some(&element.selector));
+        self.perception
+            .update_context("select", Some(&element.selector));
 
         // Clone values we need before moving element
         let element_confidence = element.confidence;
@@ -245,7 +285,10 @@ impl PerceptionAwareBrowser {
     }
 
     /// Intelligent data extraction based on page type
-    async fn intelligent_extract(&mut self, _command: IntelligentCommand) -> Result<IntelligentCommandResult> {
+    async fn intelligent_extract(
+        &mut self,
+        _command: IntelligentCommand,
+    ) -> Result<IntelligentCommandResult> {
         // Extract data based on page classification
         let extracted_data = self.perception.extract_page_data().await?;
 
@@ -262,8 +305,12 @@ impl PerceptionAwareBrowser {
     }
 
     /// Intelligent search that finds and uses search functionality
-    async fn intelligent_search(&mut self, command: IntelligentCommand) -> Result<IntelligentCommandResult> {
-        let query = command.input_text
+    async fn intelligent_search(
+        &mut self,
+        command: IntelligentCommand,
+    ) -> Result<IntelligentCommandResult> {
+        let query = command
+            .input_text
             .ok_or_else(|| anyhow::anyhow!("No search query provided"))?;
 
         // Try to find search box on current page
@@ -271,27 +318,32 @@ impl PerceptionAwareBrowser {
             Ok(search_box) => {
                 // Found search box, use it
                 self.browser.click(&search_box.selector).await?;
-                
+
                 // Clear existing content
-                let clear_script = format!(r#"
+                let clear_script = format!(
+                    r#"
                     const element = document.querySelector('{}');
                     if (element) {{
                         element.select();
                         element.value = '';
                     }}
-                "#, search_box.selector);
+                "#,
+                    search_box.selector
+                );
                 self.browser.execute_script(&clear_script).await?;
-                
+
                 // Type search query
                 self.browser.type_text(&search_box.selector, &query).await?;
 
                 // Try to find and click search button
-                let search_result = if let Ok(search_btn) = self.perception.find_element("search button").await {
-                    self.browser.click(&search_btn.selector).await?;
-                    format!("Searched for '{}' using page search", query)
-                } else {
-                    // Press Enter if no button found
-                    let press_enter = format!(r#"
+                let search_result =
+                    if let Ok(search_btn) = self.perception.find_element("search button").await {
+                        self.browser.click(&search_btn.selector).await?;
+                        format!("Searched for '{}' using page search", query)
+                    } else {
+                        // Press Enter if no button found
+                        let press_enter = format!(
+                            r#"
                         const element = document.querySelector('{}');
                         if (element) {{
                             const event = new KeyboardEvent('keydown', {{
@@ -302,13 +354,16 @@ impl PerceptionAwareBrowser {
                             }});
                             element.dispatchEvent(event);
                         }}
-                    "#, search_box.selector);
-                    self.browser.execute_script(&press_enter).await?;
-                    format!("Searched for '{}' (pressed Enter)", query)
-                };
+                    "#,
+                            search_box.selector
+                        );
+                        self.browser.execute_script(&press_enter).await?;
+                        format!("Searched for '{}' (pressed Enter)", query)
+                    };
 
                 // Update context
-                self.perception.update_context("search", Some(&search_box.selector));
+                self.perception
+                    .update_context("search", Some(&search_box.selector));
 
                 // Clone values we need before moving search_box
                 let search_confidence = search_box.confidence;
@@ -326,8 +381,10 @@ impl PerceptionAwareBrowser {
             }
             Err(_) => {
                 // No search box found, navigate to Google
-                let google_url = format!("https://www.google.com/search?q={}", 
-                                        urlencoding::encode(&query));
+                let google_url = format!(
+                    "https://www.google.com/search?q={}",
+                    urlencoding::encode(&query)
+                );
                 self.browser.navigate_to(&google_url).await?;
 
                 Ok(IntelligentCommandResult {
@@ -345,8 +402,12 @@ impl PerceptionAwareBrowser {
     }
 
     /// Intelligent navigation with page analysis
-    async fn intelligent_navigate(&mut self, command: IntelligentCommand) -> Result<IntelligentCommandResult> {
-        let url = command.target_description
+    async fn intelligent_navigate(
+        &mut self,
+        command: IntelligentCommand,
+    ) -> Result<IntelligentCommandResult> {
+        let url = command
+            .target_description
             .ok_or_else(|| anyhow::anyhow!("No URL provided for navigation"))?;
 
         // Navigate to the URL
@@ -374,8 +435,12 @@ impl PerceptionAwareBrowser {
     }
 
     /// Intelligent waiting with element detection
-    async fn intelligent_wait(&mut self, command: IntelligentCommand) -> Result<IntelligentCommandResult> {
-        let description = command.target_description
+    async fn intelligent_wait(
+        &mut self,
+        command: IntelligentCommand,
+    ) -> Result<IntelligentCommandResult> {
+        let description = command
+            .target_description
             .unwrap_or_else(|| "page to load".to_string());
 
         let timeout = command.options.wait_for_element.unwrap_or(10000);
@@ -410,10 +475,13 @@ impl PerceptionAwareBrowser {
         } else {
             // Wait for specific element
             let start_time = std::time::Instant::now();
-            
+
             loop {
                 if start_time.elapsed().as_millis() > timeout as u128 {
-                    return Err(anyhow::anyhow!("Timeout waiting for element: {}", description));
+                    return Err(anyhow::anyhow!(
+                        "Timeout waiting for element: {}",
+                        description
+                    ));
                 }
 
                 match self.perception.find_element(&description).await {
@@ -421,7 +489,7 @@ impl PerceptionAwareBrowser {
                         // Clone values we need before moving element
                         let element_text = element.text.clone();
                         let element_confidence = element.confidence;
-                        
+
                         return Ok(IntelligentCommandResult {
                             success: true,
                             action: "wait".to_string(),

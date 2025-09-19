@@ -124,7 +124,7 @@ grep "perceive_with_mode" src/api/perception_handlers.rs
 
 3. Test the API (after restart):
 ```bash
-test_perception_api.bat
+scripts/windows/test_perception_api.bat
 ```
 
 ## 📈 Performance Targets

@@ -1,8 +1,8 @@
 use super::traits::{Tool, ToolCategory};
-use crate::browser::{Browser, core::BrowserOps};
-use anyhow::{Result, anyhow};
-use serde::{Deserialize, Serialize};
+use crate::browser::{core::BrowserOps, Browser};
+use anyhow::{anyhow, Result};
 use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::Duration;
 use tracing::info;
@@ -45,26 +45,30 @@ impl WaitForElementTool {
 impl Tool for WaitForElementTool {
     type Input = WaitForElementInput;
     type Output = WaitForElementOutput;
-    
+
     fn name(&self) -> &str {
         "wait_for_element"
     }
-    
+
     fn description(&self) -> &str {
         "Wait for an element to appear on the page"
     }
-    
+
     fn category(&self) -> ToolCategory {
         ToolCategory::Synchronization
     }
-    
+
     async fn execute(&self, input: Self::Input) -> Result<Self::Output> {
         info!("Waiting for element: {}", input.selector);
         let start = std::time::Instant::now();
-        
+
         let timeout = Duration::from_millis(input.timeout_ms);
-        
-        match self.browser.wait_for_selector(&input.selector, timeout).await {
+
+        match self
+            .browser
+            .wait_for_selector(&input.selector, timeout)
+            .await
+        {
             Ok(_) => {
                 let wait_time = start.elapsed().as_millis() as u64;
                 Ok(WaitForElementOutput {
@@ -73,16 +77,14 @@ impl Tool for WaitForElementTool {
                     wait_time_ms: wait_time,
                 })
             }
-            Err(_) => {
-                Ok(WaitForElementOutput {
-                    success: false,
-                    element_found: false,
-                    wait_time_ms: input.timeout_ms,
-                })
-            }
+            Err(_) => Ok(WaitForElementOutput {
+                success: false,
+                element_found: false,
+                wait_time_ms: input.timeout_ms,
+            }),
         }
     }
-    
+
     async fn validate_input(&self, input: &Self::Input) -> Result<()> {
         if input.selector.is_empty() {
             return Err(anyhow!("Selector cannot be empty"));
@@ -97,7 +99,7 @@ impl Tool for WaitForElementTool {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct WaitForConditionInput {
-    pub condition: String,  // JavaScript expression
+    pub condition: String, // JavaScript expression
     #[serde(default = "default_timeout")]
     pub timeout_ms: u64,
     #[serde(default = "default_check_interval")]
@@ -130,25 +132,25 @@ impl WaitForConditionTool {
 impl Tool for WaitForConditionTool {
     type Input = WaitForConditionInput;
     type Output = WaitForConditionOutput;
-    
+
     fn name(&self) -> &str {
         "wait_for_condition"
     }
-    
+
     fn description(&self) -> &str {
         "Wait for a JavaScript condition to become true"
     }
-    
+
     fn category(&self) -> ToolCategory {
         ToolCategory::Synchronization
     }
-    
+
     async fn execute(&self, input: Self::Input) -> Result<Self::Output> {
         info!("Waiting for condition: {}", input.condition);
         let start = std::time::Instant::now();
         let timeout = Duration::from_millis(input.timeout_ms);
         let check_interval = Duration::from_millis(input.check_interval_ms);
-        
+
         loop {
             if start.elapsed() > timeout {
                 return Ok(WaitForConditionOutput {
@@ -158,7 +160,7 @@ impl Tool for WaitForConditionTool {
                     result: None,
                 });
             }
-            
+
             let script = format!("({})", input.condition);
             match self.browser.execute_script(&script).await {
                 Ok(result) => {
@@ -176,11 +178,11 @@ impl Tool for WaitForConditionTool {
                     // Script error, continue waiting
                 }
             }
-            
+
             tokio::time::sleep(check_interval).await;
         }
     }
-    
+
     async fn validate_input(&self, input: &Self::Input) -> Result<()> {
         if input.condition.is_empty() {
             return Err(anyhow!("Condition cannot be empty"));
@@ -232,58 +234,59 @@ impl WaitForNavigationTool {
 impl Tool for WaitForNavigationTool {
     type Input = WaitForNavigationInput;
     type Output = WaitForNavigationOutput;
-    
+
     fn name(&self) -> &str {
         "wait_for_navigation"
     }
-    
+
     fn description(&self) -> &str {
         "Wait for page navigation to complete with various load states"
     }
-    
+
     fn category(&self) -> ToolCategory {
         ToolCategory::Synchronization
     }
-    
+
     async fn execute(&self, input: Self::Input) -> Result<Self::Output> {
         info!("Waiting for navigation to complete");
         let start = std::time::Instant::now();
         let timeout = Duration::from_millis(input.timeout_ms);
-        
+
         // Wait for basic navigation completion
-        let navigation_result = tokio::time::timeout(
-            timeout,
-            self.browser.wait_for_load()
-        ).await;
-        
+        let navigation_result = tokio::time::timeout(timeout, self.browser.wait_for_load()).await;
+
         match navigation_result {
             Ok(Ok(())) => {
                 let mut wait_time = start.elapsed().as_millis() as u64;
                 let mut load_time_ms = None;
-                
+
                 // Additional wait for network idle if requested
                 if input.wait_for_network_idle {
                     let idle_start = std::time::Instant::now();
-                    if let Err(_) = tokio::time::timeout(
+                    if tokio::time::timeout(
                         Duration::from_millis(input.timeout_ms - wait_time),
-                        self.browser.wait_for_network_idle(Duration::from_millis(1000))
-                    ).await {
+                        self.browser
+                            .wait_for_network_idle(Duration::from_millis(1000)),
+                    )
+                    .await
+                    .is_err()
+                    {
                         // Network idle timeout, but navigation still succeeded
                     }
                     let idle_time = idle_start.elapsed().as_millis() as u64;
                     load_time_ms = Some(idle_time);
                     wait_time = start.elapsed().as_millis() as u64;
                 }
-                
+
                 let final_url = self.browser.current_url().await.unwrap_or_default();
-                
+
                 // Check expected URL if provided
                 let url_matches = if let Some(expected) = &input.expected_url {
                     final_url.contains(expected) || final_url == *expected
                 } else {
                     true
                 };
-                
+
                 Ok(WaitForNavigationOutput {
                     success: url_matches,
                     navigation_completed: true,
@@ -314,12 +317,13 @@ impl Tool for WaitForNavigationTool {
             }
         }
     }
-    
+
     async fn validate_input(&self, input: &Self::Input) -> Result<()> {
         if input.timeout_ms == 0 {
             return Err(anyhow!("Timeout must be greater than 0"));
         }
-        if input.timeout_ms > 300000 { // 5 minutes max
+        if input.timeout_ms > 300000 {
+            // 5 minutes max
             return Err(anyhow!("Timeout cannot exceed 300 seconds"));
         }
         Ok(())
@@ -364,32 +368,39 @@ impl WaitForNetworkIdleTool {
 impl Tool for WaitForNetworkIdleTool {
     type Input = WaitForNetworkIdleInput;
     type Output = WaitForNetworkIdleOutput;
-    
+
     fn name(&self) -> &str {
         "wait_for_network_idle"
     }
-    
+
     fn description(&self) -> &str {
         "Wait for network activity to be idle using enhanced CDP Network domain tracking"
     }
-    
+
     fn category(&self) -> ToolCategory {
         ToolCategory::Synchronization
     }
-    
+
     async fn execute(&self, input: Self::Input) -> Result<Self::Output> {
-        info!("Waiting for network idle: {}ms threshold, {}ms timeout (CDP-backed)", input.idle_time_ms, input.timeout_ms);
+        info!(
+            "Waiting for network idle: {}ms threshold, {}ms timeout (CDP-backed)",
+            input.idle_time_ms, input.timeout_ms
+        );
         let start = std::time::Instant::now();
-        
+
         let idle_duration = Duration::from_millis(input.idle_time_ms);
         let timeout = Duration::from_millis(input.timeout_ms);
-        
+
         // Use the enhanced CDP-backed network idle detection from browser
-        let result = tokio::time::timeout(timeout, self.browser.wait_for_network_idle(idle_duration)).await;
-        
+        let result =
+            tokio::time::timeout(timeout, self.browser.wait_for_network_idle(idle_duration)).await;
+
         match result {
             Ok(Ok(())) => {
-                info!("Network idle achieved after {}ms (CDP-tracked)", start.elapsed().as_millis());
+                info!(
+                    "Network idle achieved after {}ms (CDP-tracked)",
+                    start.elapsed().as_millis()
+                );
                 Ok(WaitForNetworkIdleOutput {
                     success: true,
                     network_idle_achieved: true,
@@ -407,7 +418,10 @@ impl Tool for WaitForNetworkIdleTool {
                 })
             }
             Err(_) => {
-                info!("Network idle timeout after {}ms (CDP-tracked)", input.timeout_ms);
+                info!(
+                    "Network idle timeout after {}ms (CDP-tracked)",
+                    input.timeout_ms
+                );
                 Ok(WaitForNetworkIdleOutput {
                     success: false,
                     network_idle_achieved: false,
@@ -417,7 +431,7 @@ impl Tool for WaitForNetworkIdleTool {
             }
         }
     }
-    
+
     async fn validate_input(&self, input: &Self::Input) -> Result<()> {
         if input.idle_time_ms == 0 {
             return Err(anyhow!("Idle time must be greater than 0"));
@@ -428,7 +442,8 @@ impl Tool for WaitForNetworkIdleTool {
         if input.timeout_ms == 0 {
             return Err(anyhow!("Timeout must be greater than 0"));
         }
-        if input.timeout_ms > 300000 { // 5 minutes max
+        if input.timeout_ms > 300000 {
+            // 5 minutes max
             return Err(anyhow!("Timeout cannot exceed 300 seconds"));
         }
         Ok(())

@@ -2,35 +2,34 @@
 // Provides intelligent caching with event-driven invalidation
 
 use anyhow::Result;
-use serde::{Serialize, Deserialize};
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Instant;
 use tokio::sync::RwLock;
-use std::time::{Duration, Instant};
-use tracing::{debug, info};
+// tracing::debug is currently unused in this module
 
-use super::events::{EventBus, Event, EventType};
+use super::events::{Event, EventBus, EventType};
 
 /// Unified cache for all modules
 pub struct UnifiedCache {
     browser_cache: Arc<BrowserCache>,
     perception_cache: Arc<PerceptionCache>,
     tool_cache: Arc<ToolCache>,
-    coordinator: Arc<CacheCoordinator>,
+    _coordinator: Arc<CacheCoordinator>,
 }
 
 impl UnifiedCache {
     pub async fn new(event_bus: Arc<EventBus>) -> Result<Self> {
         let coordinator = Arc::new(CacheCoordinator::new(event_bus).await);
-        
+
         Ok(Self {
             browser_cache: Arc::new(BrowserCache::new()),
             perception_cache: Arc::new(PerceptionCache::new()),
             tool_cache: Arc::new(ToolCache::new()),
-            coordinator,
+            _coordinator: coordinator,
         })
     }
-    
+
     pub async fn get_stats(&self) -> CacheStats {
         CacheStats {
             browser_stats: self.browser_cache.get_stats().await,
@@ -38,7 +37,7 @@ impl UnifiedCache {
             tool_stats: self.tool_cache.get_stats().await,
         }
     }
-    
+
     /// Invalidate cache entries matching a pattern
     pub async fn invalidate_by_pattern(&self, pattern: &str) {
         // Invalidate matching entries in each cache
@@ -50,64 +49,72 @@ impl UnifiedCache {
 
 /// Cache coordinator for intelligent invalidation
 pub struct CacheCoordinator {
-    invalidation_rules: HashMap<EventType, Vec<InvalidationRule>>,
+    _invalidation_rules: HashMap<EventType, Vec<InvalidationRule>>,
     event_bus: Arc<EventBus>,
 }
 
 impl CacheCoordinator {
     pub async fn new(event_bus: Arc<EventBus>) -> Self {
         let mut coordinator = Self {
-            invalidation_rules: Self::build_invalidation_rules(),
+            _invalidation_rules: Self::build_invalidation_rules(),
             event_bus: event_bus.clone(),
         };
-        
+
         // Subscribe to events that require cache invalidation
         coordinator.setup_event_subscriptions(event_bus).await;
-        
+
         coordinator
     }
-    
+
     fn build_invalidation_rules() -> HashMap<EventType, Vec<InvalidationRule>> {
         let mut rules = HashMap::new();
-        
+
         // Navigation invalidates perception and some tool caches
-        rules.insert(EventType::NavigationCompleted, vec![
-            InvalidationRule::InvalidateAll(CacheType::PerceptionElements),
-            InvalidationRule::InvalidateAll(CacheType::BrowserScreenshots),
-            InvalidationRule::Selective(CacheType::ToolResults, |key| {
-                key.contains("element_") || key.contains("page_")
-            }),
-        ]);
-        
+        rules.insert(
+            EventType::NavigationCompleted,
+            vec![
+                InvalidationRule::InvalidateAll(CacheType::PerceptionElements),
+                InvalidationRule::InvalidateAll(CacheType::BrowserScreenshots),
+                InvalidationRule::Selective(CacheType::ToolResults, |key| {
+                    key.contains("element_") || key.contains("page_")
+                }),
+            ],
+        );
+
         // Page content changes invalidate element caches
-        rules.insert(EventType::PageContentChanged, vec![
-            InvalidationRule::InvalidateAll(CacheType::PerceptionElements),
-            InvalidationRule::Selective(CacheType::ToolResults, |key| {
-                key.contains("extract_") || key.contains("analyze_")
-            }),
-        ]);
-        
+        rules.insert(
+            EventType::PageContentChanged,
+            vec![
+                InvalidationRule::InvalidateAll(CacheType::PerceptionElements),
+                InvalidationRule::Selective(CacheType::ToolResults, |key| {
+                    key.contains("extract_") || key.contains("analyze_")
+                }),
+            ],
+        );
+
         rules
     }
-    
-    async fn setup_event_subscriptions(&mut self, event_bus: Arc<EventBus>) {
+
+    async fn setup_event_subscriptions(&mut self, _event_bus: Arc<EventBus>) {
         // For now, we'll handle events through the event bus emit mechanism
         // The subscription system needs proper async handler implementation
         // which is complex with the current trait design
-        
+
         // TODO: Implement proper event subscription with async handlers
         // This would require creating handler structs that implement EventHandler trait
     }
-    
+
     pub async fn invalidate_navigation_sensitive(&self, _new_url: &str) -> Result<()> {
         // Emit cache invalidation event
-        self.event_bus.emit(Event::CacheInvalidated {
-            cache_type: "navigation_sensitive".to_string(),
-            reason: "navigation".to_string(),
-            keys_affected: vec![],
-            timestamp: Instant::now(),
-        }).await?;
-        
+        self.event_bus
+            .emit(Event::CacheInvalidated {
+                cache_type: "navigation_sensitive".to_string(),
+                reason: "navigation".to_string(),
+                keys_affected: vec![],
+                timestamp: Instant::now(),
+            })
+            .await?;
+
         Ok(())
     }
 }
@@ -138,7 +145,7 @@ impl BrowserCache {
             page_data: Arc::new(RwLock::new(HashMap::new())),
         }
     }
-    
+
     pub async fn get_stats(&self) -> ComponentCacheStats {
         ComponentCacheStats {
             entries: self.screenshots.read().await.len() + self.page_data.read().await.len(),
@@ -147,7 +154,7 @@ impl BrowserCache {
             size_bytes: 0,
         }
     }
-    
+
     pub async fn invalidate_by_pattern(&self, pattern: &str) {
         // Simple pattern matching - in real implementation would be more sophisticated
         if pattern.contains("*") {
@@ -155,6 +162,12 @@ impl BrowserCache {
             self.screenshots.write().await.clear();
             self.page_data.write().await.clear();
         }
+    }
+}
+
+impl Default for BrowserCache {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -171,7 +184,7 @@ impl PerceptionCache {
             analyses: Arc::new(RwLock::new(HashMap::new())),
         }
     }
-    
+
     pub async fn get_stats(&self) -> ComponentCacheStats {
         ComponentCacheStats {
             entries: self.elements.read().await.len() + self.analyses.read().await.len(),
@@ -180,12 +193,18 @@ impl PerceptionCache {
             size_bytes: 0,
         }
     }
-    
+
     pub async fn invalidate_by_pattern(&self, pattern: &str) {
         if pattern.contains("*") {
             self.elements.write().await.clear();
             self.analyses.write().await.clear();
         }
+    }
+}
+
+impl Default for PerceptionCache {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -202,7 +221,7 @@ impl ToolCache {
             metrics: Arc::new(RwLock::new(CacheMetrics::default())),
         }
     }
-    
+
     pub async fn get_stats(&self) -> ComponentCacheStats {
         let metrics = self.metrics.read().await;
         ComponentCacheStats {
@@ -212,7 +231,7 @@ impl ToolCache {
             size_bytes: 0,
         }
     }
-    
+
     pub async fn invalidate_by_pattern(&self, pattern: &str) {
         if pattern.contains("*") {
             self.results.write().await.clear();
@@ -220,8 +239,15 @@ impl ToolCache {
     }
 }
 
+impl Default for ToolCache {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 // Cache entry types
 
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 struct CachedScreenshot {
     data: Vec<u8>,
@@ -230,6 +256,7 @@ struct CachedScreenshot {
     url: String,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 struct CachedPageData {
     title: String,
@@ -237,6 +264,7 @@ struct CachedPageData {
     cached_at: Instant,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 struct CachedElement {
     selector: String,
@@ -245,6 +273,7 @@ struct CachedElement {
     confidence: f64,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 struct CachedAnalysis {
     analysis_type: String,
@@ -252,6 +281,7 @@ struct CachedAnalysis {
     cached_at: Instant,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 struct CachedToolResult {
     tool_name: String,

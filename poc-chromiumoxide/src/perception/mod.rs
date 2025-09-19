@@ -1,37 +1,37 @@
 // Perception Module for Chromiumoxide Edition
 // Advanced visual understanding and element detection for browser automation
 
-use std::collections::HashMap;
-use anyhow::Result;
-use serde::{Serialize, Deserialize};
 use crate::browser::Browser;
-use tracing::{info, debug};
+use anyhow::Result;
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use tracing::{debug, info};
 
 // Re-export advanced perception capabilities
-pub use layered_perception::{
-    LayeredPerception, PerceptionMode, PerceptionResult, PerceptionConfig,
-    LightningPerception, QuickPerception, StandardPerception, DeepPerception
-};
 pub use chromium_integration::{
-    ChromiumIntegration, ChromiumConfig, ChromiumPerceptionResult,
-    DomSnapshot, AccessibilityTree, PerformanceData, VisualElements
+    AccessibilityTree, ChromiumConfig, ChromiumIntegration, ChromiumPerceptionResult, DomSnapshot,
+    PerformanceData, VisualElements,
+};
+pub use layered_perception::{
+    DeepPerception, LayeredPerception, LightningPerception, PerceptionConfig, PerceptionMode,
+    PerceptionResult, QuickPerception, StandardPerception,
 };
 
 // pub mod visual; // Removed: Stub code not implemented
-pub mod semantic;
+pub mod chromium_integration;
 pub mod context_aware;
-pub mod smart_forms;
 pub mod integration;
 pub mod layered_perception;
-pub mod chromium_integration;
+pub mod semantic;
+pub mod smart_forms;
 
 /// Enhanced core perception engine with layered architecture
 pub struct PerceptionEngine {
     browser: std::sync::Arc<Browser>,
     context: PerceptionContext,
     element_cache: HashMap<String, CachedElement>,
-    
+
     // New layered perception components
     layered_perception: LayeredPerception,
     chromium_integration: Option<ChromiumIntegration>,
@@ -58,7 +58,7 @@ pub struct PerceptionContext {
     pub last_element: Option<String>,
     pub form_state: HashMap<String, String>,
     pub named_elements: HashMap<String, String>, // "the search box" -> selector
-    pub screenshot_cache: Option<Vec<u8>>, // Latest screenshot for visual analysis
+    pub screenshot_cache: Option<Vec<u8>>,       // Latest screenshot for visual analysis
 }
 
 /// Categorizes what type of page we're on
@@ -165,11 +165,11 @@ impl PerceptionEngine {
 
     /// Create perception engine with custom configuration
     pub async fn with_config(
-        browser: std::sync::Arc<Browser>, 
-        config: EnhancedPerceptionConfig
+        browser: std::sync::Arc<Browser>,
+        config: EnhancedPerceptionConfig,
     ) -> Result<Self> {
         let layered_perception = LayeredPerception::new(browser.clone());
-        
+
         let chromium_integration = if config.enable_advanced_cdp {
             Some(ChromiumIntegration::new(browser.clone()).await?)
         } else {
@@ -199,7 +199,8 @@ impl PerceptionEngine {
         info!("Starting enhanced page analysis");
 
         // Use layered perception for fast analysis
-        let perception_result = self.layered_perception
+        let perception_result = self
+            .layered_perception
             .perceive(self.config.default_mode)
             .await?;
 
@@ -220,14 +221,19 @@ impl PerceptionEngine {
         };
 
         // Update context with new findings
-        self.update_context_from_analysis(&enhanced_analysis).await?;
+        self.update_context_from_analysis(&enhanced_analysis)
+            .await?;
 
         Ok(enhanced_analysis)
     }
 
     /// Lightning fast analysis (<50ms) for quick decisions
     pub async fn quick_scan(&mut self) -> Result<LightningPerception> {
-        match self.layered_perception.perceive(PerceptionMode::Lightning).await? {
+        match self
+            .layered_perception
+            .perceive(PerceptionMode::Lightning)
+            .await?
+        {
             PerceptionResult::Lightning(result) => Ok(result),
             _ => Err(anyhow::anyhow!("Expected Lightning perception result")),
         }
@@ -235,7 +241,11 @@ impl PerceptionEngine {
 
     /// Deep comprehensive analysis for complex pages
     pub async fn deep_analysis(&mut self) -> Result<DeepPerception> {
-        match self.layered_perception.perceive(PerceptionMode::Deep).await? {
+        match self
+            .layered_perception
+            .perceive(PerceptionMode::Deep)
+            .await?
+        {
             PerceptionResult::Deep(result) => Ok(result),
             _ => Err(anyhow::anyhow!("Expected Deep perception result")),
         }
@@ -243,11 +253,16 @@ impl PerceptionEngine {
 
     /// Adaptive perception - automatically chooses best mode
     pub async fn adaptive_perceive(&mut self) -> Result<PerceptionResult> {
-        self.layered_perception.perceive(PerceptionMode::Adaptive).await
+        self.layered_perception
+            .perceive(PerceptionMode::Adaptive)
+            .await
     }
 
     /// Advanced element location using multiple strategies
-    pub async fn locate_element_intelligently(&self, query: &str) -> Result<Vec<SmartElementMatch>> {
+    pub async fn locate_element_intelligently(
+        &self,
+        query: &str,
+    ) -> Result<Vec<SmartElementMatch>> {
         let mut matches = Vec::new();
 
         // Try different interpretation of the query
@@ -265,7 +280,8 @@ impl PerceptionEngine {
 
         // Use chromium integration for advanced matching
         if let Some(ref chromium_integration) = self.chromium_integration {
-            if let Ok(advanced_matches) = chromium_integration.locate_element_advanced(query).await {
+            if let Ok(advanced_matches) = chromium_integration.locate_element_advanced(query).await
+            {
                 for m in advanced_matches {
                     matches.push(SmartElementMatch {
                         selector: m.selector,
@@ -291,25 +307,41 @@ impl PerceptionEngine {
     /// Legacy analyze_page method for backwards compatibility
     pub async fn analyze_page(&mut self) -> Result<PageAnalysis> {
         // Get current URL
-        let url = self.browser.current_url().await.unwrap_or_else(|_| "unknown".to_string());
+        let url = self
+            .browser
+            .current_url()
+            .await
+            .unwrap_or_else(|_| "unknown".to_string());
         self.context.current_url = url.clone();
-        
+
         // Classify page type
         let page_type = self.classify_page().await?;
         self.context.page_type = page_type.clone();
-        
+
         // Get page content for semantic analysis - use execute_script to get HTML content
         let page_source_script = "(function() { return document.documentElement.outerHTML; })();";
-        let page_source = self.browser.execute_script(page_source_script).await?
-            .as_str().unwrap_or("").to_string();
+        let page_source = self
+            .browser
+            .execute_script(page_source_script)
+            .await?
+            .as_str()
+            .unwrap_or("")
+            .to_string();
         let semantic_analyzer = semantic::SemanticAnalyzer::new();
-        let semantic_analysis = semantic_analyzer.analyze_page_semantics(&page_source).await?;
-        
+        let semantic_analysis = semantic_analyzer
+            .analyze_page_semantics(&page_source)
+            .await?;
+
         // Get page title
         let title_script = "(function() { return document.title || 'Unknown'; })();";
-        let title = self.browser.execute_script(title_script).await?
-            .as_str().unwrap_or("Unknown").to_string();
-        
+        let title = self
+            .browser
+            .execute_script(title_script)
+            .await?
+            .as_str()
+            .unwrap_or("Unknown")
+            .to_string();
+
         Ok(PageAnalysis {
             url,
             page_type,
@@ -326,7 +358,7 @@ impl PerceptionEngine {
         // Step 1: Check cache for recent lookups
         if let Some(cached) = self.check_cache(description) {
             debug!("Found cached element for: {}", description);
-            return Ok(self.create_perceived_from_cache(&cached).await?);
+            return self.create_perceived_from_cache(cached).await;
         }
 
         // Step 2: Check for references to previous elements
@@ -336,19 +368,22 @@ impl PerceptionEngine {
 
         // Step 3: Find candidates using multiple strategies
         let candidates = self.find_candidates(description).await?;
-        
+
         // Step 4: Score and select the best candidate
         let best = self.select_best_candidate(candidates, description).await?;
-        
+
         // Step 5: Cache the result for future use
         self.cache_element(description, &best);
-        
+
         Ok(best)
     }
 
     /// Find multiple elements matching a description
     pub async fn find_elements(&mut self, description: &str) -> Result<Vec<PerceivedElement>> {
-        debug!("Finding multiple elements with description: {}", description);
+        debug!(
+            "Finding multiple elements with description: {}",
+            description
+        );
         self.find_candidates(description).await
     }
 
@@ -356,15 +391,18 @@ impl PerceptionEngine {
     pub async fn classify_page(&mut self) -> Result<PageType> {
         let url = self.browser.current_url().await?;
         self.context.current_url = url.clone();
-        
+
         // Take a screenshot for visual analysis
-        let screenshot = self.browser.screenshot(crate::browser::ScreenshotOptions::default()).await?;
+        let screenshot = self
+            .browser
+            .screenshot(crate::browser::ScreenshotOptions::default())
+            .await?;
         self.context.screenshot_cache = Some(screenshot);
-        
+
         // Use URL and page content analysis
         let page_type = self.classify_by_url_and_content(&url).await?;
         self.context.page_type = page_type.clone();
-        
+
         info!("Classified page as: {:?}", page_type);
         Ok(page_type)
     }
@@ -372,7 +410,7 @@ impl PerceptionEngine {
     /// Extract structured data based on page type
     pub async fn extract_page_data(&mut self) -> Result<serde_json::Value> {
         let page_type = &self.context.page_type.clone();
-        
+
         match page_type {
             PageType::ProductPage => self.extract_product_data().await,
             PageType::ArticlePage => self.extract_article_data().await,
@@ -398,16 +436,16 @@ impl PerceptionEngine {
 
         // Strategy 1: Direct element type matching
         candidates.extend(self.find_by_element_type(&desc_lower).await?);
-        
+
         // Strategy 2: Text content matching
         candidates.extend(self.find_by_text_content(&desc_lower).await?);
-        
+
         // Strategy 3: Common UI patterns
         candidates.extend(self.find_by_ui_patterns(&desc_lower).await?);
-        
+
         // Strategy 4: Accessibility attributes
         candidates.extend(self.find_by_accessibility(&desc_lower).await?);
-        
+
         // Strategy 5: Visual context (using screenshot analysis)
         if self.context.screenshot_cache.is_some() {
             candidates.extend(self.find_by_visual_context(&desc_lower).await?);
@@ -433,11 +471,14 @@ impl PerceptionEngine {
                         }));
                 })()
             "#;
-            
+
             if let Ok(result) = self.browser.execute_script(button_script).await {
                 if let Ok(buttons) = serde_json::from_value::<Vec<serde_json::Value>>(result) {
                     for button in buttons {
-                        if let Ok(element) = self.create_perceived_element_from_json(button, ElementType::Button).await {
+                        if let Ok(element) = self
+                            .create_perceived_element_from_json(button, ElementType::Button)
+                            .await
+                        {
                             elements.push(element);
                         }
                     }
@@ -446,7 +487,10 @@ impl PerceptionEngine {
         }
 
         // Input field detection
-        if description.contains("input") || description.contains("field") || description.contains("type") {
+        if description.contains("input")
+            || description.contains("field")
+            || description.contains("type")
+        {
             let input_script = r#"
                 (function() {
                     return Array.from(document.querySelectorAll('input, textarea'))
@@ -459,11 +503,14 @@ impl PerceptionEngine {
                         }));
                 })()
             "#;
-            
+
             if let Ok(result) = self.browser.execute_script(input_script).await {
                 if let Ok(inputs) = serde_json::from_value::<Vec<serde_json::Value>>(result) {
                     for input in inputs {
-                        if let Ok(element) = self.create_perceived_element_from_json(input, ElementType::Input).await {
+                        if let Ok(element) = self
+                            .create_perceived_element_from_json(input, ElementType::Input)
+                            .await
+                        {
                             elements.push(element);
                         }
                     }
@@ -478,7 +525,8 @@ impl PerceptionEngine {
         let mut elements = Vec::new();
 
         // Extract meaningful words from description
-        let words: Vec<&str> = description.split_whitespace()
+        let words: Vec<&str> = description
+            .split_whitespace()
             .filter(|w| !["the", "a", "an", "click", "on", "button", "link"].contains(w))
             .collect();
 
@@ -487,8 +535,9 @@ impl PerceptionEngine {
         }
 
         let search_text = words.join(" ");
-        
-        let text_search_script = format!(r#"
+
+        let text_search_script = format!(
+            r#"
             const searchText = '{}';
             const results = [];
             
@@ -515,12 +564,17 @@ impl PerceptionEngine {
             }}
             
             return results.slice(0, 10); // Limit results
-        "#, search_text);
+        "#,
+            search_text
+        );
 
         if let Ok(result) = self.browser.execute_script(&text_search_script).await {
             if let Ok(text_elements) = serde_json::from_value::<Vec<serde_json::Value>>(result) {
                 for elem in text_elements {
-                    if let Ok(element) = self.create_perceived_element_from_json(elem, ElementType::Unknown).await {
+                    if let Ok(element) = self
+                        .create_perceived_element_from_json(elem, ElementType::Unknown)
+                        .await
+                    {
                         elements.push(element);
                     }
                 }
@@ -548,7 +602,10 @@ impl PerceptionEngine {
             for pattern in search_patterns {
                 if let Ok(text) = self.browser.get_text(pattern).await {
                     if !text.is_empty() {
-                        if let Ok(element) = self.create_perceived_element_from_selector(pattern, ElementType::Input).await {
+                        if let Ok(element) = self
+                            .create_perceived_element_from_selector(pattern, ElementType::Input)
+                            .await
+                        {
                             elements.push(element);
                             break; // Found a search element
                         }
@@ -589,9 +646,13 @@ impl PerceptionEngine {
             "#;
 
             if let Ok(result) = self.browser.execute_script(login_script).await {
-                if let Ok(login_elements) = serde_json::from_value::<Vec<serde_json::Value>>(result) {
+                if let Ok(login_elements) = serde_json::from_value::<Vec<serde_json::Value>>(result)
+                {
                     for elem in login_elements {
-                        if let Ok(element) = self.create_perceived_element_from_json(elem, ElementType::Button).await {
+                        if let Ok(element) = self
+                            .create_perceived_element_from_json(elem, ElementType::Button)
+                            .await
+                        {
                             elements.push(element);
                         }
                     }
@@ -605,7 +666,8 @@ impl PerceptionEngine {
     async fn find_by_accessibility(&self, description: &str) -> Result<Vec<PerceivedElement>> {
         let mut elements = Vec::new();
 
-        let aria_script = format!(r#"
+        let aria_script = format!(
+            r#"
             const searchText = '{}';
             const results = [];
             
@@ -625,12 +687,17 @@ impl PerceptionEngine {
             }});
             
             return results;
-        "#, description);
+        "#,
+            description
+        );
 
         if let Ok(result) = self.browser.execute_script(&aria_script).await {
             if let Ok(aria_elements) = serde_json::from_value::<Vec<serde_json::Value>>(result) {
                 for elem in aria_elements {
-                    if let Ok(element) = self.create_perceived_element_from_json(elem, ElementType::Unknown).await {
+                    if let Ok(element) = self
+                        .create_perceived_element_from_json(elem, ElementType::Unknown)
+                        .await
+                    {
                         elements.push(element);
                     }
                 }
@@ -647,13 +714,21 @@ impl PerceptionEngine {
         Ok(vec![])
     }
 
-    async fn select_best_candidate(&self, candidates: Vec<PerceivedElement>, description: &str) -> Result<PerceivedElement> {
+    async fn select_best_candidate(
+        &self,
+        candidates: Vec<PerceivedElement>,
+        description: &str,
+    ) -> Result<PerceivedElement> {
         if candidates.is_empty() {
-            return Err(anyhow::anyhow!("No elements found matching: {}", description));
+            return Err(anyhow::anyhow!(
+                "No elements found matching: {}",
+                description
+            ));
         }
 
         // Score candidates based on various factors
-        let mut scored_candidates: Vec<(f32, PerceivedElement)> = candidates.into_iter()
+        let mut scored_candidates: Vec<(f32, PerceivedElement)> = candidates
+            .into_iter()
             .map(|elem| {
                 let score = self.calculate_element_score(&elem, description);
                 (score, elem)
@@ -661,10 +736,12 @@ impl PerceptionEngine {
             .collect();
 
         // Sort by score (highest first)
-        scored_candidates.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+        scored_candidates
+            .sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
 
         // Return the best candidate
-        scored_candidates.into_iter()
+        scored_candidates
+            .into_iter()
             .next()
             .map(|(_, elem)| elem)
             .ok_or_else(|| anyhow::anyhow!("No suitable element found for: {}", description))
@@ -704,7 +781,7 @@ impl PerceptionEngine {
         // Check word overlap
         let elem_words: std::collections::HashSet<&str> = elem_lower.split_whitespace().collect();
         let desc_words: std::collections::HashSet<&str> = desc_lower.split_whitespace().collect();
-        
+
         let intersection = elem_words.intersection(&desc_words).count();
         let union = elem_words.union(&desc_words).count();
 
@@ -718,31 +795,45 @@ impl PerceptionEngine {
     fn element_type_matches(&self, element_type: &ElementType, description: &str) -> bool {
         match element_type {
             ElementType::Button => description.contains("button") || description.contains("click"),
-            ElementType::Input => description.contains("input") || description.contains("field") || description.contains("type"),
+            ElementType::Input => {
+                description.contains("input")
+                    || description.contains("field")
+                    || description.contains("type")
+            }
             ElementType::Link => description.contains("link") || description.contains("go to"),
-            ElementType::Select => description.contains("dropdown") || description.contains("select"),
+            ElementType::Select => {
+                description.contains("dropdown") || description.contains("select")
+            }
             _ => false,
         }
     }
 
     // Helper methods for element creation and caching
 
-    async fn create_perceived_element_from_json(&self, json: serde_json::Value, elem_type: ElementType) -> Result<PerceivedElement> {
-        let selector = json.get("selector")
+    async fn create_perceived_element_from_json(
+        &self,
+        json: serde_json::Value,
+        elem_type: ElementType,
+    ) -> Result<PerceivedElement> {
+        let selector = json
+            .get("selector")
             .and_then(|s| s.as_str())
             .unwrap_or("")
             .to_string();
-        
-        let text = json.get("text")
+
+        let text = json
+            .get("text")
             .and_then(|s| s.as_str())
             .unwrap_or("")
             .to_string();
-        
-        let visible = json.get("visible")
+
+        let visible = json
+            .get("visible")
             .and_then(|b| b.as_bool())
             .unwrap_or(false);
-        
-        let clickable = json.get("clickable")
+
+        let clickable = json
+            .get("clickable")
             .and_then(|b| b.as_bool())
             .unwrap_or(false);
 
@@ -759,9 +850,13 @@ impl PerceptionEngine {
         })
     }
 
-    async fn create_perceived_element_from_selector(&self, selector: &str, elem_type: ElementType) -> Result<PerceivedElement> {
+    async fn create_perceived_element_from_selector(
+        &self,
+        selector: &str,
+        elem_type: ElementType,
+    ) -> Result<PerceivedElement> {
         let text = self.browser.get_text(selector).await.unwrap_or_default();
-        
+
         Ok(PerceivedElement {
             selector: selector.to_string(),
             text,
@@ -786,9 +881,16 @@ impl PerceptionEngine {
         })
     }
 
-    async fn create_perceived_from_cache(&self, cached: &CachedElement) -> Result<PerceivedElement> {
-        let text = self.browser.get_text(&cached.selector).await.unwrap_or_default();
-        
+    async fn create_perceived_from_cache(
+        &self,
+        cached: &CachedElement,
+    ) -> Result<PerceivedElement> {
+        let text = self
+            .browser
+            .get_text(&cached.selector)
+            .await
+            .unwrap_or_default();
+
         Ok(PerceivedElement {
             selector: cached.selector.clone(),
             text,
@@ -804,10 +906,12 @@ impl PerceptionEngine {
 
     fn cache_element(&mut self, description: &str, element: &PerceivedElement) {
         self.context.last_element = Some(element.selector.clone());
-        
+
         // Store named references
         if description.starts_with("the ") {
-            self.context.named_elements.insert(description.to_string(), element.selector.clone());
+            self.context
+                .named_elements
+                .insert(description.to_string(), element.selector.clone());
         }
 
         // Cache for performance
@@ -818,7 +922,7 @@ impl PerceptionEngine {
                 element_type: element.element_type.clone(),
                 last_seen: std::time::Instant::now(),
                 confidence: element.confidence,
-            }
+            },
         );
     }
 
@@ -826,13 +930,22 @@ impl PerceptionEngine {
         // Handle pronouns and references
         if description == "it" || description == "that" {
             if let Some(last_selector) = &self.context.last_element {
-                return Ok(Some(self.create_perceived_element_from_selector(last_selector, ElementType::Unknown).await?));
+                return Ok(Some(
+                    self.create_perceived_element_from_selector(
+                        last_selector,
+                        ElementType::Unknown,
+                    )
+                    .await?,
+                ));
             }
         }
 
         // Handle named elements
         if let Some(selector) = self.context.named_elements.get(description) {
-            return Ok(Some(self.create_perceived_element_from_selector(selector, ElementType::Unknown).await?));
+            return Ok(Some(
+                self.create_perceived_element_from_selector(selector, ElementType::Unknown)
+                    .await?,
+            ));
         }
 
         Ok(None)
@@ -843,16 +956,18 @@ impl PerceptionEngine {
     async fn classify_by_url_and_content(&self, url: &str) -> Result<PageType> {
         // URL-based classification
         let url_lower = url.to_lowercase();
-        
-        if url_lower.contains("login") || url_lower.contains("signin") || url_lower.contains("auth") {
+
+        if url_lower.contains("login") || url_lower.contains("signin") || url_lower.contains("auth")
+        {
             return Ok(PageType::LoginPage);
         }
-        
+
         if url_lower.contains("search") || url_lower.contains("results") {
             return Ok(PageType::SearchResults);
         }
-        
-        if url_lower.contains("product") || url_lower.contains("item") || url_lower.contains("shop") {
+
+        if url_lower.contains("product") || url_lower.contains("item") || url_lower.contains("shop")
+        {
             return Ok(PageType::ProductPage);
         }
 
@@ -873,11 +988,26 @@ impl PerceptionEngine {
         if let Ok(result) = self.browser.execute_script(classification_script).await {
             if let Some(indicators) = result.as_object() {
                 let form_count = indicators.get("form").and_then(|v| v.as_u64()).unwrap_or(0);
-                let article_count = indicators.get("articles").and_then(|v| v.as_u64()).unwrap_or(0);
-                let product_count = indicators.get("products").and_then(|v| v.as_u64()).unwrap_or(0);
-                let login_count = indicators.get("login").and_then(|v| v.as_u64()).unwrap_or(0);
-                let search_count = indicators.get("search").and_then(|v| v.as_u64()).unwrap_or(0);
-                let dashboard_count = indicators.get("dashboard").and_then(|v| v.as_u64()).unwrap_or(0);
+                let article_count = indicators
+                    .get("articles")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0);
+                let product_count = indicators
+                    .get("products")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0);
+                let login_count = indicators
+                    .get("login")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0);
+                let search_count = indicators
+                    .get("search")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0);
+                let dashboard_count = indicators
+                    .get("dashboard")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0);
 
                 // Determine page type based on indicators
                 if login_count > 0 {
@@ -900,7 +1030,7 @@ impl PerceptionEngine {
     }
 
     // Data extraction methods (simplified for now)
-    
+
     async fn extract_product_data(&self) -> Result<serde_json::Value> {
         // TODO: Implement product data extraction
         Ok(serde_json::json!({
@@ -978,32 +1108,36 @@ impl PerceptionEngine {
                 return Math.max(0.0, score);
             })()
         "#;
-        
+
         let result = self.browser.execute_script(script).await?;
         Ok(result.as_f64().unwrap_or(0.8))
     }
 
-    async fn update_context_from_analysis(&mut self, analysis: &EnhancedPageAnalysis) -> Result<()> {
+    async fn update_context_from_analysis(
+        &mut self,
+        analysis: &EnhancedPageAnalysis,
+    ) -> Result<()> {
         // Update context based on analysis results
         match &analysis.layered_result {
             PerceptionResult::Lightning(lightning) => {
                 self.context.current_url = lightning.url.clone();
-            },
+            }
             PerceptionResult::Quick(quick) => {
                 self.context.current_url = quick.lightning.url.clone();
-            },
+            }
             PerceptionResult::Standard(standard) => {
                 self.context.current_url = standard.quick.lightning.url.clone();
-            },
+            }
             PerceptionResult::Deep(deep) => {
                 self.context.current_url = deep.standard.quick.lightning.url.clone();
-            },
+            }
         }
         Ok(())
     }
 
     async fn find_by_css_selector(&self, selector: &str) -> Result<Vec<SmartElementMatch>> {
-        let script = format!(r#"
+        let script = format!(
+            r#"
             (function() {{
                 const elements = document.querySelectorAll('{}');
                 return Array.from(elements).slice(0, 10).map((el, index) => {{
@@ -1022,15 +1156,18 @@ impl PerceptionEngine {
                     }};
                 }});
             }})()
-        "#, selector, selector);
-        
+        "#,
+            selector, selector
+        );
+
         let result = self.browser.execute_script(&script).await?;
         let matches: Vec<SmartElementMatch> = serde_json::from_value(result)?;
         Ok(matches)
     }
 
     async fn find_smart_by_text_content(&self, text: &str) -> Result<Vec<SmartElementMatch>> {
-        let script = format!(r#"
+        let script = format!(
+            r#"
             (function() {{
                 const xpath = "//text()[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '{}')]";
                 const snapshot = document.evaluate(xpath, document, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
@@ -1057,8 +1194,10 @@ impl PerceptionEngine {
                 }}
                 return matches;
             }})()
-        "#, text.to_lowercase());
-        
+        "#,
+            text.to_lowercase()
+        );
+
         let result = self.browser.execute_script(&script).await?;
         let matches: Vec<SmartElementMatch> = serde_json::from_value(result).unwrap_or_default();
         Ok(matches)
@@ -1067,9 +1206,26 @@ impl PerceptionEngine {
     async fn find_by_semantic_meaning(&self, meaning: &str) -> Result<Vec<SmartElementMatch>> {
         // Semantic matching based on common patterns
         let semantic_selectors = match meaning.to_lowercase().as_str() {
-            "submit" | "send" | "save" => vec!["input[type=submit]", "button[type=submit]", "button:contains('submit')", "button:contains('send')", "button:contains('save')"],
-            "search" => vec!["input[type=search]", "input[placeholder*='search']", "#search", ".search", "button:contains('search')"],
-            "login" | "signin" => vec!["input[type=password]", "form[class*='login']", "button:contains('login')", "button:contains('sign in')"],
+            "submit" | "send" | "save" => vec![
+                "input[type=submit]",
+                "button[type=submit]",
+                "button:contains('submit')",
+                "button:contains('send')",
+                "button:contains('save')",
+            ],
+            "search" => vec![
+                "input[type=search]",
+                "input[placeholder*='search']",
+                "#search",
+                ".search",
+                "button:contains('search')",
+            ],
+            "login" | "signin" => vec![
+                "input[type=password]",
+                "form[class*='login']",
+                "button:contains('login')",
+                "button:contains('sign in')",
+            ],
             "menu" | "navigation" => vec!["nav", ".nav", ".menu", "[role=navigation]", ".navbar"],
             _ => vec![],
         };
@@ -1084,7 +1240,7 @@ impl PerceptionEngine {
                 all_matches.extend(matches);
             }
         }
-        
+
         Ok(all_matches)
     }
 }

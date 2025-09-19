@@ -1,26 +1,27 @@
 // Intelligence Module
 // Provides advanced AI-driven automation with learning and adaptation capabilities
 
-pub mod organic_perception;
-pub mod learning_engine;
 pub mod adaptation_manager;
-pub mod pattern_recognition;
 pub mod decision_maker;
+pub mod learning_engine;
+pub mod organic_perception;
+pub mod pattern_recognition;
 
 // Re-exports for public API
-pub use organic_perception::{OrganicPerceptionEngine, PerceptionResult, ElementInsight, PageContext, ViewportInfo};
-pub use learning_engine::{LearningEngine, ActionPattern, PerformanceMetrics, LearningData};
 pub use adaptation_manager::{AdaptationManager, AdaptationStrategy, EnvironmentContext};
-pub use pattern_recognition::{PatternRecognizer, ActionSequence, PatternMatch, SuccessPattern};
-pub use decision_maker::{DecisionMaker, Decision, DecisionContext, Confidence};
-
+pub use decision_maker::{Confidence, Decision, DecisionContext, DecisionMaker};
+pub use learning_engine::{ActionPattern, LearningData, LearningEngine, PerformanceMetrics};
+pub use organic_perception::{
+    ElementInsight, OrganicPerceptionEngine, PageContext, PerceptionResult, ViewportInfo,
+};
+pub use pattern_recognition::{ActionSequence, PatternMatch, PatternRecognizer, SuccessPattern};
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tracing::{info, debug};
+use tracing::{debug, info};
 
 /// Main intelligence service coordinator
 #[derive(Debug)]
@@ -104,8 +105,11 @@ pub struct RiskAssessment {
 impl IntelligenceService {
     /// Create new intelligence service
     pub fn new(config: IntelligenceConfig) -> Self {
-        info!("Initializing Intelligence Service with mode: {}", config.organic_perception_mode);
-        
+        info!(
+            "Initializing Intelligence Service with mode: {}",
+            config.organic_perception_mode
+        );
+
         Self {
             organic_perception: Arc::new(RwLock::new(OrganicPerceptionEngine::new())),
             learning_engine: Arc::new(RwLock::new(LearningEngine::new())),
@@ -115,12 +119,12 @@ impl IntelligenceService {
             config,
         }
     }
-    
+
     /// Create with default configuration
     pub fn with_default_config() -> Self {
         Self::new(IntelligenceConfig::default())
     }
-    
+
     /// Perform comprehensive intelligence analysis of a page/situation
     pub async fn analyze_situation(
         &self,
@@ -128,41 +132,52 @@ impl IntelligenceService {
         user_intent: &str,
         browser: &crate::browser::Browser,
     ) -> Result<IntelligenceAnalysis> {
-        info!("Starting comprehensive intelligence analysis for intent: {}", user_intent);
-        
+        info!(
+            "Starting comprehensive intelligence analysis for intent: {}",
+            user_intent
+        );
+
         // 1. Organic perception analysis
         let perception_result = {
             let mut perception = self.organic_perception.write().await;
-            perception.analyze_page_deeply(page_context, browser).await?
+            perception
+                .analyze_page_deeply(page_context, browser)
+                .await?
         };
-        
+
         // 2. Pattern recognition
         let learned_patterns = if self.config.pattern_recognition_enabled {
             let pattern_recognizer = self.pattern_recognizer.read().await;
-            pattern_recognizer.find_relevant_patterns(user_intent, &perception_result).await
+            pattern_recognizer
+                .find_relevant_patterns(user_intent, &perception_result)
+                .await
         } else {
             Vec::new()
         };
-        
+
         // 3. Adaptation analysis
         let adaptation_suggestions = if self.config.adaptation_enabled {
             let adaptation_manager = self.adaptation_manager.read().await;
-            adaptation_manager.suggest_adaptations(page_context, &learned_patterns).await?
+            adaptation_manager
+                .suggest_adaptations(page_context, &learned_patterns)
+                .await?
         } else {
             Vec::new()
         };
-        
+
         // 4. Decision making
         let decision = {
             let decision_maker = self.decision_maker.read().await;
-            decision_maker.make_decision(
-                user_intent,
-                &perception_result,
-                &learned_patterns,
-                &adaptation_suggestions,
-            ).await?
+            decision_maker
+                .make_decision(
+                    user_intent,
+                    &perception_result,
+                    &learned_patterns,
+                    &adaptation_suggestions,
+                )
+                .await?
         };
-        
+
         let confidence = decision.confidence.value;
         let reasoning = format!(
             "Analysis based on {} elements perceived, {} patterns matched, {} adaptations suggested",
@@ -170,9 +185,12 @@ impl IntelligenceService {
             learned_patterns.len(),
             adaptation_suggestions.len()
         );
-        
-        debug!("Intelligence analysis completed with confidence: {:.2}", confidence);
-        
+
+        debug!(
+            "Intelligence analysis completed with confidence: {:.2}",
+            confidence
+        );
+
         Ok(IntelligenceAnalysis {
             perception_result,
             learned_patterns,
@@ -183,25 +201,25 @@ impl IntelligenceService {
             timestamp: chrono::Utc::now(),
         })
     }
-    
+
     /// Get intelligent action recommendation
     pub async fn recommend_action(
         &self,
         analysis: &IntelligenceAnalysis,
     ) -> Result<ActionRecommendation> {
         debug!("Generating action recommendation from intelligence analysis");
-        
+
         let decision = &analysis.decision;
         let confidence = analysis.confidence;
-        
+
         // Extract primary action from decision
         let action_type = decision.action_type.clone();
         let target_selector = decision.target_element.clone();
         let parameters = decision.parameters.clone();
-        
+
         // Generate alternatives based on patterns and adaptations
         let mut alternative_actions = Vec::new();
-        
+
         // Add alternatives from learned patterns
         for pattern in &analysis.learned_patterns {
             if pattern.confidence > 0.6 && !pattern.action_sequence.is_empty() {
@@ -214,7 +232,7 @@ impl IntelligenceService {
                 });
             }
         }
-        
+
         // Add alternatives from adaptation suggestions
         for adaptation in &analysis.adaptation_suggestions {
             if let Some(fallback) = &adaptation.fallback_strategy {
@@ -226,10 +244,12 @@ impl IntelligenceService {
                 });
             }
         }
-        
+
         // Risk assessment
-        let risk_assessment = self.assess_action_risk(&action_type, confidence, &analysis.perception_result).await;
-        
+        let risk_assessment = self
+            .assess_action_risk(&action_type, confidence, &analysis.perception_result)
+            .await;
+
         Ok(ActionRecommendation {
             action_type,
             target_selector,
@@ -240,7 +260,7 @@ impl IntelligenceService {
             risk_assessment,
         })
     }
-    
+
     /// Learn from action results
     pub async fn learn_from_result(
         &self,
@@ -252,9 +272,12 @@ impl IntelligenceService {
         if !self.config.learning_enabled {
             return Ok(());
         }
-        
-        info!("Learning from action result: success={}, time={}ms", success, execution_time_ms);
-        
+
+        info!(
+            "Learning from action result: success={}, time={}ms",
+            success, execution_time_ms
+        );
+
         let learning_data = LearningData {
             action_type: action_recommendation.action_type.clone(),
             parameters: action_recommendation.parameters.clone(),
@@ -265,22 +288,24 @@ impl IntelligenceService {
             confidence: action_recommendation.confidence,
             timestamp: chrono::Utc::now(),
         };
-        
+
         // Update learning engine
         {
             let mut learning_engine = self.learning_engine.write().await;
             learning_engine.record_learning_data(learning_data).await?;
         }
-        
+
         // Update pattern recognizer
         if success {
             let mut pattern_recognizer = self.pattern_recognizer.write().await;
-            pattern_recognizer.reinforce_successful_pattern(&action_recommendation.action_type).await;
+            pattern_recognizer
+                .reinforce_successful_pattern(&action_recommendation.action_type)
+                .await;
         }
-        
+
         Ok(())
     }
-    
+
     /// Assess risk of performing an action
     async fn assess_action_risk(
         &self,
@@ -290,7 +315,7 @@ impl IntelligenceService {
     ) -> RiskAssessment {
         let mut potential_issues = Vec::new();
         let mut mitigation_strategies = Vec::new();
-        
+
         // Base risk on confidence
         let risk_level = if confidence >= 0.9 {
             "low"
@@ -299,34 +324,37 @@ impl IntelligenceService {
         } else {
             "high"
         };
-        
+
         // Action-specific risks
         match action_type {
             "click" => {
                 if perception_result.dynamic_elements > 5 {
-                    potential_issues.push("Page has many dynamic elements, target may move".to_string());
-                    mitigation_strategies.push("Wait for page stability before clicking".to_string());
+                    potential_issues
+                        .push("Page has many dynamic elements, target may move".to_string());
+                    mitigation_strategies
+                        .push("Wait for page stability before clicking".to_string());
                 }
-            },
+            }
             "type" => {
                 potential_issues.push("Input validation may reject text".to_string());
                 mitigation_strategies.push("Validate input format before typing".to_string());
-            },
+            }
             "navigate" => {
                 potential_issues.push("Navigation may timeout or fail".to_string());
                 mitigation_strategies.push("Set appropriate timeout and retry logic".to_string());
-            },
+            }
             _ => {}
         }
-        
+
         // General risks based on page complexity
         if perception_result.page_complexity > 0.8 {
             potential_issues.push("High page complexity increases failure risk".to_string());
             mitigation_strategies.push("Use multiple fallback selectors".to_string());
         }
-        
-        let success_probability = (confidence * 0.7) + (0.3 * (1.0 - perception_result.page_complexity));
-        
+
+        let success_probability =
+            (confidence * 0.7) + (0.3 * (1.0 - perception_result.page_complexity));
+
         RiskAssessment {
             risk_level: risk_level.to_string(),
             potential_issues,
@@ -334,19 +362,19 @@ impl IntelligenceService {
             success_probability,
         }
     }
-    
+
     /// Get intelligence service statistics
     pub async fn get_statistics(&self) -> Result<IntelligenceStatistics> {
         let learning_stats = {
             let learning_engine = self.learning_engine.read().await;
             learning_engine.get_statistics().await
         };
-        
+
         let pattern_stats = {
             let pattern_recognizer = self.pattern_recognizer.read().await;
             pattern_recognizer.get_statistics().await
         };
-        
+
         Ok(IntelligenceStatistics {
             learning_samples: learning_stats.total_samples,
             success_rate: learning_stats.success_rate,
@@ -355,12 +383,12 @@ impl IntelligenceService {
             adaptations_applied: 0, // TODO: Track this
         })
     }
-    
+
     /// Update intelligence configuration
     pub async fn update_config(&mut self, new_config: IntelligenceConfig) {
         info!("Updating intelligence configuration");
         self.config = new_config;
-        
+
         // Update sub-components with new config
         // This could be expanded to pass specific config to each component
     }
@@ -385,30 +413,30 @@ pub struct IntelligenceStatistics {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[tokio::test]
     async fn test_intelligence_service_creation() {
         let service = IntelligenceService::default();
         let stats = service.get_statistics().await.unwrap();
-        
+
         assert_eq!(stats.learning_samples, 0);
         assert_eq!(stats.patterns_learned, 0);
     }
-    
+
     #[test]
     fn test_intelligence_config() {
         let config = IntelligenceConfig::default();
-        
+
         assert!(config.learning_enabled);
         assert!(config.adaptation_enabled);
         assert_eq!(config.organic_perception_mode, "enhanced");
         assert_eq!(config.confidence_threshold, 0.7);
     }
-    
+
     #[tokio::test]
     async fn test_risk_assessment() {
         let service = IntelligenceService::default();
-        
+
         let perception_result = PerceptionResult {
             elements: Vec::new(),
             page_complexity: 0.5,
@@ -416,9 +444,11 @@ mod tests {
             confidence: 0.8,
             processing_time_ms: 100,
         };
-        
-        let risk = service.assess_action_risk("click", 0.8, &perception_result).await;
-        
+
+        let risk = service
+            .assess_action_risk("click", 0.8, &perception_result)
+            .await;
+
         assert_eq!(risk.risk_level, "medium");
         assert!(risk.success_probability > 0.0);
     }

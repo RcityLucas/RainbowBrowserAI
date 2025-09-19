@@ -1,10 +1,10 @@
+use anyhow::{anyhow, Result};
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-use anyhow::{Result, anyhow};
-use serde::{Deserialize, Serialize};
-use tracing::{info, debug, warn};
-use serde_json::Value;
 use tokio::sync::RwLock;
+use tracing::{debug, info, warn};
 
 use super::traits::ToolCategory;
 
@@ -97,14 +97,24 @@ impl DependencyManager {
     }
 
     /// Register tool dependencies
-    pub async fn register_dependencies(&self, tool_name: String, dependencies: Vec<ToolDependency>) {
+    pub async fn register_dependencies(
+        &self,
+        tool_name: String,
+        dependencies: Vec<ToolDependency>,
+    ) {
         let mut deps = self.dependencies.write().await;
         deps.insert(tool_name.clone(), dependencies.clone());
-        info!("Registered {} dependencies for tool '{}'", dependencies.len(), tool_name);
-        
+        info!(
+            "Registered {} dependencies for tool '{}'",
+            dependencies.len(),
+            tool_name
+        );
+
         for dep in dependencies {
-            debug!("  - {:?} dependency on '{}' ({:?})", 
-                   dep.dependency_type, dep.tool_name, dep.condition);
+            debug!(
+                "  - {:?} dependency on '{}' ({:?})",
+                dep.dependency_type, dep.tool_name, dep.condition
+            );
         }
     }
 
@@ -118,20 +128,24 @@ impl DependencyManager {
     pub async fn create_execution_plan(&self, tool_names: Vec<String>) -> Result<ExecutionPlan> {
         let dependencies = self.dependencies.read().await;
         let categories = self.tool_categories.read().await;
-        
+
         // Build dependency graph
         let mut graph = HashMap::new();
         let mut all_tools = HashSet::new();
-        
+
         for tool_name in &tool_names {
             all_tools.insert(tool_name.clone());
             graph.insert(tool_name.clone(), Vec::new());
-            
+
             if let Some(tool_deps) = dependencies.get(tool_name) {
                 for dep in tool_deps {
-                    if dep.dependency_type == DependencyType::Required || 
-                       dep.dependency_type == DependencyType::Preferred {
-                        graph.get_mut(tool_name).unwrap().push(dep.tool_name.clone());
+                    if dep.dependency_type == DependencyType::Required
+                        || dep.dependency_type == DependencyType::Preferred
+                    {
+                        graph
+                            .get_mut(tool_name)
+                            .unwrap()
+                            .push(dep.tool_name.clone());
                         all_tools.insert(dep.tool_name.clone());
                     }
                 }
@@ -139,16 +153,20 @@ impl DependencyManager {
         }
 
         // Add intelligent category-based dependencies
-        self.infer_category_dependencies(&mut graph, &all_tools, &categories).await;
+        self.infer_category_dependencies(&mut graph, &all_tools, &categories)
+            .await;
 
         // Detect cycles
         if let Some(cycle) = self.detect_cycles(&graph) {
-            return Err(anyhow!("Circular dependency detected: {}", cycle.join(" -> ")));
+            return Err(anyhow!(
+                "Circular dependency detected: {}",
+                cycle.join(" -> ")
+            ));
         }
 
         // Topological sort to create execution stages
         let stages = self.create_execution_stages(&graph, &all_tools).await?;
-        
+
         // Calculate timing estimates
         let estimated_duration = self.estimate_execution_time(&stages).await;
         let parallel_opportunities = stages.iter().filter(|s| s.can_run_parallel).count();
@@ -168,27 +186,38 @@ impl DependencyManager {
         all_tools: &HashSet<String>,
         categories: &HashMap<String, ToolCategory>,
     ) {
-        let navigation_tools: HashSet<_> = all_tools.iter()
+        let navigation_tools: HashSet<_> = all_tools
+            .iter()
             .filter(|tool| categories.get(*tool) == Some(&ToolCategory::Navigation))
             .collect();
 
-        let interaction_tools: HashSet<_> = all_tools.iter()
+        let interaction_tools: HashSet<_> = all_tools
+            .iter()
             .filter(|tool| categories.get(*tool) == Some(&ToolCategory::Interaction))
             .collect();
 
-        let extraction_tools: HashSet<_> = all_tools.iter()
+        let extraction_tools: HashSet<_> = all_tools
+            .iter()
             .filter(|tool| categories.get(*tool) == Some(&ToolCategory::DataExtraction))
             .collect();
 
-        let memory_tools: HashSet<_> = all_tools.iter()
+        let memory_tools: HashSet<_> = all_tools
+            .iter()
             .filter(|tool| categories.get(*tool) == Some(&ToolCategory::Memory))
             .collect();
 
         // Navigation tools should run before interaction tools
         for interaction_tool in &interaction_tools {
             for navigation_tool in &navigation_tools {
-                if !graph.get(*interaction_tool).unwrap().contains(*navigation_tool) {
-                    graph.get_mut(*interaction_tool).unwrap().push((*navigation_tool).clone());
+                if !graph
+                    .get(*interaction_tool)
+                    .unwrap()
+                    .contains(*navigation_tool)
+                {
+                    graph
+                        .get_mut(*interaction_tool)
+                        .unwrap()
+                        .push((*navigation_tool).clone());
                 }
             }
         }
@@ -196,8 +225,15 @@ impl DependencyManager {
         // Interaction tools should run before extraction tools
         for extraction_tool in &extraction_tools {
             for interaction_tool in &interaction_tools {
-                if !graph.get(*extraction_tool).unwrap().contains(*interaction_tool) {
-                    graph.get_mut(*extraction_tool).unwrap().push((*interaction_tool).clone());
+                if !graph
+                    .get(*extraction_tool)
+                    .unwrap()
+                    .contains(*interaction_tool)
+                {
+                    graph
+                        .get_mut(*extraction_tool)
+                        .unwrap()
+                        .push((*interaction_tool).clone());
                 }
             }
         }
@@ -217,7 +253,9 @@ impl DependencyManager {
 
         for node in graph.keys() {
             if !visited.contains(node) {
-                if let Some(cycle) = self.dfs_cycle_detection(node, graph, &mut visited, &mut rec_stack, &mut path) {
+                if let Some(cycle) =
+                    self.dfs_cycle_detection(node, graph, &mut visited, &mut rec_stack, &mut path)
+                {
                     return Some(cycle);
                 }
             }
@@ -225,6 +263,7 @@ impl DependencyManager {
         None
     }
 
+    #[allow(clippy::only_used_in_recursion)]
     fn dfs_cycle_detection(
         &self,
         node: &str,
@@ -240,7 +279,9 @@ impl DependencyManager {
         if let Some(neighbors) = graph.get(node) {
             for neighbor in neighbors {
                 if !visited.contains(neighbor) {
-                    if let Some(cycle) = self.dfs_cycle_detection(neighbor, graph, visited, rec_stack, path) {
+                    if let Some(cycle) =
+                        self.dfs_cycle_detection(neighbor, graph, visited, rec_stack, path)
+                    {
                         return Some(cycle);
                     }
                 } else if rec_stack.contains(neighbor) {
@@ -271,24 +312,27 @@ impl DependencyManager {
         for tool in all_tools {
             in_degree.insert(tool.clone(), 0);
         }
-        
-        for (_tool, dependencies) in graph {
+
+        for dependencies in graph.values() {
             for dep in dependencies {
                 *in_degree.get_mut(dep).unwrap() += 1;
             }
         }
 
         let mut stage_number = 0;
-        
+
         while !in_degree.is_empty() {
             // Find all nodes with in-degree 0
-            let ready_tools: Vec<String> = in_degree.iter()
+            let ready_tools: Vec<String> = in_degree
+                .iter()
                 .filter(|(_, &degree)| degree == 0)
                 .map(|(tool, _)| tool.clone())
                 .collect();
 
             if ready_tools.is_empty() {
-                return Err(anyhow!("Unable to resolve dependencies - possible circular reference"));
+                return Err(anyhow!(
+                    "Unable to resolve dependencies - possible circular reference"
+                ));
             }
 
             // Remove ready tools from in_degree
@@ -309,7 +353,11 @@ impl DependencyManager {
 
             // Create execution stage
             let can_run_parallel = ready_tools.len() > 1;
-            let estimated_duration = if can_run_parallel { 2000 } else { ready_tools.len() as u64 * 1000 };
+            let estimated_duration = if can_run_parallel {
+                2000
+            } else {
+                ready_tools.len() as u64 * 1000
+            };
 
             stages.push(ExecutionStage {
                 stage_number,
@@ -324,8 +372,13 @@ impl DependencyManager {
 
         info!("Created execution plan with {} stages", stages.len());
         for (i, stage) in stages.iter().enumerate() {
-            debug!("Stage {}: {} tools (parallel: {}): [{}]", 
-                   i, stage.tools.len(), stage.can_run_parallel, stage.tools.join(", "));
+            debug!(
+                "Stage {}: {} tools (parallel: {}): [{}]",
+                i,
+                stage.tools.len(),
+                stage.can_run_parallel,
+                stage.tools.join(", ")
+            );
         }
 
         Ok(stages)
@@ -346,9 +399,9 @@ impl DependencyManager {
     ) -> bool {
         match condition {
             DependencyCondition::ResultEquals(expected) => result == expected,
-            DependencyCondition::ResultContains(field) => {
-                result.as_object().map_or(false, |obj| obj.contains_key(field))
-            },
+            DependencyCondition::ResultContains(field) => result
+                .as_object()
+                .map_or(false, |obj| obj.contains_key(field)),
             DependencyCondition::CompletedWithin(max_time) => execution_time <= *max_time * 1000,
             DependencyCondition::Expression(_expr) => {
                 // Future enhancement: implement expression evaluation
@@ -398,14 +451,19 @@ impl DependencyManager {
 
         let total_executions = history.len();
         let avg_stages = if total_executions > 0 {
-            history.iter().map(|ctx| ctx.stage_results.len()).sum::<usize>() as f64 / total_executions as f64
+            history
+                .iter()
+                .map(|ctx| ctx.stage_results.len())
+                .sum::<usize>() as f64
+                / total_executions as f64
         } else {
             0.0
         };
 
         let total_tools_with_deps = dependencies.len();
         let avg_dependencies = if total_tools_with_deps > 0 {
-            dependencies.values().map(|deps| deps.len()).sum::<usize>() as f64 / total_tools_with_deps as f64
+            dependencies.values().map(|deps| deps.len()).sum::<usize>() as f64
+                / total_tools_with_deps as f64
         } else {
             0.0
         };
@@ -415,8 +473,14 @@ impl DependencyManager {
             avg_stages_per_execution: avg_stages,
             total_tools_with_dependencies: total_tools_with_deps,
             avg_dependencies_per_tool: avg_dependencies,
-            successful_executions: history.iter().filter(|ctx| ctx.failed_tools.is_empty()).count(),
-            failed_executions: history.iter().filter(|ctx| !ctx.failed_tools.is_empty()).count(),
+            successful_executions: history
+                .iter()
+                .filter(|ctx| ctx.failed_tools.is_empty())
+                .count(),
+            failed_executions: history
+                .iter()
+                .filter(|ctx| !ctx.failed_tools.is_empty())
+                .count(),
         }
     }
 
@@ -425,11 +489,11 @@ impl DependencyManager {
         let mut dependencies = self.dependencies.write().await;
         let mut categories = self.tool_categories.write().await;
         let mut history = self.execution_history.write().await;
-        
+
         dependencies.clear();
         categories.clear();
         history.clear();
-        
+
         info!("Cleared all dependency information");
     }
 }
@@ -459,36 +523,39 @@ impl DependencyPatterns {
         let mut patterns = HashMap::new();
 
         // Navigate must complete before any interaction
-        patterns.insert("click".to_string(), vec![
-            ToolDependency {
+        patterns.insert(
+            "click".to_string(),
+            vec![ToolDependency {
                 tool_name: "navigate".to_string(),
                 dependency_type: DependencyType::Required,
                 condition: Some(DependencyCondition::ResultContains("url".to_string())),
                 timeout_seconds: Some(30),
                 retry_attempts: Some(3),
-            }
-        ]);
+            }],
+        );
 
-        patterns.insert("type_text".to_string(), vec![
-            ToolDependency {
+        patterns.insert(
+            "type_text".to_string(),
+            vec![ToolDependency {
                 tool_name: "navigate".to_string(),
                 dependency_type: DependencyType::Required,
                 condition: None,
                 timeout_seconds: Some(30),
                 retry_attempts: Some(3),
-            }
-        ]);
+            }],
+        );
 
         // Screenshot can run after page load
-        patterns.insert("screenshot".to_string(), vec![
-            ToolDependency {
+        patterns.insert(
+            "screenshot".to_string(),
+            vec![ToolDependency {
                 tool_name: "navigate".to_string(),
                 dependency_type: DependencyType::Preferred,
                 condition: None,
                 timeout_seconds: Some(15),
                 retry_attempts: Some(1),
-            }
-        ]);
+            }],
+        );
 
         patterns
     }
@@ -498,25 +565,27 @@ impl DependencyPatterns {
         let mut patterns = HashMap::new();
 
         // Wait for elements before extracting
-        patterns.insert("extract_text".to_string(), vec![
-            ToolDependency {
+        patterns.insert(
+            "extract_text".to_string(),
+            vec![ToolDependency {
                 tool_name: "wait_for_element".to_string(),
                 dependency_type: DependencyType::Required,
                 condition: None,
                 timeout_seconds: Some(10),
                 retry_attempts: Some(2),
-            }
-        ]);
+            }],
+        );
 
-        patterns.insert("extract_links".to_string(), vec![
-            ToolDependency {
+        patterns.insert(
+            "extract_links".to_string(),
+            vec![ToolDependency {
                 tool_name: "wait_for_element".to_string(),
                 dependency_type: DependencyType::Preferred,
                 condition: None,
                 timeout_seconds: Some(10),
                 retry_attempts: Some(2),
-            }
-        ]);
+            }],
+        );
 
         patterns
     }
@@ -536,21 +605,24 @@ mod tests {
     #[tokio::test]
     async fn test_simple_execution_plan() {
         let manager = DependencyManager::new();
-        
-        manager.register_dependencies("click".to_string(), vec![
-            ToolDependency {
-                tool_name: "navigate".to_string(),
-                dependency_type: DependencyType::Required,
-                condition: None,
-                timeout_seconds: Some(30),
-                retry_attempts: Some(3),
-            }
-        ]).await;
 
-        let plan = manager.create_execution_plan(vec![
-            "navigate".to_string(),
-            "click".to_string(),
-        ]).await.unwrap();
+        manager
+            .register_dependencies(
+                "click".to_string(),
+                vec![ToolDependency {
+                    tool_name: "navigate".to_string(),
+                    dependency_type: DependencyType::Required,
+                    condition: None,
+                    timeout_seconds: Some(30),
+                    retry_attempts: Some(3),
+                }],
+            )
+            .await;
+
+        let plan = manager
+            .create_execution_plan(vec!["navigate".to_string(), "click".to_string()])
+            .await
+            .unwrap();
 
         assert_eq!(plan.stages.len(), 2);
         assert!(plan.stages[0].tools.contains(&"navigate".to_string()));
@@ -560,45 +632,53 @@ mod tests {
     #[tokio::test]
     async fn test_cycle_detection() {
         let manager = DependencyManager::new();
-        
-        manager.register_dependencies("tool_a".to_string(), vec![
-            ToolDependency {
-                tool_name: "tool_b".to_string(),
-                dependency_type: DependencyType::Required,
-                condition: None,
-                timeout_seconds: Some(30),
-                retry_attempts: Some(3),
-            }
-        ]).await;
 
-        manager.register_dependencies("tool_b".to_string(), vec![
-            ToolDependency {
-                tool_name: "tool_a".to_string(),
-                dependency_type: DependencyType::Required,
-                condition: None,
-                timeout_seconds: Some(30),
-                retry_attempts: Some(3),
-            }
-        ]).await;
+        manager
+            .register_dependencies(
+                "tool_a".to_string(),
+                vec![ToolDependency {
+                    tool_name: "tool_b".to_string(),
+                    dependency_type: DependencyType::Required,
+                    condition: None,
+                    timeout_seconds: Some(30),
+                    retry_attempts: Some(3),
+                }],
+            )
+            .await;
 
-        let result = manager.create_execution_plan(vec![
-            "tool_a".to_string(),
-            "tool_b".to_string(),
-        ]).await;
+        manager
+            .register_dependencies(
+                "tool_b".to_string(),
+                vec![ToolDependency {
+                    tool_name: "tool_a".to_string(),
+                    dependency_type: DependencyType::Required,
+                    condition: None,
+                    timeout_seconds: Some(30),
+                    retry_attempts: Some(3),
+                }],
+            )
+            .await;
+
+        let result = manager
+            .create_execution_plan(vec!["tool_a".to_string(), "tool_b".to_string()])
+            .await;
 
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Circular dependency"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Circular dependency"));
     }
 
     #[tokio::test]
     async fn test_dependency_condition_check() {
         let manager = DependencyManager::new();
-        
+
         let condition = DependencyCondition::ResultContains("success".to_string());
         let result = serde_json::json!({"success": true, "url": "https://example.com"});
-        
+
         assert!(manager.check_dependency_condition(&condition, &result, 1000));
-        
+
         let result2 = serde_json::json!({"error": "failed"});
         assert!(!manager.check_dependency_condition(&condition, &result2, 1000));
     }

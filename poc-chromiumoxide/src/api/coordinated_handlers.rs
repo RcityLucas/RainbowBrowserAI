@@ -1,19 +1,17 @@
 // Coordinated API Handlers
 // Provides HTTP endpoints that use the coordinated module system
 
-use anyhow::Result;
 use axum::{
-    extract::{State, Json, Path, Query},
+    extract::{Json, Path, State},
     http::StatusCode,
     response::{IntoResponse, Response},
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use std::collections::HashMap;
-use tracing::{info, error, debug};
+use tracing::error;
 
-use crate::coordination::{RainbowCoordinator, SessionBundle};
 use super::ApiResponse;
+use crate::coordination::RainbowCoordinator;
 
 /// State for coordinated API handlers
 #[derive(Clone)]
@@ -56,7 +54,7 @@ impl<T> CoordinatedResponse<T> {
             metrics: None,
         }
     }
-    
+
     pub fn error(error: String) -> Self {
         Self {
             success: false,
@@ -71,9 +69,7 @@ impl<T> CoordinatedResponse<T> {
 // Session management endpoints
 
 /// Create a new coordinated session
-pub async fn create_coordinated_session(
-    State(state): State<CoordinatedApiState>,
-) -> Response {
+pub async fn create_coordinated_session(State(state): State<CoordinatedApiState>) -> Response {
     match state.coordinator.create_session().await {
         Ok(bundle) => {
             let response = serde_json::json!({
@@ -89,8 +85,11 @@ pub async fn create_coordinated_session(
         }
         Err(e) => {
             error!("Failed to create coordinated session: {}", e);
-            (StatusCode::INTERNAL_SERVER_ERROR,
-             Json(ApiResponse::<()>::error(e.to_string()))).into_response()
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::<()>::error(e.to_string())),
+            )
+                .into_response()
         }
     }
 }
@@ -115,17 +114,19 @@ pub async fn get_coordinated_session(
             });
             Json(ApiResponse::success(response)).into_response()
         }
-        None => {
-            (StatusCode::NOT_FOUND,
-             Json(ApiResponse::<()>::error(format!("Session not found: {}", session_id)))).into_response()
-        }
+        None => (
+            StatusCode::NOT_FOUND,
+            Json(ApiResponse::<()>::error(format!(
+                "Session not found: {}",
+                session_id
+            ))),
+        )
+            .into_response(),
     }
 }
 
 /// List all active sessions
-pub async fn list_coordinated_sessions(
-    State(state): State<CoordinatedApiState>,
-) -> Response {
+pub async fn list_coordinated_sessions(State(state): State<CoordinatedApiState>) -> Response {
     let sessions = state.coordinator.list_sessions().await;
     let response = serde_json::json!({
         "sessions": sessions.iter().map(|s| serde_json::json!({
@@ -149,16 +150,18 @@ pub async fn delete_coordinated_session(
     Path(session_id): Path<String>,
 ) -> Response {
     match state.coordinator.remove_session(&session_id).await {
-        Ok(()) => {
-            Json(ApiResponse::success(serde_json::json!({
-                "session_id": session_id,
-                "deleted": true
-            }))).into_response()
-        }
+        Ok(()) => Json(ApiResponse::success(serde_json::json!({
+            "session_id": session_id,
+            "deleted": true
+        })))
+        .into_response(),
         Err(e) => {
             error!("Failed to delete session: {}", e);
-            (StatusCode::INTERNAL_SERVER_ERROR,
-             Json(ApiResponse::<()>::error(e.to_string()))).into_response()
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::<()>::error(e.to_string())),
+            )
+                .into_response()
         }
     }
 }
@@ -168,7 +171,7 @@ pub async fn delete_coordinated_session(
 #[derive(Debug, Deserialize)]
 pub struct NavigateRequest {
     pub url: String,
-    pub wait_for_load: Option<bool>,
+    pub _wait_for_load: Option<bool>,
     pub analyze_page: Option<bool>,
 }
 
@@ -178,16 +181,23 @@ pub async fn coordinated_navigate(
     Json(req): Json<CoordinatedRequest<NavigateRequest>>,
 ) -> Response {
     let start_time = std::time::Instant::now();
-    
+
     // Get or create session
-    let bundle = match state.coordinator.get_or_create_session(req.session_id).await {
+    let bundle = match state
+        .coordinator
+        .get_or_create_session(req.session_id)
+        .await
+    {
         Ok(b) => b,
         Err(e) => {
-            return (StatusCode::INTERNAL_SERVER_ERROR,
-                   Json(CoordinatedResponse::<()>::error(e.to_string()))).into_response();
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(CoordinatedResponse::<()>::error(e.to_string())),
+            )
+                .into_response();
         }
     };
-    
+
     // Navigate
     match bundle.navigate(&req.data.url).await {
         Ok(result) => {
@@ -196,7 +206,7 @@ pub async fn coordinated_navigate(
                 "load_time_ms": result.load_time_ms,
                 "success": result.success
             });
-            
+
             // Add page analysis if requested and available
             if req.data.analyze_page.unwrap_or(false) {
                 if let Some(analysis) = result.page_analysis {
@@ -207,20 +217,24 @@ pub async fn coordinated_navigate(
                     });
                 }
             }
-            
-            let mut response = CoordinatedResponse::success(bundle.session_id.clone(), response_data);
+
+            let mut response =
+                CoordinatedResponse::success(bundle.session_id.clone(), response_data);
             response.metrics = Some(OperationMetrics {
                 duration_ms: start_time.elapsed().as_millis() as u64,
                 cache_hits: 0,
                 cache_misses: 0,
             });
-            
+
             Json(response).into_response()
         }
         Err(e) => {
             error!("Navigation failed: {}", e);
-            (StatusCode::BAD_REQUEST,
-             Json(CoordinatedResponse::<()>::error(e.to_string()))).into_response()
+            (
+                StatusCode::BAD_REQUEST,
+                Json(CoordinatedResponse::<()>::error(e.to_string())),
+            )
+                .into_response()
         }
     }
 }
@@ -238,23 +252,30 @@ pub async fn coordinated_intelligent_action(
     Json(req): Json<CoordinatedRequest<IntelligentActionRequest>>,
 ) -> Response {
     let start_time = std::time::Instant::now();
-    
+
     // Get or create session
-    let bundle = match state.coordinator.get_or_create_session(req.session_id).await {
+    let bundle = match state
+        .coordinator
+        .get_or_create_session(req.session_id)
+        .await
+    {
         Ok(b) => b,
         Err(e) => {
-            return (StatusCode::INTERNAL_SERVER_ERROR,
-                   Json(CoordinatedResponse::<()>::error(e.to_string()))).into_response();
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(CoordinatedResponse::<()>::error(e.to_string())),
+            )
+                .into_response();
         }
     };
-    
+
     // Convert to internal action request
     let action = crate::coordination::session::IntelligentActionRequest {
         action_type: req.data.action_type,
         target: req.data.target,
         parameters: req.data.parameters,
     };
-    
+
     // Execute intelligent action
     match bundle.execute_intelligent_action(action).await {
         Ok(result) => {
@@ -280,30 +301,32 @@ pub async fn coordinated_intelligent_action(
                 },
                 "learning_applied": result.learning_applied
             });
-            
-            let mut response = CoordinatedResponse::success(bundle.session_id.clone(), response_data);
+
+            let mut response =
+                CoordinatedResponse::success(bundle.session_id.clone(), response_data);
             response.metrics = Some(OperationMetrics {
                 duration_ms: start_time.elapsed().as_millis() as u64,
                 cache_hits: 0, // Would need actual metrics
                 cache_misses: 0,
             });
-            
+
             Json(response).into_response()
         }
         Err(e) => {
             error!("Intelligent action failed: {}", e);
-            (StatusCode::BAD_REQUEST,
-             Json(CoordinatedResponse::<()>::error(e.to_string()))).into_response()
+            (
+                StatusCode::BAD_REQUEST,
+                Json(CoordinatedResponse::<()>::error(e.to_string())),
+            )
+                .into_response()
         }
     }
 }
 
 /// Get system health status
-pub async fn get_system_health(
-    State(state): State<CoordinatedApiState>,
-) -> Response {
+pub async fn get_system_health(State(state): State<CoordinatedApiState>) -> Response {
     let health = state.coordinator.get_system_health().await;
-    
+
     let response = serde_json::json!({
         "healthy": health.healthy_sessions == health.total_sessions,
         "total_sessions": health.total_sessions,
@@ -337,14 +360,14 @@ pub async fn get_system_health(
             "average_handling_time_ms": health.event_metrics.average_handling_time_ms
         }
     });
-    
+
     Json(ApiResponse::success(response)).into_response()
 }
 
 #[derive(Debug, Deserialize)]
 pub struct ToolExecutionRequest {
     pub tool_name: String,
-    pub parameters: serde_json::Value,
+    pub _parameters: serde_json::Value,
 }
 
 /// Execute a tool in a coordinated session
@@ -353,16 +376,23 @@ pub async fn coordinated_tool_execution(
     Json(req): Json<CoordinatedRequest<ToolExecutionRequest>>,
 ) -> Response {
     let start_time = std::time::Instant::now();
-    
+
     // Get or create session
-    let bundle = match state.coordinator.get_or_create_session(req.session_id).await {
+    let bundle = match state
+        .coordinator
+        .get_or_create_session(req.session_id)
+        .await
+    {
         Ok(b) => b,
         Err(e) => {
-            return (StatusCode::INTERNAL_SERVER_ERROR,
-                   Json(CoordinatedResponse::<()>::error(e.to_string()))).into_response();
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(CoordinatedResponse::<()>::error(e.to_string())),
+            )
+                .into_response();
         }
     };
-    
+
     // Execute tool through coordinated registry
     // This would be implemented when we migrate the tool registry
     let response_data = serde_json::json!({
@@ -371,21 +401,21 @@ pub async fn coordinated_tool_execution(
         "session_id": bundle.session_id,
         "message": "Tool execution through coordinated system (pending full implementation)"
     });
-    
+
     let mut response = CoordinatedResponse::success(bundle.session_id.clone(), response_data);
     response.metrics = Some(OperationMetrics {
         duration_ms: start_time.elapsed().as_millis() as u64,
         cache_hits: 0,
         cache_misses: 0,
     });
-    
+
     Json(response).into_response()
 }
 
 #[derive(Debug, Deserialize)]
 pub struct PerceptionAnalysisRequest {
     pub analysis_type: Option<String>, // "quick", "standard", "deep"
-    pub target: Option<String>,
+    pub _target: Option<String>,
 }
 
 /// Analyze page with coordinated perception
@@ -394,16 +424,23 @@ pub async fn coordinated_perception_analysis(
     Json(req): Json<CoordinatedRequest<PerceptionAnalysisRequest>>,
 ) -> Response {
     let start_time = std::time::Instant::now();
-    
+
     // Get or create session
-    let bundle = match state.coordinator.get_or_create_session(req.session_id).await {
+    let bundle = match state
+        .coordinator
+        .get_or_create_session(req.session_id)
+        .await
+    {
         Ok(b) => b,
         Err(e) => {
-            return (StatusCode::INTERNAL_SERVER_ERROR,
-                   Json(CoordinatedResponse::<()>::error(e.to_string()))).into_response();
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(CoordinatedResponse::<()>::error(e.to_string())),
+            )
+                .into_response();
         }
     };
-    
+
     // Analyze current page
     match bundle.perception.analyze_current_page().await {
         Ok(analysis) => {
@@ -413,20 +450,24 @@ pub async fn coordinated_perception_analysis(
                 "interactive_elements": analysis.interactive_elements,
                 "analysis_type": req.data.analysis_type.unwrap_or_else(|| "standard".to_string())
             });
-            
-            let mut response = CoordinatedResponse::success(bundle.session_id.clone(), response_data);
+
+            let mut response =
+                CoordinatedResponse::success(bundle.session_id.clone(), response_data);
             response.metrics = Some(OperationMetrics {
                 duration_ms: start_time.elapsed().as_millis() as u64,
                 cache_hits: 0,
                 cache_misses: 0,
             });
-            
+
             Json(response).into_response()
         }
         Err(e) => {
             error!("Perception analysis failed: {}", e);
-            (StatusCode::BAD_REQUEST,
-             Json(CoordinatedResponse::<()>::error(e.to_string()))).into_response()
+            (
+                StatusCode::BAD_REQUEST,
+                Json(CoordinatedResponse::<()>::error(e.to_string())),
+            )
+                .into_response()
         }
     }
 }

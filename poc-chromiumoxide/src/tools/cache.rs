@@ -1,8 +1,8 @@
-use std::collections::HashMap;
-use std::time::{Duration, SystemTime};
-use std::sync::Arc;
-use tokio::sync::RwLock;
 use serde_json::Value;
+use std::collections::HashMap;
+use std::sync::Arc;
+use std::time::{Duration, SystemTime};
+use tokio::sync::RwLock;
 use tracing::{debug, info};
 
 /// Cache entry with expiration and metadata
@@ -88,7 +88,7 @@ impl ToolCache {
     pub fn generate_key(&self, tool_name: &str, input: &Value) -> String {
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
-        
+
         let mut hasher = DefaultHasher::new();
         tool_name.hash(&mut hasher);
         input.to_string().hash(&mut hasher);
@@ -98,8 +98,13 @@ impl ToolCache {
     /// Set cache configuration for a specific tool
     pub async fn set_tool_config(&self, tool_name: &str, config: CacheConfig) {
         let mut configs = self.configs.write().await;
-        info!("Cache config set for tool '{}': ttl={}s, max_entries={}, enabled={}", 
-              tool_name, config.ttl.as_secs(), config.max_entries, config.enabled);
+        info!(
+            "Cache config set for tool '{}': ttl={}s, max_entries={}, enabled={}",
+            tool_name,
+            config.ttl.as_secs(),
+            config.max_entries,
+            config.enabled
+        );
         configs.insert(tool_name.to_string(), config);
     }
 
@@ -147,7 +152,7 @@ impl ToolCache {
 
         let key = self.generate_key(tool_name, input);
         let mut entries = self.entries.write().await;
-        
+
         if let Some(entry) = entries.get_mut(&key) {
             if entry.is_expired() {
                 debug!("Cache entry expired for tool '{}', removing", tool_name);
@@ -156,8 +161,12 @@ impl ToolCache {
             }
 
             let value = entry.access().clone();
-            debug!("Cache hit for tool '{}' (age: {}s, access_count: {})", 
-                   tool_name, entry.age().as_secs(), entry.access_count);
+            debug!(
+                "Cache hit for tool '{}' (age: {}s, access_count: {})",
+                tool_name,
+                entry.age().as_secs(),
+                entry.access_count
+            );
             Some(value)
         } else {
             debug!("Cache miss for tool '{}'", tool_name);
@@ -182,41 +191,46 @@ impl ToolCache {
         );
 
         let mut entries = self.entries.write().await;
-        
+
         // Enforce max entries limit
         if entries.len() >= config.max_entries {
             self.evict_oldest(&mut entries, &config).await;
         }
 
         entries.insert(key, entry);
-        debug!("Cached result for tool '{}' (TTL: {}s)", tool_name, config.ttl.as_secs());
+        debug!(
+            "Cached result for tool '{}' (TTL: {}s)",
+            tool_name,
+            config.ttl.as_secs()
+        );
     }
 
     /// Evict oldest entries to make room
     async fn evict_oldest(&self, entries: &mut HashMap<String, CacheEntry>, config: &CacheConfig) {
         let target_size = config.max_entries.saturating_sub(config.max_entries / 4); // Remove 25%
-        
+
         if entries.len() <= target_size {
             return;
         }
 
         // Sort by last accessed time and collect keys to remove
-        let mut sorted_entries: Vec<_> = entries.iter()
+        let mut sorted_entries: Vec<_> = entries
+            .iter()
             .map(|(key, entry)| (key.clone(), entry.last_accessed))
             .collect();
         sorted_entries.sort_by_key(|(_, last_accessed)| *last_accessed);
-        
+
         let to_remove = entries.len() - target_size;
         let keys_to_remove: Vec<String> = sorted_entries
             .into_iter()
             .take(to_remove)
             .map(|(key, _)| key)
             .collect();
-        
+
         for key in keys_to_remove {
             entries.remove(&key);
         }
-        
+
         debug!("Evicted {} cache entries to make room", to_remove);
     }
 
@@ -226,7 +240,7 @@ impl ToolCache {
         let initial_count = entries.len();
         entries.retain(|_, entry| entry.tool_name != tool_name);
         let removed = initial_count - entries.len();
-        
+
         if removed > 0 {
             info!("Cleared {} cache entries for tool '{}'", removed, tool_name);
         }
@@ -245,21 +259,22 @@ impl ToolCache {
         let mut current_url = self.current_url.write().await;
         if *current_url != new_url {
             *current_url = new_url.to_string();
-            
+
             let mut entries = self.entries.write().await;
             let configs = self.configs.read().await;
             let initial_count = entries.len();
-            
+
             entries.retain(|_, entry| {
-                let config = configs.get(&entry.tool_name)
-                    .cloned()
-                    .unwrap_or_default();
+                let config = configs.get(&entry.tool_name).cloned().unwrap_or_default();
                 !config.invalidate_on_navigation
             });
-            
+
             let removed = initial_count - entries.len();
             if removed > 0 {
-                info!("Navigation to '{}': invalidated {} cache entries", new_url, removed);
+                info!(
+                    "Navigation to '{}': invalidated {} cache entries",
+                    new_url, removed
+                );
             }
         }
     }
@@ -270,7 +285,7 @@ impl ToolCache {
         let initial_count = entries.len();
         entries.retain(|_, entry| !entry.is_expired());
         let removed = initial_count - entries.len();
-        
+
         if removed > 0 {
             debug!("Cleaned up {} expired cache entries", removed);
         }
@@ -285,21 +300,23 @@ impl ToolCache {
 
         for (_, entry) in entries.iter() {
             total_size += entry.value.to_string().len();
-            
+
             if entry.is_expired() {
                 expired_count += 1;
             }
 
-            let stats = tool_stats.entry(entry.tool_name.clone()).or_insert(ToolCacheStats {
-                total_entries: 0,
-                total_accesses: 0,
-                avg_age_seconds: 0.0,
-                oldest_entry_seconds: 0,
-            });
-            
+            let stats = tool_stats
+                .entry(entry.tool_name.clone())
+                .or_insert(ToolCacheStats {
+                    total_entries: 0,
+                    total_accesses: 0,
+                    avg_age_seconds: 0.0,
+                    oldest_entry_seconds: 0,
+                });
+
             stats.total_entries += 1;
             stats.total_accesses += entry.access_count;
-            
+
             let age_seconds = entry.age().as_secs();
             stats.avg_age_seconds += age_seconds as f64;
             stats.oldest_entry_seconds = stats.oldest_entry_seconds.max(age_seconds);
@@ -323,7 +340,7 @@ impl ToolCache {
     fn hash_input(&self, input: &Value) -> String {
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
-        
+
         let mut hasher = DefaultHasher::new();
         input.to_string().hash(&mut hasher);
         format!("{:x}", hasher.finish())
@@ -356,7 +373,7 @@ pub struct ToolCacheStats {
 /// Background task to periodically clean up expired cache entries
 pub async fn start_cache_cleanup_task(cache: Arc<ToolCache>, interval: Duration) {
     let mut cleanup_interval = tokio::time::interval(interval);
-    
+
     loop {
         cleanup_interval.tick().await;
         cache.cleanup_expired().await;

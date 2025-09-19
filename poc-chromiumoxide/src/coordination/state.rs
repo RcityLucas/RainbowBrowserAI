@@ -2,16 +2,15 @@
 // Provides centralized state management with event-driven updates
 
 use anyhow::Result;
-use serde::{Serialize, Deserialize};
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::RwLock;
 use std::time::Instant;
-use tracing::{debug, info};
+use tokio::sync::RwLock;
+use tracing::info;
 
-use super::events::{Event, EventBus, EventType};
 use super::cache::CacheCoordinator;
-use crate::perception::{PageType, ElementType, PerceivedElement};
+use super::events::{Event, EventBus};
+use crate::perception::{ElementType, PageType, PerceivedElement};
 
 /// Unified state manager for all modules
 pub struct UnifiedStateManager {
@@ -71,7 +70,7 @@ pub struct ScreenshotMetadata {
 }
 
 /// Perception module state
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct PerceptionState {
     pub current_analysis: Option<PageAnalysis>,
     pub element_cache: ElementCache,
@@ -134,15 +133,15 @@ pub struct PageClassification {
 
 #[derive(Debug, Clone)]
 pub struct ElementCache {
-    elements: HashMap<String, CachedElement>,
-    last_cleanup: Instant,
+    _elements: HashMap<String, CachedElement>,
+    _last_cleanup: Instant,
 }
 
 impl Default for ElementCache {
     fn default() -> Self {
         Self {
-            elements: HashMap::new(),
-            last_cleanup: Instant::now(),
+            _elements: HashMap::new(),
+            _last_cleanup: Instant::now(),
         }
     }
 }
@@ -164,7 +163,7 @@ pub struct PerceptionContext {
 }
 
 /// Tool execution state
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct ToolState {
     pub execution_history: Vec<ToolExecution>,
     pub active_workflows: HashMap<String, WorkflowState>,
@@ -252,7 +251,7 @@ pub struct CacheStats {
 impl UnifiedStateManager {
     pub async fn new(event_bus: Arc<EventBus>) -> Result<Self> {
         let cache_coordinator = Arc::new(CacheCoordinator::new(event_bus.clone()).await);
-        
+
         let manager = Self {
             event_bus: event_bus.clone(),
             browser_state: Arc::new(RwLock::new(BrowserState::default())),
@@ -262,23 +261,23 @@ impl UnifiedStateManager {
             cache_coordinator,
             state_version: Arc::new(RwLock::new(0)),
         };
-        
+
         // Subscribe to events that affect state
         manager.setup_event_subscriptions().await;
-        
+
         Ok(manager)
     }
-    
+
     async fn setup_event_subscriptions(&self) {
         // TODO: Implement proper event subscriptions
         // The current EventHandler trait requires async handlers which
         // are complex to implement with closures. We need to create
         // proper handler structs that implement the trait.
-        
-        // For now, state updates will be handled directly by the 
+
+        // For now, state updates will be handled directly by the
         // modules that emit the events
     }
-    
+
     /// Update browser state with a function
     pub async fn update_browser_state<F>(&self, updater: F) -> Result<()>
     where
@@ -287,21 +286,23 @@ impl UnifiedStateManager {
         let mut state = self.browser_state.write().await;
         updater(&mut state)?;
         state.last_updated = Instant::now();
-        
+
         // Increment version
         let mut version = self.state_version.write().await;
         *version += 1;
-        
+
         // Emit state change event
-        self.event_bus.emit(Event::PageContentChanged {
-            session_id: String::new(), // Will be filled by session context
-            change_type: super::events::ContentChangeType::Unknown,
-            timestamp: Instant::now(),
-        }).await?;
-        
+        self.event_bus
+            .emit(Event::PageContentChanged {
+                session_id: String::new(), // Will be filled by session context
+                change_type: super::events::ContentChangeType::Unknown,
+                timestamp: Instant::now(),
+            })
+            .await?;
+
         Ok(())
     }
-    
+
     /// Update perception state
     pub async fn update_perception_state<F>(&self, updater: F) -> Result<()>
     where
@@ -310,14 +311,14 @@ impl UnifiedStateManager {
         let mut state = self.perception_state.write().await;
         updater(&mut state)?;
         state.last_analysis_time = Some(Instant::now());
-        
+
         // Increment version
         let mut version = self.state_version.write().await;
         *version += 1;
-        
+
         Ok(())
     }
-    
+
     /// Update tool state
     pub async fn update_tool_state<F>(&self, updater: F) -> Result<()>
     where
@@ -325,74 +326,79 @@ impl UnifiedStateManager {
     {
         let mut state = self.tool_state.write().await;
         updater(&mut state)?;
-        
+
         // Increment version
         let mut version = self.state_version.write().await;
         *version += 1;
-        
+
         Ok(())
     }
-    
+
     pub async fn update_intelligence_state<F>(&self, updater: F) -> Result<()>
     where
         F: FnOnce(&mut IntelligenceState) -> Result<()>,
     {
         let mut state = self.intelligence_state.write().await;
         updater(&mut state)?;
-        
+
         // Increment version
         let mut version = self.state_version.write().await;
         *version += 1;
-        
+
         Ok(())
     }
-    
+
     /// Get current browser state (read-only)
     pub async fn get_browser_state(&self) -> BrowserState {
         self.browser_state.read().await.clone()
     }
-    
+
     /// Get current perception state (read-only)
     pub async fn get_perception_state(&self) -> PerceptionState {
         self.perception_state.read().await.clone()
     }
-    
+
     /// Get current tool state (read-only)
     pub async fn get_tool_state(&self) -> ToolState {
         self.tool_state.read().await.clone()
     }
-    
+
     /// Get current state version
     pub async fn get_state_version(&self) -> u64 {
         *self.state_version.read().await
     }
-    
+
     /// Invalidate caches for navigation
     pub async fn invalidate_caches_for_navigation(&self, new_url: &str) -> Result<()> {
         info!("Invalidating caches for navigation to: {}", new_url);
-        
+
         // Clear perception element cache
         self.update_perception_state(|state| {
             state.element_cache = ElementCache::default();
             state.current_analysis = None;
             state.page_classification = None;
             Ok(())
-        }).await?;
-        
+        })
+        .await?;
+
         // Notify cache coordinator
-        self.cache_coordinator.invalidate_navigation_sensitive(new_url).await?;
-        
+        self.cache_coordinator
+            .invalidate_navigation_sensitive(new_url)
+            .await?;
+
         // Emit cache invalidation event
-        self.event_bus.emit(Event::CacheInvalidated {
-            cache_type: "navigation".to_string(),
-            reason: "page_navigation".to_string(),
-            keys_affected: vec![],
-            timestamp: Instant::now(),
-        }).await?;
-        
+        self.event_bus
+            .emit(Event::CacheInvalidated {
+                cache_type: "navigation".to_string(),
+                reason: "page_navigation".to_string(),
+                keys_affected: vec![],
+                timestamp: Instant::now(),
+            })
+            .await?;
+
         Ok(())
     }
-    
+
     /// Get a snapshot of all state
     pub async fn get_state_snapshot(&self) -> StateSnapshot {
         StateSnapshot {
@@ -436,27 +442,4 @@ impl Default for BrowserState {
     }
 }
 
-impl Default for PerceptionState {
-    fn default() -> Self {
-        Self {
-            current_analysis: None,
-            element_cache: ElementCache::default(),
-            page_classification: None,
-            context_stack: Vec::new(),
-            confidence_scores: HashMap::new(),
-            last_analysis_time: None,
-        }
-    }
-}
-
-impl Default for ToolState {
-    fn default() -> Self {
-        Self {
-            execution_history: Vec::new(),
-            active_workflows: HashMap::new(),
-            dependency_graph: DependencyGraph::default(),
-            performance_metrics: ToolPerformanceMetrics::default(),
-            tool_cache_stats: HashMap::new(),
-        }
-    }
-}
+// Default for PerceptionState and ToolState derived above

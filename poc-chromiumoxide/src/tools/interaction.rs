@@ -1,10 +1,10 @@
 use super::traits::{Tool, ToolCategory};
 use crate::browser::Browser;
-use anyhow::{Result, anyhow};
-use serde::{Deserialize, Serialize};
+use anyhow::{anyhow, Result};
 use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use tracing::{info, debug, warn};
+use tracing::{debug, info, warn};
 
 // ============================================================================
 // Click Tool
@@ -54,55 +54,53 @@ impl ClickTool {
 impl Tool for ClickTool {
     type Input = ClickInput;
     type Output = ClickOutput;
-    
+
     fn name(&self) -> &str {
         "click"
     }
-    
+
     fn description(&self) -> &str {
         "Click on an element specified by selector"
     }
-    
+
     fn category(&self) -> ToolCategory {
         ToolCategory::Interaction
     }
-    
+
     async fn execute(&self, input: Self::Input) -> Result<Self::Output> {
         info!("Clicking element: {}", input.selector);
-        
+
         // Wait for element if requested
         if input.wait_for_element {
             let timeout = std::time::Duration::from_millis(input.timeout_ms);
-            self.browser.wait_for_selector(&input.selector, timeout).await?;
+            self.browser
+                .wait_for_selector(&input.selector, timeout)
+                .await?;
         }
-        
+
         // Get element position before clicking (optional)
         let click_position = match self.browser.find_element(&input.selector).await {
-            Ok(element_info) => {
-                element_info.rect.map(|rect| ClickPosition {
-                    x: rect.x + rect.width / 2.0,
-                    y: rect.y + rect.height / 2.0,
-                })
-            }
+            Ok(element_info) => element_info.rect.map(|rect| ClickPosition {
+                x: rect.x + rect.width / 2.0,
+                y: rect.y + rect.height / 2.0,
+            }),
             Err(_) => None,
         };
-        
+
         // Perform the click
         match self.browser.click(&input.selector).await {
-            Ok(_) => {
-                Ok(ClickOutput {
-                    success: true,
-                    element_found: true,
-                    click_position,
-                })
-            }
+            Ok(_) => Ok(ClickOutput {
+                success: true,
+                element_found: true,
+                click_position,
+            }),
             Err(e) => {
                 warn!("Click failed: {}", e);
                 Err(e)
             }
         }
     }
-    
+
     async fn validate_input(&self, input: &Self::Input) -> Result<()> {
         if input.selector.is_empty() {
             return Err(anyhow!("Selector cannot be empty"));
@@ -150,62 +148,61 @@ impl TypeTextTool {
 impl Tool for TypeTextTool {
     type Input = TypeTextInput;
     type Output = TypeTextOutput;
-    
+
     fn name(&self) -> &str {
         "type_text"
     }
-    
+
     fn description(&self) -> &str {
         "Type text into an input field"
     }
-    
+
     fn category(&self) -> ToolCategory {
         ToolCategory::Interaction
     }
-    
+
     async fn execute(&self, input: Self::Input) -> Result<Self::Output> {
         info!("Typing text into: {}", input.selector);
-        
+
         // Wait for element if requested
         if input.wait_for_element {
             let timeout = std::time::Duration::from_millis(input.timeout_ms);
-            self.browser.wait_for_selector(&input.selector, timeout).await?;
+            self.browser
+                .wait_for_selector(&input.selector, timeout)
+                .await?;
         }
-        
+
         // Clear field first if requested
         if input.clear_first {
             debug!("Clearing field first");
-            let clear_script = format!(
-                "document.querySelector('{}').value = ''",
-                input.selector
-            );
+            let clear_script = format!("document.querySelector('{}').value = ''", input.selector);
             self.browser.execute_script(&clear_script).await?;
         }
-        
+
         // Type the text
         self.browser.type_text(&input.selector, &input.text).await?;
-        
+
         // Add delay if specified
         if let Some(delay) = input.delay_ms {
             tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
         }
-        
+
         // Get the final value
-        let value_script = format!(
-            "document.querySelector('{}').value",
-            input.selector
-        );
-        let final_value = self.browser.execute_script(&value_script).await
+        let value_script = format!("document.querySelector('{}').value", input.selector);
+        let final_value = self
+            .browser
+            .execute_script(&value_script)
+            .await
             .ok()
             .and_then(|v| v.as_str().map(|s| s.to_string()));
-        
+
         Ok(TypeTextOutput {
             success: true,
             characters_typed: input.text.len(),
             final_value,
         })
     }
-    
+
     async fn validate_input(&self, input: &Self::Input) -> Result<()> {
         if input.selector.is_empty() {
             return Err(anyhow!("Selector cannot be empty"));
@@ -259,28 +256,30 @@ impl SelectOptionTool {
 impl Tool for SelectOptionTool {
     type Input = SelectOptionInput;
     type Output = SelectOptionOutput;
-    
+
     fn name(&self) -> &str {
         "select_option"
     }
-    
+
     fn description(&self) -> &str {
         "Select an option from a dropdown/select element"
     }
-    
+
     fn category(&self) -> ToolCategory {
         ToolCategory::Interaction
     }
-    
+
     async fn execute(&self, input: Self::Input) -> Result<Self::Output> {
         info!("Selecting option in: {}", input.selector);
-        
+
         // Wait for element if requested
         if input.wait_for_element {
             let timeout = std::time::Duration::from_millis(input.timeout_ms);
-            self.browser.wait_for_selector(&input.selector, timeout).await?;
+            self.browser
+                .wait_for_selector(&input.selector, timeout)
+                .await?;
         }
-        
+
         // Select based on option type
         let script = match &input.option {
             SelectOption::Value(value) => {
@@ -335,9 +334,9 @@ impl Tool for SelectOptionTool {
                 )
             }
         };
-        
+
         let result = self.browser.execute_script(&script).await?;
-        
+
         Ok(SelectOptionOutput {
             success: true,
             selected_value: result["value"].as_str().map(|s| s.to_string()),
@@ -345,7 +344,7 @@ impl Tool for SelectOptionTool {
             selected_index: result["index"].as_u64().map(|i| i as usize),
         })
     }
-    
+
     async fn validate_input(&self, input: &Self::Input) -> Result<()> {
         if input.selector.is_empty() {
             return Err(anyhow!("Selector cannot be empty"));
@@ -400,35 +399,37 @@ impl HoverTool {
 impl Tool for HoverTool {
     type Input = HoverInput;
     type Output = HoverOutput;
-    
+
     fn name(&self) -> &str {
         "hover"
     }
-    
+
     fn description(&self) -> &str {
         "Hover over an element"
     }
-    
+
     fn category(&self) -> ToolCategory {
         ToolCategory::Interaction
     }
-    
+
     async fn execute(&self, input: Self::Input) -> Result<Self::Output> {
         info!("Hovering over element: {}", input.selector);
-        
+
         // Wait for element if requested
         if input.wait_for_element {
             let timeout = std::time::Duration::from_millis(input.timeout_ms);
-            self.browser.wait_for_selector(&input.selector, timeout).await?;
+            self.browser
+                .wait_for_selector(&input.selector, timeout)
+                .await?;
         }
-        
+
         // Get element position
         let element_info = self.browser.find_element(&input.selector).await?;
         let hover_position = element_info.rect.map(|rect| HoverPosition {
             x: rect.x + rect.width / 2.0,
             y: rect.y + rect.height / 2.0,
         });
-        
+
         // Perform hover using JavaScript
         let script = format!(
             r#"
@@ -454,14 +455,17 @@ impl Tool for HoverTool {
             }})()"#,
             input.selector
         );
-        
-        let element_found = self.browser.execute_script(&script).await?
+
+        let element_found = self
+            .browser
+            .execute_script(&script)
+            .await?
             .as_bool()
             .unwrap_or(false);
-        
+
         // Hold the hover for specified duration
         tokio::time::sleep(std::time::Duration::from_millis(input.duration_ms)).await;
-        
+
         // Trigger mouseout event
         let mouseout_script = format!(
             r#"
@@ -485,16 +489,16 @@ impl Tool for HoverTool {
             }})()"#,
             input.selector
         );
-        
+
         self.browser.execute_script(&mouseout_script).await?;
-        
+
         Ok(HoverOutput {
             success: true,
             element_found,
             hover_position,
         })
     }
-    
+
     async fn validate_input(&self, input: &Self::Input) -> Result<()> {
         if input.selector.is_empty() {
             return Err(anyhow!("Selector cannot be empty"));
@@ -537,37 +541,42 @@ impl FocusTool {
 impl Tool for FocusTool {
     type Input = FocusInput;
     type Output = FocusOutput;
-    
+
     fn name(&self) -> &str {
         "focus"
     }
-    
+
     fn description(&self) -> &str {
         "Focus on an element"
     }
-    
+
     fn category(&self) -> ToolCategory {
         ToolCategory::Interaction
     }
-    
+
     async fn execute(&self, input: Self::Input) -> Result<Self::Output> {
         info!("Focusing element: {}", input.selector);
-        
+
         // Wait for element if requested
         if input.wait_for_element {
             let timeout = std::time::Duration::from_millis(input.timeout_ms);
-            self.browser.wait_for_selector(&input.selector, timeout).await?;
+            self.browser
+                .wait_for_selector(&input.selector, timeout)
+                .await?;
         }
-        
+
         // Get current active element
         let previous_script = r#"
             document.activeElement ? 
             (document.activeElement.id || document.activeElement.tagName) : null
         "#;
-        let previous_active = self.browser.execute_script(previous_script).await
+        let previous_active = self
+            .browser
+            .execute_script(previous_script)
+            .await
             .ok()
             .and_then(|v| v.as_str().map(|s| s.to_string()));
-        
+
         // Focus the element
         let focus_script = format!(
             r#"
@@ -581,18 +590,21 @@ impl Tool for FocusTool {
             }})()"#,
             input.selector
         );
-        
-        let element_focused = self.browser.execute_script(&focus_script).await?
+
+        let element_focused = self
+            .browser
+            .execute_script(&focus_script)
+            .await?
             .as_bool()
             .unwrap_or(false);
-        
+
         Ok(FocusOutput {
             success: true,
             element_focused,
             previous_active_element: previous_active,
         })
     }
-    
+
     async fn validate_input(&self, input: &Self::Input) -> Result<()> {
         if input.selector.is_empty() {
             return Err(anyhow!("Selector cannot be empty"));

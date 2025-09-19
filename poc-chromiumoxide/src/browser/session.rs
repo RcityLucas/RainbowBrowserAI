@@ -1,13 +1,13 @@
+use super::core::Browser;
+use super::pool::{BrowserGuard, BrowserPool};
 use anyhow::Result;
 use chromiumoxide::BrowserConfig;
+use chrono::{DateTime, Utc};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use uuid::Uuid;
-use chrono::{DateTime, Utc};
 use tracing::info;
-use super::core::Browser;
-use super::pool::{BrowserPool, BrowserGuard};
+use uuid::Uuid;
 
 /// Browser session for stateful operations
 #[derive(Clone)]
@@ -27,9 +27,9 @@ impl BrowserSession {
         let id = Uuid::new_v4().to_string();
         let browser_guard = browser_pool.acquire().await?;
         let browser = browser_guard.browser_arc();
-        
+
         info!("Created new browser session from pool: {}", id);
-        
+
         let session = Self {
             id: id.clone(),
             browser,
@@ -39,18 +39,18 @@ impl BrowserSession {
             current_url: None,
             history: Vec::new(),
         };
-        
+
         Ok((session, browser_guard))
     }
-    
+
     /// Create a new browser session (deprecated - use from_pool instead)
     #[deprecated(note = "Use from_pool() to reuse browsers from pool")]
     pub async fn new() -> Result<Self> {
         let id = Uuid::new_v4().to_string();
         let browser = Arc::new(Browser::new().await?);
-        
+
         info!("Created new browser session: {}", id);
-        
+
         Ok(Self {
             id: id.clone(),
             browser,
@@ -66,9 +66,9 @@ impl BrowserSession {
     pub async fn with_config(config: BrowserConfig) -> Result<Self> {
         let id = Uuid::new_v4().to_string();
         let browser = Arc::new(Browser::new_with_config(config).await?);
-        
+
         info!("Created new browser session with custom config: {}", id);
-        
+
         Ok(Self {
             id: id.clone(),
             browser,
@@ -89,13 +89,13 @@ impl BrowserSession {
     pub async fn navigate(&mut self, url: &str) -> Result<()> {
         self.touch();
         self.browser.navigate_to(url).await?;
-        
+
         // Update history
         if let Some(current) = &self.current_url {
             self.history.push(current.clone());
         }
         self.current_url = Some(url.to_string());
-        
+
         info!("Session {} navigated to: {}", self.id, url);
         Ok(())
     }
@@ -103,16 +103,20 @@ impl BrowserSession {
     /// Go back in history
     pub async fn go_back(&mut self) -> Result<()> {
         self.touch();
-        
+
         if let Some(previous_url) = self.history.pop() {
             let current = self.current_url.clone();
             self.browser.navigate_to(&previous_url).await?;
             self.current_url = Some(previous_url);
-            
+
             // Don't add to history when going back
             if let Some(current) = current {
-                info!("Session {} went back from {} to {}", 
-                      self.id, current, self.current_url.as_ref().unwrap());
+                info!(
+                    "Session {} went back from {} to {}",
+                    self.id,
+                    current,
+                    self.current_url.as_ref().unwrap()
+                );
             }
             Ok(())
         } else {
@@ -171,29 +175,33 @@ impl SessionManager {
     pub async fn create_session(&self) -> Result<String> {
         // Clean up expired sessions first
         self.cleanup_expired().await;
-        
+
         // Check if we've reached max sessions
         {
             let sessions = self.sessions.read().await;
             if sessions.len() >= self.max_sessions {
                 return Err(anyhow::anyhow!(
-                    "Maximum number of sessions ({}) reached", 
+                    "Maximum number of sessions ({}) reached",
                     self.max_sessions
                 ));
             }
         }
-        
+
         // Create new session using browser pool
         let (session, browser_guard) = BrowserSession::from_pool(&self.browser_pool).await?;
         let session_id = session.id.clone();
-        
+
         // Store session and its browser guard
         let mut sessions = self.sessions.write().await;
         let mut browser_guards = self.browser_guards.write().await;
         sessions.insert(session_id.clone(), Arc::new(RwLock::new(session)));
         browser_guards.insert(session_id.clone(), browser_guard);
-        
-        info!("Created session: {} (total: {})", session_id, sessions.len());
+
+        info!(
+            "Created session: {} (total: {})",
+            session_id,
+            sessions.len()
+        );
         Ok(session_id)
     }
 
@@ -207,11 +215,15 @@ impl SessionManager {
     pub async fn remove_session(&self, session_id: &str) -> Result<()> {
         let mut sessions = self.sessions.write().await;
         let mut browser_guards = self.browser_guards.write().await;
-        
+
         if sessions.remove(session_id).is_some() {
             // Also remove the browser guard (this returns the browser to the pool)
             browser_guards.remove(session_id);
-            info!("Removed session: {} (remaining: {})", session_id, sessions.len());
+            info!(
+                "Removed session: {} (remaining: {})",
+                session_id,
+                sessions.len()
+            );
             Ok(())
         } else {
             Err(anyhow::anyhow!("Session not found: {}", session_id))
@@ -223,7 +235,7 @@ impl SessionManager {
         let mut sessions = self.sessions.write().await;
         let mut browser_guards = self.browser_guards.write().await;
         let _initial_count = sessions.len();
-        
+
         let expired_ids: Vec<String> = {
             let mut expired = Vec::new();
             for (id, session) in sessions.iter() {
@@ -234,19 +246,22 @@ impl SessionManager {
             }
             expired
         };
-        
+
         for id in &expired_ids {
             sessions.remove(id);
             browser_guards.remove(id); // Return browser to pool
             info!("Cleaned up expired session: {}", id);
         }
-        
+
         let removed_count = expired_ids.len();
         if removed_count > 0 {
-            info!("Cleaned up {} expired sessions (remaining: {})", 
-                  removed_count, sessions.len());
+            info!(
+                "Cleaned up {} expired sessions (remaining: {})",
+                removed_count,
+                sessions.len()
+            );
         }
-        
+
         removed_count
     }
 
@@ -254,7 +269,7 @@ impl SessionManager {
     pub async fn list_sessions(&self) -> Vec<SessionInfo> {
         let sessions = self.sessions.read().await;
         let mut session_list = Vec::new();
-        
+
         for (id, session) in sessions.iter() {
             let session_guard = session.read().await;
             session_list.push(SessionInfo {
@@ -266,7 +281,7 @@ impl SessionManager {
                 idle_seconds: session_guard.idle_seconds(),
             });
         }
-        
+
         session_list
     }
 

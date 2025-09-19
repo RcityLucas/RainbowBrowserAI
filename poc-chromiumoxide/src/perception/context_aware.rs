@@ -1,7 +1,7 @@
 // Context-aware perception - understanding user intent and workflow context
 
 use anyhow::Result;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
 
 /// Context-aware perception engine that learns from user interactions
@@ -83,40 +83,43 @@ impl ContextAwarePerception {
     pub fn record_interaction(&mut self, interaction: InteractionRecord) {
         // Add to history
         self.interaction_history.push_back(interaction.clone());
-        
+
         // Maintain history size
         while self.interaction_history.len() > self.max_history {
             self.interaction_history.pop_front();
         }
-        
+
         // Update patterns
         self.update_patterns(&interaction);
-        
+
         // Update workflow context
         self.update_workflow_context(&interaction);
     }
 
     /// Predict the next likely action based on context
-    pub fn predict_next_action(&self, current_context: &InteractionContext) -> Result<Vec<ActionPrediction>> {
+    pub fn predict_next_action(
+        &self,
+        current_context: &InteractionContext,
+    ) -> Result<Vec<ActionPrediction>> {
         let mut predictions = Vec::new();
-        
+
         // Analyze patterns to predict next actions
-        for (_, pattern) in &self.user_patterns {
+        for pattern in self.user_patterns.values() {
             if let Some(prediction) = self.analyze_pattern_match(pattern, current_context) {
                 predictions.push(prediction);
             }
         }
-        
+
         // Sort by confidence
         predictions.sort_by(|a, b| b.confidence.partial_cmp(&a.confidence).unwrap());
-        
+
         Ok(predictions)
     }
 
     /// Suggest element descriptions based on context
     pub fn suggest_element_descriptions(&self, page_type: &str, action: &str) -> Vec<String> {
         let mut suggestions: Vec<String> = Vec::new();
-        
+
         // Get suggestions based on page type and action
         match (page_type, action) {
             ("LoginPage", "click") => {
@@ -130,7 +133,7 @@ impl ContextAwarePerception {
             ("LoginPage", "type") => {
                 suggestions.extend([
                     "username field".to_string(),
-                    "email field".to_string(), 
+                    "email field".to_string(),
                     "password field".to_string(),
                     "login field".to_string(),
                 ]);
@@ -166,14 +169,14 @@ impl ContextAwarePerception {
                 ]);
             }
         }
-        
+
         // Add suggestions from learned patterns
         for pattern in self.user_patterns.values() {
             if pattern.success_rate > 0.7 {
                 suggestions.extend(pattern.typical_sequence.clone());
             }
         }
-        
+
         // Remove duplicates and return
         suggestions.sort();
         suggestions.dedup();
@@ -210,20 +213,22 @@ impl ContextAwarePerception {
         // Detect workflow transitions
         if interaction.success {
             if let Some(ref current_step) = self.workflow_context.current_step {
-                self.workflow_context.completed_steps.push(current_step.clone());
+                self.workflow_context
+                    .completed_steps
+                    .push(current_step.clone());
             }
-            
+
             self.workflow_context.current_step = Some(interaction.action.clone());
-            
+
             // Update context data
             self.workflow_context.context_data.insert(
                 format!("last_{}", interaction.action),
-                interaction.target_selector.clone()
+                interaction.target_selector.clone(),
             );
         }
 
         // Detect workflow completion or reset
-        if self.is_workflow_complete(&interaction) {
+        if self.is_workflow_complete(interaction) {
             self.reset_workflow_context();
         }
     }
@@ -231,28 +236,36 @@ impl ContextAwarePerception {
     /// Update user patterns based on new interaction
     fn update_patterns(&mut self, interaction: &InteractionRecord) {
         let pattern_key = format!("{}_{}", interaction.page_type, interaction.action);
-        
+
         // Call classify_pattern_type before the mutable borrow
         let pattern_type = self.classify_pattern_type(&interaction.action);
-        
-        let pattern = self.user_patterns.entry(pattern_key).or_insert_with(|| {
-            UserPattern {
+
+        let pattern = self
+            .user_patterns
+            .entry(pattern_key)
+            .or_insert_with(|| UserPattern {
                 pattern_type,
                 frequency: 0,
                 success_rate: 0.0,
                 typical_sequence: Vec::new(),
                 contextual_cues: Vec::new(),
-            }
-        });
+            });
 
         // Update frequency and success rate
         pattern.frequency += 1;
         let success_count = if interaction.success { 1.0 } else { 0.0 };
-        pattern.success_rate = (pattern.success_rate * (pattern.frequency - 1) as f32 + success_count) / pattern.frequency as f32;
+        pattern.success_rate = (pattern.success_rate * (pattern.frequency - 1) as f32
+            + success_count)
+            / pattern.frequency as f32;
 
         // Update typical sequence
-        if !pattern.typical_sequence.contains(&interaction.target_description) {
-            pattern.typical_sequence.push(interaction.target_description.clone());
+        if !pattern
+            .typical_sequence
+            .contains(&interaction.target_description)
+        {
+            pattern
+                .typical_sequence
+                .push(interaction.target_description.clone());
         }
 
         // Update contextual cues
@@ -265,7 +278,9 @@ impl ContextAwarePerception {
 
     fn classify_pattern_type(&self, action: &str) -> PatternType {
         match action {
-            "click" if action.contains("login") || action.contains("sign") => PatternType::LoginSequence,
+            "click" if action.contains("login") || action.contains("sign") => {
+                PatternType::LoginSequence
+            }
             "search" => PatternType::SearchWorkflow,
             "type" => PatternType::FormFilling,
             "navigate" => PatternType::Navigation,
@@ -274,23 +289,30 @@ impl ContextAwarePerception {
         }
     }
 
-    fn analyze_pattern_match(&self, pattern: &UserPattern, context: &InteractionContext) -> Option<ActionPrediction> {
+    fn analyze_pattern_match(
+        &self,
+        pattern: &UserPattern,
+        context: &InteractionContext,
+    ) -> Option<ActionPrediction> {
         // Simple pattern matching - could be enhanced with ML
         let mut confidence = pattern.success_rate * 0.5;
-        
+
         // Boost confidence if context matches
         for cue in &pattern.contextual_cues {
             if context.preceding_actions.contains(cue) {
                 confidence += 0.1;
             }
         }
-        
+
         if confidence > 0.3 {
             Some(ActionPrediction {
                 action: "click".to_string(), // Simplified
                 target_description: pattern.typical_sequence.first()?.clone(),
                 confidence,
-                reasoning: format!("Based on pattern with {:.1}% success rate", pattern.success_rate * 100.0),
+                reasoning: format!(
+                    "Based on pattern with {:.1}% success rate",
+                    pattern.success_rate * 100.0
+                ),
             })
         } else {
             None
@@ -298,8 +320,11 @@ impl ContextAwarePerception {
     }
 
     fn find_matching_pattern(&self, description: &str) -> Option<&UserPattern> {
-        self.user_patterns.values()
-            .find(|p| p.typical_sequence.iter().any(|seq| seq.contains(description)))
+        self.user_patterns.values().find(|p| {
+            p.typical_sequence
+                .iter()
+                .any(|seq| seq.contains(description))
+        })
     }
 
     fn predict_element_location(&self, _description: &str, _goal: &str) -> Option<ElementLocation> {
@@ -342,10 +367,12 @@ impl ContextAwarePerception {
     /// Get interaction history summary
     pub fn get_history_summary(&self) -> InteractionSummary {
         let total_interactions = self.interaction_history.len();
-        let successful_interactions = self.interaction_history.iter()
+        let successful_interactions = self
+            .interaction_history
+            .iter()
             .filter(|i| i.success)
             .count();
-        
+
         let success_rate = if total_interactions > 0 {
             successful_interactions as f32 / total_interactions as f32
         } else {
@@ -363,14 +390,20 @@ impl ContextAwarePerception {
 
     fn get_most_common_actions(&self) -> Vec<(String, u32)> {
         let mut action_counts: HashMap<String, u32> = HashMap::new();
-        
+
         for interaction in &self.interaction_history {
             *action_counts.entry(interaction.action.clone()).or_insert(0) += 1;
         }
-        
+
         let mut actions: Vec<_> = action_counts.into_iter().collect();
         actions.sort_by(|a, b| b.1.cmp(&a.1));
         actions.into_iter().take(10).collect()
+    }
+}
+
+impl Default for ContextAwarePerception {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

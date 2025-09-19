@@ -1,19 +1,19 @@
 // Central Coordinator for RainbowBrowserAI
 // Manages session lifecycle, module coordination, and resource management
 
-use anyhow::{Result, anyhow};
+use anyhow::{anyhow, Result};
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::RwLock;
 use std::time::{Duration, Instant};
-use tracing::{info, debug, warn, error};
+use tokio::sync::RwLock;
+use tracing::{error, info, warn};
 use uuid::Uuid;
 
-use super::events::{EventBus, Event, EventType};
-use super::state::UnifiedStateManager;
-use super::session::{SessionContext, SessionBundle};
 use super::cache::UnifiedCache;
+use super::events::{Event, EventBus};
 use super::monitoring::UnifiedMonitoring;
+use super::session::{SessionBundle, SessionContext};
+use super::state::UnifiedStateManager;
 use crate::browser::pool::BrowserPool;
 
 /// Resource manager for browser instances
@@ -42,6 +42,7 @@ impl Default for ResourceLimits {
     }
 }
 
+#[allow(dead_code)]
 struct BrowserLease {
     session_id: String,
     browser: Arc<crate::browser::Browser>,
@@ -56,30 +57,36 @@ impl ResourceManager {
             resource_limits: ResourceLimits::default(),
         }
     }
-    
+
     pub async fn acquire_browser(&self, session_id: &str) -> Result<Arc<crate::browser::Browser>> {
         // Check resource limits
         let active_count = self.active_browsers.read().await.len();
         if active_count >= self.resource_limits.max_browsers {
-            return Err(anyhow!("Browser limit reached: {}/{}", 
-                active_count, self.resource_limits.max_browsers));
+            return Err(anyhow!(
+                "Browser limit reached: {}/{}",
+                active_count,
+                self.resource_limits.max_browsers
+            ));
         }
-        
+
         // Acquire browser from pool
         let browser_guard = self.browser_pool.acquire().await?;
         let browser = browser_guard.browser_arc();
-        
+
         // Store lease
         let lease = BrowserLease {
             session_id: session_id.to_string(),
             browser: browser.clone(),
             leased_at: Instant::now(),
         };
-        self.active_browsers.write().await.insert(session_id.to_string(), lease);
-        
+        self.active_browsers
+            .write()
+            .await
+            .insert(session_id.to_string(), lease);
+
         Ok(browser)
     }
-    
+
     pub async fn release_browser(&self, session_id: &str) -> Result<()> {
         self.active_browsers.write().await.remove(session_id);
         Ok(())
@@ -102,40 +109,57 @@ pub struct ModuleInfo {
 impl ModuleRegistry {
     pub fn new() -> Self {
         let mut modules = HashMap::new();
-        
+
         // Register core modules
-        modules.insert("perception".to_string(), ModuleInfo {
-            name: "perception".to_string(),
-            module_type: super::ModuleType::Perception,
-            version: "1.0.0".to_string(),
-            enabled: true,
-        });
-        
-        modules.insert("tools".to_string(), ModuleInfo {
-            name: "tools".to_string(),
-            module_type: super::ModuleType::Tools,
-            version: "1.0.0".to_string(),
-            enabled: true,
-        });
-        
-        modules.insert("intelligence".to_string(), ModuleInfo {
-            name: "intelligence".to_string(),
-            module_type: super::ModuleType::Intelligence,
-            version: "1.0.0".to_string(),
-            enabled: true,
-        });
-        
+        modules.insert(
+            "perception".to_string(),
+            ModuleInfo {
+                name: "perception".to_string(),
+                module_type: super::ModuleType::Perception,
+                version: "1.0.0".to_string(),
+                enabled: true,
+            },
+        );
+
+        modules.insert(
+            "tools".to_string(),
+            ModuleInfo {
+                name: "tools".to_string(),
+                module_type: super::ModuleType::Tools,
+                version: "1.0.0".to_string(),
+                enabled: true,
+            },
+        );
+
+        modules.insert(
+            "intelligence".to_string(),
+            ModuleInfo {
+                name: "intelligence".to_string(),
+                module_type: super::ModuleType::Intelligence,
+                version: "1.0.0".to_string(),
+                enabled: true,
+            },
+        );
+
         Self {
             modules: Arc::new(RwLock::new(modules)),
         }
     }
-    
+
     pub async fn get_enabled_modules(&self) -> Vec<ModuleInfo> {
-        self.modules.read().await
+        self.modules
+            .read()
+            .await
             .values()
             .filter(|m| m.enabled)
             .cloned()
             .collect()
+    }
+}
+
+impl Default for ModuleRegistry {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -180,7 +204,7 @@ impl RainbowCoordinator {
         let module_registry = Arc::new(ModuleRegistry::new());
         let cache = Arc::new(UnifiedCache::new(event_bus.clone()).await?);
         let monitoring = Arc::new(UnifiedMonitoring::new(event_bus.clone()).await?);
-        
+
         let coordinator = Self {
             event_bus,
             state_manager,
@@ -192,63 +216,77 @@ impl RainbowCoordinator {
             session_bundles: Arc::new(RwLock::new(HashMap::new())),
             config: CoordinatorConfig::default(),
         };
-        
+
         // Start background tasks
         if coordinator.config.enable_auto_cleanup {
             coordinator.start_cleanup_task();
         }
-        
+
         if coordinator.config.enable_monitoring {
             coordinator.start_monitoring_task();
         }
-        
+
         info!("RainbowCoordinator initialized successfully");
-        
+
         Ok(coordinator)
     }
-    
+
     /// Create a new session with coordinated modules
     pub async fn create_session(&self) -> Result<Arc<SessionBundle>> {
         let session_id = Uuid::new_v4().to_string();
         info!("Creating new session: {}", session_id);
-        
+
         // Acquire browser for session
         let browser = self.resource_manager.acquire_browser(&session_id).await?;
-        
+
         // Create session context
-        let context = Arc::new(SessionContext::new(
-            session_id.clone(),
-            browser,
-            self.event_bus.clone(),
-            self.state_manager.clone(),
-            self.cache.clone(),
-        ).await?);
-        
+        let context = Arc::new(
+            SessionContext::new(
+                session_id.clone(),
+                browser,
+                self.event_bus.clone(),
+                self.state_manager.clone(),
+                self.cache.clone(),
+            )
+            .await?,
+        );
+
         // Create session bundle with all modules
         let bundle = Arc::new(SessionBundle::new(context.clone()).await?);
-        
+
         // Store session
-        self.session_contexts.write().await.insert(session_id.clone(), context);
-        self.session_bundles.write().await.insert(session_id.clone(), bundle.clone());
-        
+        self.session_contexts
+            .write()
+            .await
+            .insert(session_id.clone(), context);
+        self.session_bundles
+            .write()
+            .await
+            .insert(session_id.clone(), bundle.clone());
+
         // Emit session created event
-        self.event_bus.emit(Event::SessionCreated {
-            session_id: session_id.clone(),
-            timestamp: Instant::now(),
-        }).await?;
-        
+        self.event_bus
+            .emit(Event::SessionCreated {
+                session_id: session_id.clone(),
+                timestamp: Instant::now(),
+            })
+            .await?;
+
         info!("Session {} created successfully", session_id);
-        
+
         Ok(bundle)
     }
-    
+
     /// Get an existing session bundle
     pub async fn get_session(&self, session_id: &str) -> Option<Arc<SessionBundle>> {
         self.session_bundles.read().await.get(session_id).cloned()
     }
-    
+
     /// Get or create a session
-    pub async fn get_or_create_session(&self, session_id: Option<String>) -> Result<Arc<SessionBundle>> {
+    pub async fn get_or_create_session(
+        &self,
+        session_id: Option<String>,
+    ) -> Result<Arc<SessionBundle>> {
         match session_id {
             Some(id) => {
                 // Try to get existing session
@@ -272,41 +310,43 @@ impl RainbowCoordinator {
             }
         }
     }
-    
+
     /// Remove a session and cleanup resources
     pub async fn remove_session(&self, session_id: &str) -> Result<()> {
         info!("Removing session: {}", session_id);
-        
+
         // Get and cleanup bundle
         if let Some(bundle) = self.session_bundles.write().await.remove(session_id) {
             bundle.cleanup().await?;
         }
-        
+
         // Remove context
         self.session_contexts.write().await.remove(session_id);
-        
+
         // Release browser
         self.resource_manager.release_browser(session_id).await?;
-        
+
         // Emit session closed event
-        self.event_bus.emit(Event::SessionClosed {
-            session_id: session_id.to_string(),
-            reason: "removed".to_string(),
-            timestamp: Instant::now(),
-        }).await?;
-        
+        self.event_bus
+            .emit(Event::SessionClosed {
+                session_id: session_id.to_string(),
+                reason: "removed".to_string(),
+                timestamp: Instant::now(),
+            })
+            .await?;
+
         Ok(())
     }
-    
+
     /// List all active sessions
     pub async fn list_sessions(&self) -> Vec<SessionInfo> {
         let bundles = self.session_bundles.read().await;
         let mut sessions = Vec::new();
-        
+
         for (id, bundle) in bundles.iter() {
             let context = &bundle.context;
             let resource_usage = context.get_resource_usage().await;
-            
+
             sessions.push(SessionInfo {
                 session_id: id.clone(),
                 created_at: context.created_at,
@@ -315,40 +355,41 @@ impl RainbowCoordinator {
                 resource_usage: resource_usage.clone(),
             });
         }
-        
+
         sessions
     }
-    
+
     /// Get system health status
     pub async fn get_system_health(&self) -> SystemHealth {
         let sessions = self.session_bundles.read().await;
         let mut session_health = Vec::new();
-        
+
         for (id, bundle) in sessions.iter() {
             session_health.push((id.clone(), bundle.health_check().await));
         }
-        
+
         SystemHealth {
             total_sessions: session_health.len(),
-            healthy_sessions: session_health.iter().filter(|(_, h)| 
-                matches!(h.overall_status, super::session::HealthStatus::Healthy)
-            ).count(),
+            healthy_sessions: session_health
+                .iter()
+                .filter(|(_, h)| matches!(h.overall_status, super::session::HealthStatus::Healthy))
+                .count(),
             resource_usage: self.get_resource_usage().await,
             cache_stats: self.cache.get_stats().await,
             event_metrics: self.event_bus.get_metrics().await,
         }
     }
-    
+
     async fn get_resource_usage(&self) -> ResourceUsage {
         let browsers = self.resource_manager.active_browsers.read().await;
         ResourceUsage {
             active_browsers: browsers.len(),
             total_sessions: self.session_bundles.read().await.len(),
-            memory_mb: 0, // Would need actual memory monitoring
+            memory_mb: 0,     // Would need actual memory monitoring
             cpu_percent: 0.0, // Would need actual CPU monitoring
         }
     }
-    
+
     /// Start background cleanup task
     fn start_cleanup_task(&self) {
         let coordinator = Arc::new(self.clone());
@@ -362,37 +403,37 @@ impl RainbowCoordinator {
             }
         });
     }
-    
+
     /// Cleanup timed out sessions
     async fn cleanup_timed_out_sessions(&self) -> Result<()> {
         let bundles = self.session_bundles.read().await;
         let mut to_remove = Vec::new();
-        
+
         for (id, bundle) in bundles.iter() {
             if bundle.context.is_timed_out().await {
                 to_remove.push(id.clone());
             }
         }
         drop(bundles);
-        
+
         for session_id in to_remove {
             info!("Cleaning up timed out session: {}", session_id);
             self.remove_session(&session_id).await?;
         }
-        
+
         Ok(())
     }
-    
+
     /// Start monitoring task
     fn start_monitoring_task(&self) {
         let monitoring = self.monitoring.clone();
         let bundles = self.session_bundles.clone();
-        
+
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(30));
             loop {
                 interval.tick().await;
-                
+
                 let bundles = bundles.read().await;
                 for bundle in bundles.values() {
                     monitoring.monitor_session_bundle(bundle).await;

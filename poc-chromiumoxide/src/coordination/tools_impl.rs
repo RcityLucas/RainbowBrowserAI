@@ -2,36 +2,40 @@
 // Provides coordinated tool execution with event-driven updates
 
 use anyhow::Result;
-use std::sync::Arc;
-use tokio::sync::RwLock;
-use std::collections::HashMap;
-use std::time::Instant;
-use tracing::{info, debug, warn, error};
 use serde_json::{json, Value};
+use std::collections::HashMap;
+use std::sync::Arc;
+use std::time::Instant;
+use tokio::sync::RwLock;
+use tracing::{debug, error, info};
 
 use crate::browser::Browser;
 
 // Placeholder for ToolRegistry - will be replaced with real implementation
 pub struct ToolRegistry {
-    browser: Arc<Browser>,
-    tools: HashMap<String, Box<dyn Tool>>,
+    _browser: Arc<Browser>,
+    _tools: HashMap<String, Box<dyn Tool>>,
 }
 
 impl ToolRegistry {
     pub fn new(browser: Arc<Browser>) -> Self {
         Self {
-            browser,
-            tools: HashMap::new(),
+            _browser: browser,
+            _tools: HashMap::new(),
         }
     }
-    
+
     pub async fn initialize(&mut self) -> Result<()> {
         // Placeholder - in real implementation would register tools
         Ok(())
     }
-    
+
     pub fn list_tools(&self) -> Vec<String> {
-        vec!["click".to_string(), "type".to_string(), "extract".to_string()]
+        vec![
+            "click".to_string(),
+            "type".to_string(),
+            "extract".to_string(),
+        ]
     }
 }
 
@@ -40,25 +44,25 @@ pub trait Tool: Send + Sync {
     fn execute(&self, params: serde_json::Value) -> Result<serde_json::Value>;
 }
 use super::{
-    EventBus, Event, EventType, UnifiedStateManager, UnifiedCache,
-    CoordinatedModule, ModuleHealth, ModuleType, 
-    monitoring::{HealthStatus, HealthCheckResult},
-    session::{SessionContext, ActionPlan, ExecutionResult},
+    monitoring::{HealthCheckResult, HealthStatus},
+    session::{ActionPlan, ExecutionResult, SessionContext},
+    CoordinatedModule, Event, EventBus, ModuleHealth, ModuleType, UnifiedCache,
+    UnifiedStateManager,
 };
 
 /// Real implementation of coordinated tool registry
 pub struct RealCoordinatedToolRegistry {
     session_id: String,
-    browser: Arc<Browser>,
+    _browser: Arc<Browser>,
     tool_registry: Arc<RwLock<ToolRegistry>>,
-    cache: Arc<UnifiedCache>,
-    event_bus: Arc<EventBus>,
-    state_manager: Arc<UnifiedStateManager>,
-    
+    _cache: Arc<UnifiedCache>,
+    _event_bus: Arc<EventBus>,
+    _state_manager: Arc<UnifiedStateManager>,
+
     // Execution tracking
     active_executions: Arc<RwLock<HashMap<String, ToolExecution>>>,
     execution_history: Arc<RwLock<Vec<CompletedExecution>>>,
-    
+
     // Metrics
     total_executions: Arc<RwLock<u64>>,
     successful_executions: Arc<RwLock<u64>>,
@@ -66,6 +70,7 @@ pub struct RealCoordinatedToolRegistry {
     last_execution: Arc<RwLock<Option<Instant>>>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 struct ToolExecution {
     execution_id: String,
@@ -74,6 +79,7 @@ struct ToolExecution {
     parameters: Value,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 struct CompletedExecution {
     execution_id: String,
@@ -94,23 +100,21 @@ impl RealCoordinatedToolRegistry {
         state_manager: Arc<UnifiedStateManager>,
     ) -> Result<Arc<Self>> {
         // Create tool registry
-        let tool_registry = Arc::new(RwLock::new(
-            ToolRegistry::new(browser.clone())
-        ));
-        
+        let tool_registry = Arc::new(RwLock::new(ToolRegistry::new(browser.clone())));
+
         // Initialize the registry
         {
             let mut registry = tool_registry.write().await;
             registry.initialize().await?;
         }
-        
+
         let registry = Arc::new(Self {
             session_id: session_id.clone(),
-            browser,
+            _browser: browser,
             tool_registry,
-            cache,
-            event_bus: event_bus.clone(),
-            state_manager,
+            _cache: cache,
+            _event_bus: event_bus.clone(),
+            _state_manager: state_manager,
             active_executions: Arc::new(RwLock::new(HashMap::new())),
             execution_history: Arc::new(RwLock::new(Vec::new())),
             total_executions: Arc::new(RwLock::new(0)),
@@ -118,25 +122,27 @@ impl RealCoordinatedToolRegistry {
             failed_executions: Arc::new(RwLock::new(0)),
             last_execution: Arc::new(RwLock::new(None)),
         });
-        
+
         // Emit module initialized event
-        event_bus.emit(Event::ModuleInitialized {
-            session_id,
-            module_type: "tools".to_string(),
-            timestamp: Instant::now(),
-        }).await?;
-        
+        event_bus
+            .emit(Event::ModuleInitialized {
+                session_id,
+                module_type: "tools".to_string(),
+                timestamp: Instant::now(),
+            })
+            .await?;
+
         Ok(registry)
     }
-    
+
     /// Execute a planned action
     pub async fn execute_planned_action(&self, plan: ActionPlan) -> Result<ExecutionResult> {
         let start_time = Instant::now();
         let execution_id = uuid::Uuid::new_v4().to_string();
-        
+
         info!("Executing planned action with {} steps", plan.steps.len());
         debug!("Required tools: {:?}", plan.tools_required);
-        
+
         // Update metrics
         {
             let mut total = self.total_executions.write().await;
@@ -144,49 +150,60 @@ impl RealCoordinatedToolRegistry {
             let mut last = self.last_execution.write().await;
             *last = Some(Instant::now());
         }
-        
+
         // Track this execution
         {
             let mut active = self.active_executions.write().await;
-            active.insert(execution_id.clone(), ToolExecution {
-                execution_id: execution_id.clone(),
-                tool_name: plan.tools_required.first()
+            active.insert(
+                execution_id.clone(),
+                ToolExecution {
+                    execution_id: execution_id.clone(),
+                    tool_name: plan
+                        .tools_required
+                        .first()
+                        .unwrap_or(&"unknown".to_string())
+                        .clone(),
+                    started_at: Instant::now(),
+                    parameters: json!({}),
+                },
+            );
+        }
+
+        // Emit tool execution started event
+        self._event_bus
+            .emit(Event::ToolExecutionStarted {
+                session_id: self.session_id.clone(),
+                tool_name: plan
+                    .tools_required
+                    .first()
                     .unwrap_or(&"unknown".to_string())
                     .clone(),
-                started_at: Instant::now(),
-                parameters: json!({}),
-            });
-        }
-        
-        // Emit tool execution started event
-        self.event_bus.emit(Event::ToolExecutionStarted {
-            session_id: self.session_id.clone(),
-            tool_name: plan.tools_required.first()
-                .unwrap_or(&"unknown".to_string())
-                .clone(),
-            execution_id: execution_id.clone(),
-            timestamp: Instant::now(),
-        }).await?;
-        
+                execution_id: execution_id.clone(),
+                timestamp: Instant::now(),
+            })
+            .await?;
+
         let mut outputs = Vec::new();
         let mut overall_success = true;
         let mut errors = Vec::new();
-        
+
         // Execute each step
         for (i, step) in plan.steps.iter().enumerate() {
             debug!("Executing step {}: {}", i + 1, step);
-            
+
             // In a real implementation, we would:
             // 1. Parse the step to determine which tool to use
             // 2. Extract parameters from the step
             // 3. Execute the appropriate tool
             // 4. Collect the output
-            
+
             // For now, we'll simulate execution
-            let tool_name = plan.tools_required.get(i)
+            let tool_name = plan
+                .tools_required
+                .get(i)
                 .unwrap_or(&"generic".to_string())
                 .clone();
-            
+
             match self.execute_tool(&tool_name, json!({"step": step})).await {
                 Ok(output) => {
                     outputs.push(output);
@@ -199,35 +216,41 @@ impl RealCoordinatedToolRegistry {
                 }
             }
         }
-        
+
         // Remove from active executions
         {
             let mut active = self.active_executions.write().await;
             active.remove(&execution_id);
         }
-        
+
         // Record in history
         {
             let mut history = self.execution_history.write().await;
             history.push(CompletedExecution {
                 execution_id: execution_id.clone(),
-                tool_name: plan.tools_required.first()
+                tool_name: plan
+                    .tools_required
+                    .first()
                     .unwrap_or(&"unknown".to_string())
                     .clone(),
                 started_at: start_time,
                 completed_at: Instant::now(),
                 success: overall_success,
-                error: if errors.is_empty() { None } else { Some(errors.join("; ")) },
+                error: if errors.is_empty() {
+                    None
+                } else {
+                    Some(errors.join("; "))
+                },
                 result: Some(json!(outputs)),
             });
-            
+
             // Keep only last 100 executions
             if history.len() > 100 {
                 let drain_count = history.len() - 100;
                 history.drain(0..drain_count);
             }
         }
-        
+
         // Update metrics
         if overall_success {
             let mut successful = self.successful_executions.write().await;
@@ -236,52 +259,73 @@ impl RealCoordinatedToolRegistry {
             let mut failed = self.failed_executions.write().await;
             *failed += 1;
         }
-        
+
         // Update state
-        self.state_manager.update_tool_state(|state| {
-            state.execution_history.push(crate::coordination::state::ToolExecution {
-                execution_id: execution_id.clone(),
-                tool_name: plan.tools_required.first()
+        self._state_manager
+            .update_tool_state(|state| {
+                state
+                    .execution_history
+                    .push(crate::coordination::state::ToolExecution {
+                        execution_id: execution_id.clone(),
+                        tool_name: plan
+                            .tools_required
+                            .first()
+                            .unwrap_or(&"unknown".to_string())
+                            .clone(),
+                        started_at: start_time,
+                        completed_at: Some(Instant::now()),
+                        success: overall_success,
+                        error: if errors.is_empty() {
+                            None
+                        } else {
+                            Some(errors.join("; "))
+                        },
+                        input_size: 0,
+                        output_size: outputs.len(),
+                    });
+                Ok(())
+            })
+            .await?;
+
+        // Emit completion event
+        self._event_bus
+            .emit(Event::ToolExecutionCompleted {
+                session_id: self.session_id.clone(),
+                tool_name: plan
+                    .tools_required
+                    .first()
                     .unwrap_or(&"unknown".to_string())
                     .clone(),
-                started_at: start_time,
-                completed_at: Some(Instant::now()),
+                execution_id: execution_id.clone(),
                 success: overall_success,
-                error: if errors.is_empty() { None } else { Some(errors.join("; ")) },
-                input_size: 0,
-                output_size: outputs.len(),
-            });
-            Ok(())
-        }).await?;
-        
-        // Emit completion event
-        self.event_bus.emit(Event::ToolExecutionCompleted {
-            session_id: self.session_id.clone(),
-            tool_name: plan.tools_required.first()
-                .unwrap_or(&"unknown".to_string())
-                .clone(),
-            execution_id: execution_id.clone(),
-            success: overall_success,
-            duration_ms: start_time.elapsed().as_millis() as u64,
-            timestamp: Instant::now(),
-        }).await?;
-        
+                duration_ms: start_time.elapsed().as_millis() as u64,
+                timestamp: Instant::now(),
+            })
+            .await?;
+
         Ok(ExecutionResult {
             success: overall_success,
             output: json!(outputs),
-            error: if errors.is_empty() { None } else { Some(errors.join("; ")) },
+            error: if errors.is_empty() {
+                None
+            } else {
+                Some(errors.join("; "))
+            },
             execution_id,
             duration_ms: start_time.elapsed().as_millis() as u64,
         })
     }
-    
+
     /// Execute a specific tool
     pub async fn execute_tool(&self, tool_name: &str, parameters: Value) -> Result<Value> {
-        debug!("Executing tool: {} with params: {:?}", tool_name, parameters);
-        
+        debug!(
+            "Executing tool: {} with params: {:?}",
+            tool_name, parameters
+        );
+
         // Get the tool from registry
-        let registry = self.tool_registry.read().await;
-        
+        let _registry = self.tool_registry.read().await;
+
         // In a real implementation, we would get the tool and execute it
         // For now, we'll return a simulated result
         match tool_name {
@@ -319,27 +363,29 @@ impl RealCoordinatedToolRegistry {
             }
         }
     }
-    
+
     /// Get available tools
     pub async fn get_available_tools(&self) -> Vec<String> {
         let registry = self.tool_registry.read().await;
         registry.list_tools()
     }
-    
+
     /// Cleanup tool registry
     pub async fn cleanup(&self) -> Result<()> {
         info!("Cleaning up tool registry for session: {}", self.session_id);
-        
+
         // Clear active executions
         self.active_executions.write().await.clear();
-        
+
         // Emit module shutdown event
-        self.event_bus.emit(Event::ModuleShutdown {
-            session_id: self.session_id.clone(),
-            module_type: "tools".to_string(),
-            timestamp: Instant::now(),
-        }).await?;
-        
+        self._event_bus
+            .emit(Event::ModuleShutdown {
+                session_id: self.session_id.clone(),
+                module_type: "tools".to_string(),
+                timestamp: Instant::now(),
+            })
+            .await?;
+
         Ok(())
     }
 }
@@ -350,7 +396,7 @@ impl CoordinatedModule for RealCoordinatedToolRegistry {
         debug!("Initializing tools module for session: {}", self.session_id);
         Ok(())
     }
-    
+
     async fn handle_event(&self, event: &Event) -> Result<()> {
         match event {
             Event::NavigationCompleted { .. } => {
@@ -365,27 +411,27 @@ impl CoordinatedModule for RealCoordinatedToolRegistry {
         }
         Ok(())
     }
-    
+
     async fn cleanup(&mut self) -> Result<()> {
         self.cleanup().await
     }
-    
+
     fn dependencies(&self) -> Vec<ModuleType> {
         vec![ModuleType::Browser, ModuleType::Perception]
     }
-    
+
     fn health_check(&self) -> ModuleHealth {
         let total = self.total_executions.blocking_read();
         let successful = self.successful_executions.blocking_read();
-        let failed = self.failed_executions.blocking_read();
+        let _failed = self.failed_executions.blocking_read();
         let active = self.active_executions.blocking_read();
-        
+
         let success_rate = if *total > 0 {
             *successful as f64 / *total as f64
         } else {
             1.0
         };
-        
+
         let score = if success_rate < 0.5 {
             0.3
         } else if success_rate < 0.8 {
@@ -395,7 +441,7 @@ impl CoordinatedModule for RealCoordinatedToolRegistry {
         } else {
             1.0
         };
-        
+
         let status = if score > 0.8 {
             HealthStatus::Healthy
         } else if score > 0.5 {
@@ -403,7 +449,7 @@ impl CoordinatedModule for RealCoordinatedToolRegistry {
         } else {
             HealthStatus::Critical
         };
-        
+
         ModuleHealth {
             module_name: "tools".to_string(),
             status,
@@ -425,14 +471,14 @@ impl CoordinatedModule for RealCoordinatedToolRegistry {
             last_check: Instant::now(),
         }
     }
-    
+
     fn get_metrics(&self) -> serde_json::Value {
         let total = self.total_executions.blocking_read();
         let successful = self.successful_executions.blocking_read();
         let failed = self.failed_executions.blocking_read();
         let active = self.active_executions.blocking_read();
         let last = self.last_execution.blocking_read();
-        
+
         json!({
             "total_executions": *total,
             "successful_executions": *successful,

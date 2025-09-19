@@ -1,47 +1,46 @@
 // Core Coordination Module for RainbowBrowserAI
 // Provides centralized coordination, event-driven communication, and unified state management
 
-pub mod events;
-pub mod state;
-pub mod session;
-pub mod coordinator;
+pub mod browser_context;
 pub mod cache;
+pub mod coordinator;
+pub mod error_handler;
+pub mod events;
+pub mod intelligence_impl;
 pub mod monitoring;
 pub mod perception_impl;
+pub mod session;
+pub mod state;
 pub mod tools_impl;
-pub mod intelligence_impl;
-pub mod browser_context;
-pub mod error_handler;
 
 // Re-export main types
-pub use events::{Event, EventBus, EventType, EventHandler};
-pub use state::{UnifiedStateManager, BrowserState, PerceptionState, ToolState};
-pub use session::{SessionContext, SessionBundle};
+pub use cache::{CacheCoordinator, UnifiedCache};
 pub use coordinator::RainbowCoordinator;
-pub use cache::{UnifiedCache, CacheCoordinator};
-pub use monitoring::{UnifiedMonitoring, ModuleHealth};
+pub use events::{Event, EventBus, EventHandler, EventType};
+pub use monitoring::{ModuleHealth, UnifiedMonitoring};
+pub use session::{SessionBundle, SessionContext};
+pub use state::{BrowserState, PerceptionState, ToolState, UnifiedStateManager};
 
 use anyhow::Result;
-use std::sync::Arc;
 
 /// Trait for modules that participate in coordinated operations
 #[async_trait::async_trait]
 pub trait CoordinatedModule: Send + Sync {
     /// Initialize the module with session context
     async fn initialize(&mut self, context: &SessionContext) -> Result<()>;
-    
+
     /// Handle events from the event bus
     async fn handle_event(&self, event: &Event) -> Result<()>;
-    
+
     /// Perform cleanup when module is shutting down
     async fn cleanup(&mut self) -> Result<()>;
-    
+
     /// Get the list of module dependencies
     fn dependencies(&self) -> Vec<ModuleType>;
-    
+
     /// Check the health of the module
     fn health_check(&self) -> ModuleHealth;
-    
+
     /// Get module metrics
     fn get_metrics(&self) -> serde_json::Value;
 }

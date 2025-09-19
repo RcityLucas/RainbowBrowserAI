@@ -1,23 +1,22 @@
 // Session Management for Coordinated Modules
 // Provides session-aware coordination and resource management
 
-use anyhow::{Result, anyhow};
-use serde::{Serialize, Deserialize};
+use anyhow::Result;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::RwLock;
 use std::time::{Duration, Instant};
-use tracing::{info, debug, warn};
+use tokio::sync::RwLock;
+use tracing::{debug, info};
 use uuid::Uuid;
 
-use super::events::{Event, EventBus};
-use super::state::{UnifiedStateManager, PerceptionContext};
 use super::cache::UnifiedCache;
+use super::events::{Event, EventBus};
 use super::monitoring::ModuleHealth;
-use super::{CoordinatedModule, ModuleType};
+use super::state::{PerceptionContext, UnifiedStateManager};
+use super::CoordinatedModule;
 use crate::browser::Browser;
-use crate::perception::PerceptionEngine;
-use crate::tools::registry::ToolRegistry;
+// use crate::perception::PerceptionEngine;
+// use crate::tools::registry::ToolRegistry;
 
 /// Session context for coordinated operations
 pub struct SessionContext {
@@ -26,17 +25,17 @@ pub struct SessionContext {
     pub shared_cache: Arc<UnifiedCache>,
     pub event_bus: Arc<EventBus>,
     pub state_manager: Arc<UnifiedStateManager>,
-    
+
     // Session-specific state
     perception_context: Arc<RwLock<PerceptionContext>>,
     execution_history: Arc<RwLock<Vec<ExecutionRecord>>>,
-    workflow_state: Arc<RwLock<HashMap<String, WorkflowState>>>,
-    
+    _workflow_state: Arc<RwLock<HashMap<String, WorkflowState>>>,
+
     // Resource tracking
     pub created_at: Instant,
     pub last_activity: Arc<RwLock<Instant>>,
     resource_usage: Arc<RwLock<ResourceUsage>>,
-    
+
     // Configuration
     config: SessionConfig,
 }
@@ -119,33 +118,35 @@ impl SessionContext {
                 form_state: HashMap::new(),
             })),
             execution_history: Arc::new(RwLock::new(Vec::new())),
-            workflow_state: Arc::new(RwLock::new(HashMap::new())),
+            _workflow_state: Arc::new(RwLock::new(HashMap::new())),
             created_at: Instant::now(),
             last_activity: Arc::new(RwLock::new(Instant::now())),
             resource_usage: Arc::new(RwLock::new(ResourceUsage::default())),
             config: SessionConfig::default(),
         };
-        
+
         // Emit session created event
-        event_bus.emit(Event::SessionCreated {
-            session_id,
-            timestamp: Instant::now(),
-        }).await?;
-        
+        event_bus
+            .emit(Event::SessionCreated {
+                session_id,
+                timestamp: Instant::now(),
+            })
+            .await?;
+
         Ok(context)
     }
-    
+
     /// Update last activity timestamp
     pub async fn touch(&self) {
         *self.last_activity.write().await = Instant::now();
     }
-    
+
     /// Check if session has timed out
     pub async fn is_timed_out(&self) -> bool {
         let last_activity = *self.last_activity.read().await;
         last_activity.elapsed() > self.config.timeout
     }
-    
+
     /// Record an execution
     pub async fn record_execution(
         &self,
@@ -161,21 +162,21 @@ impl SessionContext {
             success,
             error,
         };
-        
+
         let mut history = self.execution_history.write().await;
         history.push(record);
-        
+
         // Keep only last 100 records
         if history.len() > 100 {
             history.drain(0..50);
         }
     }
-    
+
     /// Get current resource usage
     pub async fn get_resource_usage(&self) -> ResourceUsage {
         self.resource_usage.read().await.clone()
     }
-    
+
     /// Update resource usage
     pub async fn update_resource_usage<F>(&self, updater: F)
     where
@@ -184,7 +185,7 @@ impl SessionContext {
         let mut usage = self.resource_usage.write().await;
         updater(&mut usage);
     }
-    
+
     /// Create coordinated perception engine for this session
     pub async fn create_perception_engine(&self) -> Result<Arc<CoordinatedPerceptionEngine>> {
         CoordinatedPerceptionEngine::new(
@@ -194,9 +195,10 @@ impl SessionContext {
             self.state_manager.clone(),
             self.perception_context.clone(),
             self.session_id.clone(),
-        ).await
+        )
+        .await
     }
-    
+
     /// Create coordinated tool registry for this session
     pub async fn create_tool_registry(&self) -> Result<Arc<CoordinatedToolRegistry>> {
         CoordinatedToolRegistry::new(
@@ -205,9 +207,10 @@ impl SessionContext {
             self.event_bus.clone(),
             self.state_manager.clone(),
             self.session_id.clone(),
-        ).await
+        )
+        .await
     }
-    
+
     /// Create coordinated intelligence engine for this session
     pub async fn create_intelligence_engine(&self) -> Result<Arc<CoordinatedIntelligenceEngine>> {
         CoordinatedIntelligenceEngine::new(
@@ -216,7 +219,8 @@ impl SessionContext {
             self.event_bus.clone(),
             self.state_manager.clone(),
             self.session_id.clone(),
-        ).await
+        )
+        .await
     }
 }
 
@@ -227,36 +231,36 @@ pub struct SessionBundle {
     pub tools: Arc<CoordinatedToolRegistry>,
     pub intelligence: Arc<CoordinatedIntelligenceEngine>,
     pub context: Arc<SessionContext>,
-    coordinator: Arc<ModuleCoordinator>,
+    _coordinator: Arc<ModuleCoordinator>,
 }
 
 impl SessionBundle {
     /// Create a new session bundle
     pub async fn new(context: Arc<SessionContext>) -> Result<Self> {
         let session_id = context.session_id.clone();
-        
+
         // Create coordinated modules
         let perception = context.create_perception_engine().await?;
         let tools = context.create_tool_registry().await?;
         let intelligence = context.create_intelligence_engine().await?;
-        
+
         // Create module coordinator
         let coordinator = Arc::new(ModuleCoordinator::new(
             perception.clone(),
             tools.clone(),
             intelligence.clone(),
         ));
-        
+
         Ok(Self {
             session_id,
             perception,
             tools,
             intelligence,
             context,
-            coordinator,
+            _coordinator: coordinator,
         })
     }
-    
+
     /// Execute an intelligent action with full coordination
     pub async fn execute_intelligent_action(
         &self,
@@ -264,34 +268,44 @@ impl SessionBundle {
     ) -> Result<IntelligentActionResult> {
         let start_time = Instant::now();
         self.context.touch().await;
-        
+
         // Phase 1: Perception Analysis
         debug!("Phase 1: Analyzing page for action");
         let page_analysis = self.perception.analyze_current_page().await?;
         let action_analysis = self.perception.analyze_for_action(&action).await?;
-        
+
         // Phase 2: Intelligence Planning
         debug!("Phase 2: Planning action execution");
-        let plan = self.intelligence.plan_action(&action, &page_analysis, &action_analysis).await?;
-        
+        let plan = self
+            .intelligence
+            .plan_action(&action, &page_analysis, &action_analysis)
+            .await?;
+
         // Phase 3: Tool Execution
         debug!("Phase 3: Executing planned action");
         let execution_result = self.tools.execute_planned_action(plan.clone()).await?;
-        
+
         // Phase 4: Verification & Learning
         debug!("Phase 4: Verifying results and applying learning");
-        let verification = self.perception.verify_action_result(&execution_result).await?;
-        self.intelligence.learn_from_result(&execution_result, &verification).await?;
-        
+        let verification = self
+            .perception
+            .verify_action_result(&execution_result)
+            .await?;
+        self.intelligence
+            .learn_from_result(&execution_result, &verification)
+            .await?;
+
         // Record execution
         let duration_ms = start_time.elapsed().as_millis() as u64;
-        self.context.record_execution(
-            format!("intelligent_action: {}", action.action_type),
-            duration_ms,
-            verification.success,
-            verification.error.clone(),
-        ).await;
-        
+        self.context
+            .record_execution(
+                format!("intelligent_action: {}", action.action_type),
+                duration_ms,
+                verification.success,
+                verification.error.clone(),
+            )
+            .await;
+
         Ok(IntelligentActionResult {
             success: verification.success,
             analysis: action_analysis,
@@ -302,38 +316,44 @@ impl SessionBundle {
             learning_applied: true,
         })
     }
-    
+
     /// Navigate to a URL with coordinated perception
     pub async fn navigate(&self, url: &str) -> Result<NavigationResult> {
         let start_time = Instant::now();
         self.context.touch().await;
-        
+
         // Emit navigation started event
-        self.context.event_bus.emit(Event::NavigationStarted {
-            session_id: self.session_id.clone(),
-            url: url.to_string(),
-            timestamp: Instant::now(),
-        }).await?;
-        
+        self.context
+            .event_bus
+            .emit(Event::NavigationStarted {
+                session_id: self.session_id.clone(),
+                url: url.to_string(),
+                timestamp: Instant::now(),
+            })
+            .await?;
+
         // Navigate browser
         self.context.browser.navigate_to(url).await?;
-        
+
         // Wait for page load
         tokio::time::sleep(Duration::from_millis(500)).await;
-        
+
         // Analyze new page
         let analysis = self.perception.analyze_current_page().await?;
-        
+
         let duration_ms = start_time.elapsed().as_millis() as u64;
-        
+
         // Emit navigation completed event
-        self.context.event_bus.emit(Event::NavigationCompleted {
-            session_id: self.session_id.clone(),
-            url: url.to_string(),
-            load_time_ms: duration_ms,
-            timestamp: Instant::now(),
-        }).await?;
-        
+        self.context
+            .event_bus
+            .emit(Event::NavigationCompleted {
+                session_id: self.session_id.clone(),
+                url: url.to_string(),
+                load_time_ms: duration_ms,
+                timestamp: Instant::now(),
+            })
+            .await?;
+
         Ok(NavigationResult {
             success: true,
             url: url.to_string(),
@@ -341,7 +361,7 @@ impl SessionBundle {
             page_analysis: Some(analysis),
         })
     }
-    
+
     /// Get health status of all modules
     pub async fn health_check(&self) -> BundleHealth {
         BundleHealth {
@@ -352,37 +372,40 @@ impl SessionBundle {
             overall_status: self.calculate_overall_health(),
         }
     }
-    
+
     fn calculate_overall_health(&self) -> HealthStatus {
         // Implementation would check all module health scores
         HealthStatus::Healthy
     }
-    
+
     /// Cleanup session resources
     pub async fn cleanup(&self) -> Result<()> {
         info!("Cleaning up session: {}", self.session_id);
-        
+
         // Cleanup modules
         self.perception.cleanup().await?;
         self.tools.cleanup().await?;
         self.intelligence.cleanup().await?;
-        
+
         // Emit session closed event
-        self.context.event_bus.emit(Event::SessionClosed {
-            session_id: self.session_id.clone(),
-            reason: "cleanup".to_string(),
-            timestamp: Instant::now(),
-        }).await?;
-        
+        self.context
+            .event_bus
+            .emit(Event::SessionClosed {
+                session_id: self.session_id.clone(),
+                reason: "cleanup".to_string(),
+                timestamp: Instant::now(),
+            })
+            .await?;
+
         Ok(())
     }
 }
 
 /// Module coordinator for cross-module operations
 pub struct ModuleCoordinator {
-    perception: Arc<CoordinatedPerceptionEngine>,
-    tools: Arc<CoordinatedToolRegistry>,
-    intelligence: Arc<CoordinatedIntelligenceEngine>,
+    _perception: Arc<CoordinatedPerceptionEngine>,
+    _tools: Arc<CoordinatedToolRegistry>,
+    _intelligence: Arc<CoordinatedIntelligenceEngine>,
 }
 
 impl ModuleCoordinator {
@@ -391,11 +414,7 @@ impl ModuleCoordinator {
         tools: Arc<CoordinatedToolRegistry>,
         intelligence: Arc<CoordinatedIntelligenceEngine>,
     ) -> Self {
-        Self {
-            perception,
-            tools,
-            intelligence,
-        }
+        Self { _perception: perception, _tools: tools, _intelligence: intelligence }
     }
 }
 
@@ -424,38 +443,45 @@ impl CoordinatedPerceptionEngine {
             event_bus,
             state_manager,
             context,
-        ).await?;
-        
+        )
+        .await?;
+
         Ok(Arc::new(Self { inner }))
     }
-    
-    pub async fn analyze_for_action(&self, action: &IntelligentActionRequest) -> Result<ActionAnalysis> {
+
+    pub async fn analyze_for_action(
+        &self,
+        action: &IntelligentActionRequest,
+    ) -> Result<ActionAnalysis> {
         self.inner.analyze_for_action(action).await
     }
-    
+
     pub async fn analyze_current_page(&self) -> Result<PageAnalysis> {
         self.inner.analyze_current_page().await
     }
-    
-    pub async fn verify_action_result(&self, result: &ExecutionResult) -> Result<VerificationResult> {
+
+    pub async fn verify_action_result(
+        &self,
+        result: &ExecutionResult,
+    ) -> Result<VerificationResult> {
         self.inner.verify_action_result(result).await
     }
-    
+
     pub fn health_check(&self) -> ModuleHealth {
         self.inner.health_check()
     }
-    
+
     pub async fn cleanup(&self) -> Result<()> {
         self.inner.cleanup().await
     }
 }
 
 pub struct CoordinatedToolRegistry {
-    browser: Arc<Browser>,
-    cache: Arc<UnifiedCache>,
-    event_bus: Arc<EventBus>,
-    state_manager: Arc<UnifiedStateManager>,
-    session_id: String,
+    _browser: Arc<Browser>,
+    _cache: Arc<UnifiedCache>,
+    _event_bus: Arc<EventBus>,
+    _state_manager: Arc<UnifiedStateManager>,
+    _session_id: String,
 }
 
 impl CoordinatedToolRegistry {
@@ -467,23 +493,23 @@ impl CoordinatedToolRegistry {
         session_id: String,
     ) -> Result<Arc<Self>> {
         Ok(Arc::new(Self {
-            browser,
-            cache,
-            event_bus,
-            state_manager,
-            session_id,
+            _browser: browser,
+            _cache: cache,
+            _event_bus: event_bus,
+            _state_manager: state_manager,
+            _session_id: session_id,
         }))
     }
-    
+
     pub async fn execute_planned_action(&self, _plan: ActionPlan) -> Result<ExecutionResult> {
         // Placeholder implementation
         Ok(ExecutionResult::default())
     }
-    
+
     pub fn health_check(&self) -> ModuleHealth {
         ModuleHealth::healthy()
     }
-    
+
     pub async fn cleanup(&self) -> Result<()> {
         Ok(())
     }
@@ -509,26 +535,38 @@ impl CoordinatedIntelligenceEngine {
             cache,
             event_bus,
             state_manager,
-        ).await?;
-        
+        )
+        .await?;
+
         Ok(Arc::new(Self { inner }))
     }
-    
-    pub async fn plan_action(&self, action: &IntelligentActionRequest, page_analysis: &PageAnalysis, action_analysis: &ActionAnalysis) -> Result<ActionPlan> {
+
+    pub async fn plan_action(
+        &self,
+        action: &IntelligentActionRequest,
+        page_analysis: &PageAnalysis,
+        action_analysis: &ActionAnalysis,
+    ) -> Result<ActionPlan> {
         // Use the real implementation
-        self.inner.plan_action(action, page_analysis, action_analysis).await
+        self.inner
+            .plan_action(action, page_analysis, action_analysis)
+            .await
     }
-    
-    pub async fn learn_from_result(&self, result: &ExecutionResult, verification: &VerificationResult) -> Result<()> {
+
+    pub async fn learn_from_result(
+        &self,
+        result: &ExecutionResult,
+        verification: &VerificationResult,
+    ) -> Result<()> {
         // Use the real implementation
         self.inner.learn_from_result(result, verification).await
     }
-    
+
     pub fn health_check(&self) -> ModuleHealth {
         // Use the real implementation
         self.inner.health_check()
     }
-    
+
     pub async fn cleanup(&self) -> Result<()> {
         // Use the real implementation
         self.inner.cleanup().await

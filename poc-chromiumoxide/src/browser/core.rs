@@ -1,14 +1,14 @@
-use anyhow::{anyhow, Result, Context};
-use chromiumoxide::{Browser as ChromeBrowser, BrowserConfig, Page, Element};
+use anyhow::{anyhow, Context, Result};
+use async_trait::async_trait;
 use chromiumoxide::cdp::browser_protocol::page::CaptureScreenshotFormat;
 use chromiumoxide::page::ScreenshotParams;
+use chromiumoxide::{Browser as ChromeBrowser, BrowserConfig, Element, Page};
 use futures::StreamExt;
-use std::time::Duration;
-use tracing::{info, error, warn};
-use serde::{Serialize, Deserialize};
-use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::RwLock;
+use tracing::{error, info, warn};
 
 /// Browser operations trait for abstraction
 #[async_trait]
@@ -31,7 +31,7 @@ pub trait BrowserOps: Send + Sync {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScreenshotOptions {
     pub full_page: bool,
-    pub format: String, // "png" or "jpeg"
+    pub format: String,      // "png" or "jpeg"
     pub quality: Option<u8>, // For JPEG
     pub viewport_width: u32,
     pub viewport_height: u32,
@@ -78,6 +78,8 @@ impl Browser {
     pub async fn new() -> Result<Self> {
         let config = BrowserConfig::builder()
             .no_sandbox()
+            .arg("--ignore-certificate-errors")
+            .arg("--disable-http2")
             .arg("--disable-web-security")
             .arg("--disable-features=VizDisplayCompositor")
             .arg("--disable-gpu")
@@ -96,13 +98,14 @@ impl Browser {
     /// Create a browser with custom configuration
     pub async fn new_with_config(config: BrowserConfig) -> Result<Self> {
         info!("Launching Chrome browser with chromiumoxide...");
-        
+
         // Note: BrowserConfig builder pattern should be used to add arguments
         // Arguments should be added when creating the config, not here
-        
-        let (browser, mut handler) = ChromeBrowser::launch(config).await
+
+        let (browser, mut handler) = ChromeBrowser::launch(config)
+            .await
             .context("Failed to launch Chrome browser")?;
-        
+
         // Spawn handler in background with proper error handling
         tokio::spawn(async move {
             while let Some(h) = handler.next().await {
@@ -111,15 +114,16 @@ impl Browser {
                     match e.to_string().as_str() {
                         s if s.contains("ResetWithoutClosingHandshake") => {
                             warn!("WebSocket connection reset (non-fatal): {}", e);
-                        },
+                        }
                         s if s.contains("Connection reset") => {
                             warn!("Connection reset (non-fatal): {}", e);
-                        },
+                        }
                         _ => {
                             error!("Browser handler error: {:?}", e);
                             // Only break on truly critical errors
-                            if e.to_string().contains("Browser closed") || 
-                               e.to_string().contains("Process exited") {
+                            if e.to_string().contains("Browser closed")
+                                || e.to_string().contains("Process exited")
+                            {
                                 break;
                             }
                         }
@@ -130,13 +134,15 @@ impl Browser {
             }
             warn!("Browser handler task terminated");
         });
-        
+
         // Create a new page
-        let page = browser.new_page("about:blank").await
+        let page = browser
+            .new_page("about:blank")
+            .await
             .context("Failed to create new page")?;
-        
+
         info!("Browser initialized successfully");
-        
+
         Ok(Self {
             browser: Arc::new(browser),
             page: Arc::new(RwLock::new(page)),
@@ -147,6 +153,8 @@ impl Browser {
     pub async fn new_headless() -> Result<Self> {
         let config = BrowserConfig::builder()
             .no_sandbox()
+            .arg("--ignore-certificate-errors")
+            .arg("--disable-http2")
             .arg("--headless")
             .arg("--disable-gpu")
             .arg("--disable-web-security")
@@ -162,7 +170,9 @@ impl Browser {
     pub async fn new_headless_new() -> Result<Self> {
         let config = BrowserConfig::builder()
             .no_sandbox()
-            .arg("--headless=new")  // Use the new headless mode API
+            .arg("--ignore-certificate-errors")
+            .arg("--disable-http2")
+            .arg("--headless=new") // Use the new headless mode API
             .arg("--disable-gpu")
             .arg("--disable-web-security")
             .arg("--disable-features=VizDisplayCompositor")
@@ -185,7 +195,9 @@ impl Browser {
     pub async fn new_headless_old() -> Result<Self> {
         let config = BrowserConfig::builder()
             .no_sandbox()
-            .arg("--headless=old")  // Explicitly use old headless mode
+            .arg("--ignore-certificate-errors")
+            .arg("--disable-http2")
+            .arg("--headless=old") // Explicitly use old headless mode
             .arg("--disable-gpu")
             .arg("--disable-web-security")
             .arg("--disable-features=VizDisplayCompositor")
@@ -200,6 +212,8 @@ impl Browser {
         let config = BrowserConfig::builder()
             .with_head()
             .no_sandbox()
+            .arg("--ignore-certificate-errors")
+            .arg("--disable-http2")
             .arg("--disable-web-security")
             .arg("--disable-features=VizDisplayCompositor")
             .build()
@@ -227,82 +241,92 @@ impl Browser {
     async fn find_element_with_retry(&self, selector: &str, max_retries: u32) -> Result<Element> {
         let page = self.page.read().await;
         let mut retries = 0;
-        
+
         loop {
             match page.find_element(selector).await {
                 Ok(element) => return Ok(element),
                 Err(_e) if retries < max_retries => {
                     retries += 1;
-                    warn!("Element not found (attempt {}/{}): {}", retries, max_retries, selector);
+                    warn!(
+                        "Element not found (attempt {}/{}): {}",
+                        retries, max_retries, selector
+                    );
                     tokio::time::sleep(Duration::from_millis(500)).await;
                 }
-                Err(e) => return Err(anyhow!("Element not found after {} retries: {}", max_retries, e)),
+                Err(e) => {
+                    return Err(anyhow!(
+                        "Element not found after {} retries: {}",
+                        max_retries,
+                        e
+                    ))
+                }
             }
         }
     }
-    
+
     // Public methods that delegate to BrowserOps trait
     pub async fn navigate_to(&self, url: &str) -> Result<()> {
         <Self as BrowserOps>::navigate_to(self, url).await
     }
-    
+
     pub async fn current_url(&self) -> Result<String> {
         <Self as BrowserOps>::current_url(self).await
     }
-    
+
     pub async fn url(&self) -> Result<String> {
         self.current_url().await
     }
-    
+
     pub async fn title(&self) -> Result<String> {
         let page = self.page.write().await;
-        Ok(page.evaluate("document.title")
+        Ok(page
+            .evaluate("document.title")
             .await?
             .into_value::<String>()
             .unwrap_or_else(|_| "Untitled".to_string()))
     }
-    
+
     pub async fn content(&self) -> Result<String> {
         let page = self.page.write().await;
         Ok(page.content().await?)
     }
-    
+
     pub async fn screenshot(&self, options: ScreenshotOptions) -> Result<Vec<u8>> {
         <Self as BrowserOps>::screenshot(self, options).await
     }
-    
+
     pub async fn execute_script(&self, script: &str) -> Result<serde_json::Value> {
         <Self as BrowserOps>::execute_script(self, script).await
     }
-    
+
     pub async fn find_element(&self, selector: &str) -> Result<ElementInfo> {
         <Self as BrowserOps>::find_element(self, selector).await
     }
-    
+
     pub async fn get_text(&self, selector: &str) -> Result<String> {
         <Self as BrowserOps>::get_text(self, selector).await
     }
-    
+
     pub async fn close(&self) -> Result<()> {
         <Self as BrowserOps>::close(self).await
     }
-    
+
     pub async fn click(&self, selector: &str) -> Result<()> {
         <Self as BrowserOps>::click(self, selector).await
     }
-    
+
     pub async fn type_text(&self, selector: &str, text: &str) -> Result<()> {
         <Self as BrowserOps>::type_text(self, selector, text).await
     }
-    
+
     pub async fn wait_for_selector(&self, selector: &str, timeout: Duration) -> Result<()> {
         <Self as BrowserOps>::wait_for_selector(self, selector, timeout).await
     }
-    
+
     pub async fn scroll_to(&self, x: i32, y: i32) -> Result<()> {
         <Self as BrowserOps>::scroll_to(self, x, y).await
     }
-    
+
     /// Check if the browser connection is still alive
     pub async fn is_connected(&self) -> bool {
         // Try to get the current page and check if we can get its URL
@@ -322,7 +346,9 @@ impl Browser {
 
     /// Force browser to render properly (screenshot trigger)
     pub async fn trigger_proper_rendering(&self) -> Result<()> {
-        let _screenshot = self.screenshot(crate::browser::ScreenshotOptions::default()).await?;
+        let _screenshot = self
+            .screenshot(crate::browser::ScreenshotOptions::default())
+            .await?;
         // Taking a screenshot forces the browser to properly render and reflow content
         info!("Screenshot taken to trigger proper rendering");
         Ok(())
@@ -332,17 +358,17 @@ impl Browser {
     pub async fn fix_window_completely(&self) -> Result<()> {
         // First trigger proper rendering with screenshot
         self.trigger_proper_rendering().await?;
-        
+
         // Then apply content scaling
         self.fix_content_scaling().await?;
-        
+
         Ok(())
     }
 
     /// Force content to fit window properly
     pub async fn fix_content_scaling(&self) -> Result<()> {
         let page = self.page().await;
-        
+
         // Comprehensive script to scale content to fit the actual window size
         let script = r#"
         (function() {
@@ -436,19 +462,18 @@ impl Browser {
             };
         })();
         "#;
-        
+
         let result = page.evaluate(script).await?;
         info!("Adaptive content scaling fix applied: {:?}", result);
         Ok(())
     }
-    
 }
 
 #[async_trait]
 impl BrowserOps for Browser {
     async fn navigate_to(&self, url: &str) -> Result<()> {
         info!("Navigating to: {}", url);
-        
+
         // Validate and fix URL format
         let url = if !url.starts_with("http://") && !url.starts_with("https://") {
             if url.starts_with("//") {
@@ -459,55 +484,67 @@ impl BrowserOps for Browser {
         } else {
             url.to_string()
         };
-        
+
         let page = self.page.read().await;
-        
+
         // Navigate with timeout and retry logic
         let mut retries = 3;
         let mut last_error = None;
-        
+
         while retries > 0 {
-            match tokio::time::timeout(
-                Duration::from_secs(30),
-                page.goto(&url)
-            ).await {
+            match tokio::time::timeout(Duration::from_secs(30), page.goto(&url)).await {
                 Ok(Ok(nav)) => {
                     // Wait for navigation to complete
-                    match tokio::time::timeout(
-                        Duration::from_secs(15),
-                        nav.wait_for_navigation()
-                    ).await {
+                    match tokio::time::timeout(Duration::from_secs(15), nav.wait_for_navigation())
+                        .await
+                    {
                         Ok(Ok(_)) => {
                             // Give the page a moment to stabilize
                             tokio::time::sleep(Duration::from_millis(500)).await;
                             return Ok(());
-                        },
+                        }
                         Ok(Err(e)) => {
-                            warn!("Navigation wait failed (retries left: {}): {}", retries - 1, e);
+                            warn!(
+                                "Navigation wait failed (retries left: {}): {}",
+                                retries - 1,
+                                e
+                            );
                             last_error = Some(anyhow!("Navigation wait failed: {}", e));
-                        },
+                        }
                         Err(_) => {
                             warn!("Navigation wait timeout (retries left: {})", retries - 1);
                             last_error = Some(anyhow!("Navigation wait timeout"));
                         }
                     }
-                },
+                }
                 Ok(Err(e)) => {
-                    warn!("Navigation failed (retries left: {}): {}", retries - 1, e);
-                    last_error = Some(anyhow!("Navigation failed: {}", e));
-                },
+                    let es = e.to_string();
+                    warn!("Navigation failed (retries left: {}): {}", retries - 1, es);
+                    // Fallback: if HTTPS closes unexpectedly, try HTTP
+                    if url.starts_with("https://") && es.contains("ERR_CONNECTION_CLOSED") {
+                        let http_url = url.replacen("https://", "http://", 1);
+                        warn!("Retrying over HTTP due to connection closed: {}", http_url);
+                        if let Ok(Ok(nav2)) = tokio::time::timeout(Duration::from_secs(30), page.goto(&http_url)).await {
+                            if let Ok(Ok(_)) = tokio::time::timeout(Duration::from_secs(15), nav2.wait_for_navigation()).await {
+                                tokio::time::sleep(Duration::from_millis(500)).await;
+                                return Ok(());
+                            }
+                        }
+                    }
+                    last_error = Some(anyhow!("Navigation failed: {}", es));
+                }
                 Err(_) => {
                     warn!("Navigation timeout (retries left: {})", retries - 1);
                     last_error = Some(anyhow!("Navigation timeout"));
                 }
             }
-            
+
             retries -= 1;
             if retries > 0 {
                 tokio::time::sleep(Duration::from_millis(1000)).await;
             }
         }
-        
+
         Err(last_error.unwrap_or_else(|| anyhow!("Navigation failed after retries")))
     }
 
@@ -526,22 +563,24 @@ impl BrowserOps for Browser {
 
     async fn screenshot(&self, options: ScreenshotOptions) -> Result<Vec<u8>> {
         let page = self.page.read().await;
-        
+
         // Wait if specified
         tokio::time::sleep(options.wait_after_load).await;
-        
+
         let format = match options.format.as_str() {
             "jpeg" | "jpg" => CaptureScreenshotFormat::Jpeg,
             _ => CaptureScreenshotFormat::Png,
         };
-        
-        let screenshot = page.screenshot(
-            ScreenshotParams::builder()
-                .full_page(options.full_page)
-                .format(format)
-                .build()
-        ).await?;
-        
+
+        let screenshot = page
+            .screenshot(
+                ScreenshotParams::builder()
+                    .full_page(options.full_page)
+                    .format(format)
+                    .build(),
+            )
+            .await?;
+
         Ok(screenshot)
     }
 
@@ -555,9 +594,10 @@ impl BrowserOps for Browser {
 
     async fn find_element(&self, selector: &str) -> Result<ElementInfo> {
         let page = self.page.read().await;
-        
+
         // Use JavaScript to get element information
-        let script = format!(r#"
+        let script = format!(
+            r#"
             (function() {{
                 const el = document.querySelector('{}');
                 if (!el) return null;
@@ -573,28 +613,26 @@ impl BrowserOps for Browser {
                     }}
                 }};
             }})()
-        "#, selector);
-        
+        "#,
+            selector
+        );
+
         let result = page.evaluate(script.as_str()).await?;
         let value: serde_json::Value = result.into_value()?;
-        
+
         if value.is_null() {
             return Err(anyhow!("Element not found: {}", selector));
         }
-        
+
         let tag_name = value["tag_name"].as_str().unwrap_or("").to_string();
         let text = value["text"].as_str().unwrap_or("").to_string();
-        let rect = if let Some(rect_obj) = value["rect"].as_object() {
-            Some(ElementRect {
-                x: rect_obj["x"].as_f64().unwrap_or(0.0),
-                y: rect_obj["y"].as_f64().unwrap_or(0.0),
-                width: rect_obj["width"].as_f64().unwrap_or(0.0),
-                height: rect_obj["height"].as_f64().unwrap_or(0.0),
-            })
-        } else {
-            None
-        };
-        
+        let rect = value["rect"].as_object().map(|rect_obj| ElementRect {
+            x: rect_obj["x"].as_f64().unwrap_or(0.0),
+            y: rect_obj["y"].as_f64().unwrap_or(0.0),
+            width: rect_obj["width"].as_f64().unwrap_or(0.0),
+            height: rect_obj["height"].as_f64().unwrap_or(0.0),
+        });
+
         Ok(ElementInfo {
             tag_name,
             text,
@@ -605,9 +643,10 @@ impl BrowserOps for Browser {
 
     async fn find_elements(&self, selector: &str) -> Result<Vec<ElementInfo>> {
         let page = self.page.read().await;
-        
+
         // Use JavaScript to get all elements information
-        let script = format!(r#"
+        let script = format!(
+            r#"
             (function() {{
                 const elements = document.querySelectorAll('{}');
                 const results = [];
@@ -626,27 +665,25 @@ impl BrowserOps for Browser {
                 }});
                 return results;
             }})()
-        "#, selector);
-        
+        "#,
+            selector
+        );
+
         let result = page.evaluate(script.as_str()).await?;
         let value: serde_json::Value = result.into_value()?;
-        
+
         let mut element_infos = Vec::new();
         if let Some(array) = value.as_array() {
             for item in array {
                 let tag_name = item["tag_name"].as_str().unwrap_or("").to_string();
                 let text = item["text"].as_str().unwrap_or("").to_string();
-                let rect = if let Some(rect_obj) = item["rect"].as_object() {
-                    Some(ElementRect {
-                        x: rect_obj["x"].as_f64().unwrap_or(0.0),
-                        y: rect_obj["y"].as_f64().unwrap_or(0.0),
-                        width: rect_obj["width"].as_f64().unwrap_or(0.0),
-                        height: rect_obj["height"].as_f64().unwrap_or(0.0),
-                    })
-                } else {
-                    None
-                };
-                
+                let rect = item["rect"].as_object().map(|rect_obj| ElementRect {
+                    x: rect_obj["x"].as_f64().unwrap_or(0.0),
+                    y: rect_obj["y"].as_f64().unwrap_or(0.0),
+                    width: rect_obj["width"].as_f64().unwrap_or(0.0),
+                    height: rect_obj["height"].as_f64().unwrap_or(0.0),
+                });
+
                 element_infos.push(ElementInfo {
                     tag_name,
                     text,
@@ -655,14 +692,16 @@ impl BrowserOps for Browser {
                 });
             }
         }
-        
+
         Ok(element_infos)
     }
 
     async fn click(&self, selector: &str) -> Result<()> {
         info!("Clicking element: {}", selector);
         let element = self.find_element_with_retry(selector, 3).await?;
-        element.click().await
+        element
+            .click()
+            .await
             .context(format!("Failed to click element: {}", selector))?;
         Ok(())
     }
@@ -671,31 +710,32 @@ impl BrowserOps for Browser {
         info!("Typing text into: {}", selector);
         let element = self.find_element_with_retry(selector, 3).await?;
         element.click().await?; // Focus the element
-        element.type_str(text).await
+        element
+            .type_str(text)
+            .await
             .context(format!("Failed to type text into: {}", selector))?;
         Ok(())
     }
 
     async fn get_text(&self, selector: &str) -> Result<String> {
         let element = self.find_element_with_retry(selector, 3).await?;
-        let text = element.inner_text().await?
-            .unwrap_or_default();
+        let text = element.inner_text().await?.unwrap_or_default();
         Ok(text)
     }
 
     async fn wait_for_selector(&self, selector: &str, timeout: Duration) -> Result<()> {
         let page = self.page.read().await;
         let start = std::time::Instant::now();
-        
+
         loop {
             if page.find_element(selector).await.is_ok() {
                 return Ok(());
             }
-            
+
             if start.elapsed() > timeout {
                 return Err(anyhow!("Timeout waiting for selector: {}", selector));
             }
-            
+
             tokio::time::sleep(Duration::from_millis(100)).await;
         }
     }
@@ -718,11 +758,10 @@ impl Browser {
     /// Refresh the current page
     pub async fn refresh(&self) -> Result<()> {
         let page = self.page.read().await;
-        page.reload().await?
-            .wait_for_navigation().await?;
+        page.reload().await?.wait_for_navigation().await?;
         Ok(())
     }
-    
+
     /// Navigate back in history
     pub async fn go_back(&self) -> Result<()> {
         let page = self.page.read().await;
@@ -731,7 +770,7 @@ impl Browser {
         tokio::time::sleep(Duration::from_millis(500)).await; // Wait for navigation
         Ok(())
     }
-    
+
     /// Navigate forward in history
     pub async fn go_forward(&self) -> Result<()> {
         let page = self.page.read().await;
@@ -740,12 +779,13 @@ impl Browser {
         tokio::time::sleep(Duration::from_millis(500)).await; // Wait for navigation
         Ok(())
     }
-    
+
     /// Hover over an element
     pub async fn hover(&self, selector: &str) -> Result<()> {
         let page = self.page.read().await;
         // Use JavaScript to simulate hover
-        let script = format!(r#"
+        let script = format!(
+            r#"
             (function() {{
                 const el = document.querySelector('{}');
                 if (!el) return false;
@@ -757,8 +797,10 @@ impl Browser {
                 el.dispatchEvent(event);
                 return true;
             }})()
-        "#, selector);
-        
+        "#,
+            selector
+        );
+
         let result = page.evaluate(script.as_str()).await?;
         let success: bool = result.into_value()?;
         if !success {
@@ -766,18 +808,19 @@ impl Browser {
         }
         Ok(())
     }
-    
+
     /// Focus on an element
     pub async fn focus(&self, selector: &str) -> Result<()> {
         let element = self.find_element_with_retry(selector, 3).await?;
         element.focus().await?;
         Ok(())
     }
-    
+
     /// Select an option from a dropdown
     pub async fn select_option(&self, selector: &str, value: &str) -> Result<()> {
         let page = self.page.read().await;
-        let script = format!(r#"
+        let script = format!(
+            r#"
             (function() {{
                 const select = document.querySelector('{}');
                 if (!select) return false;
@@ -785,8 +828,10 @@ impl Browser {
                 select.dispatchEvent(new Event('change', {{ bubbles: true }}));
                 return true;
             }})()
-        "#, selector, value);
-        
+        "#,
+            selector, value
+        );
+
         let result = page.evaluate(script.as_str()).await?;
         let success: bool = result.into_value()?;
         if !success {
@@ -794,11 +839,12 @@ impl Browser {
         }
         Ok(())
     }
-    
+
     /// Extract all links from the page
     pub async fn extract_links(&self, selector: &str) -> Result<Vec<String>> {
         let page = self.page.read().await;
-        let script = format!(r#"
+        let script = format!(
+            r#"
             (function() {{
                 const links = document.querySelectorAll('{}');
                 const hrefs = [];
@@ -807,25 +853,35 @@ impl Browser {
                 }});
                 return hrefs;
             }})()
-        "#, selector);
-        
+        "#,
+            selector
+        );
+
         let result = page.evaluate(script.as_str()).await?;
         let value: serde_json::Value = result.into_value()?;
-        
-        let links = value.as_array()
-            .map(|arr| arr.iter()
-                .filter_map(|v| v.as_str().map(String::from))
-                .collect())
+
+        let links = value
+            .as_array()
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str().map(String::from))
+                    .collect()
+            })
             .unwrap_or_default();
-        
+
         Ok(links)
     }
-    
+
     /// Extract attributes from elements
-    pub async fn extract_attributes(&self, selector: &str, attributes: &[String]) -> Result<Vec<serde_json::Value>> {
+    pub async fn extract_attributes(
+        &self,
+        selector: &str,
+        attributes: &[String],
+    ) -> Result<Vec<serde_json::Value>> {
         let page = self.page.read().await;
         let attrs_json = serde_json::to_string(attributes)?;
-        let script = format!(r#"
+        let script = format!(
+            r#"
             (function() {{
                 const elements = document.querySelectorAll('{}');
                 const attributes = {};
@@ -839,22 +895,23 @@ impl Browser {
                 }});
                 return results;
             }})()
-        "#, selector, attrs_json);
-        
+        "#,
+            selector, attrs_json
+        );
+
         let result = page.evaluate(script.as_str()).await?;
         let value: serde_json::Value = result.into_value()?;
-        
-        let data = value.as_array()
-            .map(|arr| arr.clone())
-            .unwrap_or_default();
-        
+
+        let data = value.as_array().cloned().unwrap_or_default();
+
         Ok(data)
     }
-    
+
     /// Extract table data
     pub async fn extract_table(&self, selector: &str) -> Result<Vec<Vec<String>>> {
         let page = self.page.read().await;
-        let script = format!(r#"
+        let script = format!(
+            r#"
             (function() {{
                 const table = document.querySelector('{}');
                 if (!table) return [];
@@ -870,17 +927,21 @@ impl Browser {
                 }});
                 return data;
             }})()
-        "#, selector);
-        
+        "#,
+            selector
+        );
+
         let result = page.evaluate(script.as_str()).await?;
         let value: serde_json::Value = result.into_value()?;
-        
-        let table = value.as_array()
+
+        let table = value
+            .as_array()
             .map(|rows| {
                 rows.iter()
                     .filter_map(|row| {
                         row.as_array().map(|cells| {
-                            cells.iter()
+                            cells
+                                .iter()
                                 .filter_map(|cell| cell.as_str().map(String::from))
                                 .collect()
                         })
@@ -888,14 +949,15 @@ impl Browser {
                     .collect()
             })
             .unwrap_or_default();
-        
+
         Ok(table)
     }
-    
+
     /// Extract form data
     pub async fn extract_form(&self, selector: &str) -> Result<serde_json::Value> {
         let page = self.page.read().await;
-        let script = format!(r#"
+        let script = format!(
+            r#"
             (function() {{
                 const form = document.querySelector('{}');
                 if (!form) return null;
@@ -914,39 +976,42 @@ impl Browser {
                 }});
                 return formData;
             }})()
-        "#, selector);
-        
+        "#,
+            selector
+        );
+
         let result = page.evaluate(script.as_str()).await?;
         let value = result.into_value()?;
         Ok(value)
     }
-    
+
     /// Wait for a JavaScript condition to be true
     pub async fn wait_for_condition(&self, condition: &str, timeout: Duration) -> Result<()> {
         let page = self.page.read().await;
         let start = std::time::Instant::now();
-        
+
         loop {
             let script = format!("(function() {{ return {}; }})()", condition);
             let result = page.evaluate(script.as_str()).await?;
             let value: bool = result.into_value().unwrap_or(false);
-            
+
             if value {
                 return Ok(());
             }
-            
+
             if start.elapsed() > timeout {
                 return Err(anyhow!("Timeout waiting for condition: {}", condition));
             }
-            
+
             tokio::time::sleep(Duration::from_millis(100)).await;
         }
     }
-    
+
     /// Get element information
     pub async fn get_element_info(&self, selector: &str) -> Result<serde_json::Value> {
         let page = self.page.read().await;
-        let script = format!(r#"
+        let script = format!(
+            r#"
             (function() {{
                 const el = document.querySelector('{}');
                 if (!el) return null;
@@ -978,20 +1043,20 @@ impl Browser {
                     }}
                 }};
             }})()
-        "#, selector);
-        
+        "#,
+            selector
+        );
+
         let result = page.evaluate(script.as_str()).await?;
         let value: serde_json::Value = result.into_value()?;
-        
+
         if value.is_null() {
             return Err(anyhow!("Element not found: {}", selector));
         }
-        
+
         Ok(value)
     }
 }
 
 // Export public types
-pub use self::{
-    BrowserOps as BrowserOperations,
-};
+pub use self::BrowserOps as BrowserOperations;

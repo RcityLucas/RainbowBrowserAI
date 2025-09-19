@@ -11,9 +11,9 @@ use std::collections::HashMap;
 use std::time::Instant;
 use tracing::{error, info};
 
-use super::AppState;
 use super::task_executor::TaskPlanExecutor;
-use crate::llm::{LLMConfig, LLMService, LLMResponse as RealLLMResponse, TokenUsage};
+use super::AppState;
+use crate::llm::{LLMConfig, LLMResponse as RealLLMResponse, LLMService, TokenUsage};
 
 // Re-export TaskPlan from the real LLM module or define here if needed
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -50,11 +50,14 @@ impl Default for BrowserActionOptions {
 }
 
 // Helper function to build task planning prompt
-fn build_planning_prompt(instruction: &str, context: &HashMap<String, serde_json::Value>) -> String {
+fn build_planning_prompt(
+    instruction: &str,
+    context: &HashMap<String, serde_json::Value>,
+) -> String {
     let mut prompt = String::from(
         "You are a browser automation expert. Convert the following instruction into a series of browser actions.\n\n"
     );
-    
+
     // Add context if available
     if !context.is_empty() {
         prompt.push_str("Context:\n");
@@ -63,7 +66,7 @@ fn build_planning_prompt(instruction: &str, context: &HashMap<String, serde_json
         }
         prompt.push('\n');
     }
-    
+
     prompt.push_str(&format!("Instruction: {}\n\n", instruction));
     prompt.push_str(
         "Respond with a JSON object containing:\n\
@@ -84,9 +87,9 @@ fn build_planning_prompt(instruction: &str, context: &HashMap<String, serde_json
           \"estimated_time_seconds\": integer,\n\
           \"complexity\": \"simple|medium|complex\"\n\
         }\n\n\
-        Only use common, reliable CSS selectors. Be specific and accurate."
+        Only use common, reliable CSS selectors. Be specific and accurate.",
     );
-    
+
     prompt
 }
 
@@ -95,13 +98,16 @@ fn parse_task_plan(response_content: &str) -> Result<TaskPlan, String> {
     // Try to extract JSON from the response
     let json_start = response_content.find('{');
     let json_end = response_content.rfind('}');
-    
+
     if let (Some(start), Some(end)) = (json_start, json_end) {
         let json_str = &response_content[start..=end];
-        
+
         match serde_json::from_str::<TaskPlan>(json_str) {
             Ok(plan) => {
-                info!("Successfully parsed LLM task plan with {} steps", plan.steps.len());
+                info!(
+                    "Successfully parsed LLM task plan with {} steps",
+                    plan.steps.len()
+                );
                 Ok(plan)
             }
             Err(e) => {
@@ -128,7 +134,7 @@ fn parse_task_plan(response_content: &str) -> Result<TaskPlan, String> {
 async fn mock_task_planner(prompt: &str) -> Result<Vec<BrowserAction>, String> {
     let mut actions = Vec::new();
     let prompt_lower = prompt.to_lowercase();
-    
+
     if prompt_lower.contains("navigate") || prompt_lower.contains("go to") {
         let url = if prompt_lower.contains("google.com") {
             "https://google.com"
@@ -137,7 +143,7 @@ async fn mock_task_planner(prompt: &str) -> Result<Vec<BrowserAction>, String> {
         } else {
             "https://example.com"
         };
-        
+
         actions.push(BrowserAction {
             action_type: "navigate".to_string(),
             target: Some(url.to_string()),
@@ -154,7 +160,7 @@ async fn mock_task_planner(prompt: &str) -> Result<Vec<BrowserAction>, String> {
         } else {
             "[data-testid='click-target']"
         };
-        
+
         actions.push(BrowserAction {
             action_type: "click".to_string(),
             target: Some(selector.to_string()),
@@ -169,7 +175,7 @@ async fn mock_task_planner(prompt: &str) -> Result<Vec<BrowserAction>, String> {
         } else {
             "input"
         };
-        
+
         actions.push(BrowserAction {
             action_type: "type".to_string(),
             target: Some(selector.to_string()),
@@ -201,25 +207,26 @@ async fn mock_task_planner(prompt: &str) -> Result<Vec<BrowserAction>, String> {
 
 /// Enhanced error type for LLM operations
 #[derive(Debug, thiserror::Error)]
+#[allow(dead_code)]
 pub enum LLMApiError {
     #[error("LLM provider not available: {0}")]
     ProviderUnavailable(String),
-    
+
     #[error("Task planning failed: {0}")]
     TaskPlanningError(String),
-    
+
     #[error("Natural language processing failed: {0}")]
     NLPError(String),
-    
+
     #[error("Cost limit exceeded: current {current}USD, limit {limit}USD")]
     CostLimitExceeded { current: f64, limit: f64 },
-    
+
     #[error("Invalid request parameters: {0}")]
     ValidationError(String),
-    
+
     #[error("LLM service unavailable: {0}")]
     ServiceUnavailable(String),
-    
+
     #[error("Command execution failed: {0}")]
     ExecutionError(String),
 }
@@ -252,7 +259,7 @@ impl<T> LLMResponse<T> {
             metadata,
         }
     }
-    
+
     pub fn error(error: String, metadata: LLMResponseMetadata) -> Self {
         Self {
             success: false,
@@ -269,8 +276,11 @@ pub async fn llm_query(
     Json(req): Json<LLMQueryRequest>,
 ) -> impl IntoResponse {
     let start_time = Instant::now();
-    info!("Processing LLM query: {:?}", req.prompt.chars().take(50).collect::<String>());
-    
+    info!(
+        "Processing LLM query: {:?}",
+        req.prompt.chars().take(50).collect::<String>()
+    );
+
     // Validate request
     if let Err(validation_error) = validate_llm_query_request(&req) {
         let metadata = LLMResponseMetadata {
@@ -281,12 +291,18 @@ pub async fn llm_query(
             confidence: None,
             total_time_ms: start_time.elapsed().as_millis() as u64,
         };
-        return (StatusCode::BAD_REQUEST,
-               Json(LLMResponse::<()>::error(validation_error.to_string(), metadata))).into_response();
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(LLMResponse::<()>::error(
+                validation_error.to_string(),
+                metadata,
+            )),
+        )
+            .into_response();
     }
-    
+
     let processing_start = Instant::now();
-    
+
     // Create LLM configuration and service
     let llm_config = create_llm_config(&req);
     let mut llm_service = match LLMService::new(llm_config.clone()) {
@@ -307,27 +323,36 @@ pub async fn llm_query(
             return Json(LLMResponse::success(mock_response, metadata)).into_response();
         }
     };
-    
+
     // Try real LLM query
     match llm_service.query(&req.prompt).await {
         Ok(real_response) => {
             let processing_time = processing_start.elapsed().as_millis() as u64;
-            
+
             let metadata = LLMResponseMetadata {
                 processing_time_ms: processing_time,
-                provider_used: req.provider.clone().unwrap_or_else(|| llm_config.default_provider.clone()),
+                provider_used: req
+                    .provider
+                    .clone()
+                    .unwrap_or_else(|| llm_config.default_provider.clone()),
                 tokens_used: real_response.usage.total_tokens,
-                estimated_cost_usd: calculate_cost(&real_response.usage, &llm_config.default_provider),
+                estimated_cost_usd: calculate_cost(
+                    &real_response.usage,
+                    &llm_config.default_provider,
+                ),
                 confidence: Some(0.9),
                 total_time_ms: start_time.elapsed().as_millis() as u64,
             };
-            
-            info!("Real LLM query completed in {}ms, tokens: {}", processing_time, real_response.usage.total_tokens);
+
+            info!(
+                "Real LLM query completed in {}ms, tokens: {}",
+                processing_time, real_response.usage.total_tokens
+            );
             Json(LLMResponse::success(real_response, metadata)).into_response()
         }
         Err(e) => {
             error!("LLM query failed: {}, falling back to mock", e);
-            
+
             // Fallback to mock response
             let mock_response = create_mock_llm_response(&req).await;
             let processing_time = processing_start.elapsed().as_millis() as u64;
@@ -339,8 +364,11 @@ pub async fn llm_query(
                 confidence: Some(0.5),
                 total_time_ms: start_time.elapsed().as_millis() as u64,
             };
-            
-            info!("Mock LLM query completed in {}ms, tokens: {}", processing_time, mock_response.usage.total_tokens);
+
+            info!(
+                "Mock LLM query completed in {}ms, tokens: {}",
+                processing_time, mock_response.usage.total_tokens
+            );
             Json(LLMResponse::success(mock_response, metadata)).into_response()
         }
     }
@@ -353,7 +381,7 @@ pub async fn task_planning(
 ) -> impl IntoResponse {
     let start_time = Instant::now();
     info!("Processing task planning request: {}", req.instruction);
-    
+
     // Validate request
     if let Err(validation_error) = validate_task_planning_request(&req) {
         let metadata = LLMResponseMetadata {
@@ -364,30 +392,45 @@ pub async fn task_planning(
             confidence: None,
             total_time_ms: start_time.elapsed().as_millis() as u64,
         };
-        return (StatusCode::BAD_REQUEST,
-               Json(LLMResponse::<()>::error(validation_error.to_string(), metadata))).into_response();
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(LLMResponse::<()>::error(
+                validation_error.to_string(),
+                metadata,
+            )),
+        )
+            .into_response();
     }
-    
+
     // Create LLM configuration
     let llm_config = create_llm_config_for_planning(&req);
     let provider_name = llm_config.default_provider.clone();
-    
+
     match LLMService::new(llm_config) {
         Ok(mut llm_service) => {
             let processing_start = Instant::now();
-            
+
             // Build context for task planning
             let mut context = HashMap::new();
-            context.insert("url".to_string(), serde_json::Value::String(req.url.unwrap_or_else(|| "about:blank".to_string())));
-            context.insert("complexity".to_string(), serde_json::Value::String(req.complexity.unwrap_or_else(|| "medium".to_string())));
-            
+            context.insert(
+                "url".to_string(),
+                serde_json::Value::String(req.url.unwrap_or_else(|| "about:blank".to_string())),
+            );
+            context.insert(
+                "complexity".to_string(),
+                serde_json::Value::String(req.complexity.unwrap_or_else(|| "medium".to_string())),
+            );
+
             if let Some(ref page_context) = req.page_context {
-                context.insert("page_context".to_string(), serde_json::Value::Object(page_context.clone()));
+                context.insert(
+                    "page_context".to_string(),
+                    serde_json::Value::Object(page_context.clone()),
+                );
             }
-            
+
             // Build planning prompt
             let planning_prompt = build_planning_prompt(&req.instruction, &context);
-            
+
             match llm_service.query(&planning_prompt).await {
                 Ok(llm_response) => {
                     // Try to parse the response as a task plan
@@ -396,55 +439,75 @@ pub async fn task_planning(
                             let processing_time = processing_start.elapsed().as_millis() as u64;
                             let metadata = LLMResponseMetadata {
                                 processing_time_ms: processing_time,
-                                provider_used: req.provider.unwrap_or_else(|| "default".to_string()),
+                                provider_used: req
+                                    .provider
+                                    .unwrap_or_else(|| "default".to_string()),
                                 tokens_used: llm_response.usage.total_tokens,
-                                estimated_cost_usd: calculate_cost(&llm_response.usage, &provider_name),
+                                estimated_cost_usd: calculate_cost(
+                                    &llm_response.usage,
+                                    &provider_name,
+                                ),
                                 confidence: Some(task_plan.confidence),
                                 total_time_ms: start_time.elapsed().as_millis() as u64,
                             };
-                            
-                            info!("Task planning completed in {}ms with {} steps", processing_time, task_plan.steps.len());
+
+                            info!(
+                                "Task planning completed in {}ms with {} steps",
+                                processing_time,
+                                task_plan.steps.len()
+                            );
                             Json(LLMResponse::success(task_plan, metadata)).into_response()
                         }
                         Err(e) => {
                             error!("Failed to parse task plan: {}, falling back to mock", e);
-                            
+
                             // Fallback to mock planner
-                            let actions = mock_task_planner(&req.instruction).await.unwrap_or_default();
+                            let actions = mock_task_planner(&req.instruction)
+                                .await
+                                .unwrap_or_default();
                             let task_plan = TaskPlan {
                                 steps: actions,
                                 confidence: 0.7,
                                 estimated_time_seconds: 10,
                                 complexity: "medium".to_string(),
                             };
-                            
+
                             let processing_time = processing_start.elapsed().as_millis() as u64;
                             let metadata = LLMResponseMetadata {
                                 processing_time_ms: processing_time,
                                 provider_used: "fallback".to_string(),
                                 tokens_used: llm_response.usage.total_tokens,
-                                estimated_cost_usd: calculate_cost(&llm_response.usage, &provider_name),
+                                estimated_cost_usd: calculate_cost(
+                                    &llm_response.usage,
+                                    &provider_name,
+                                ),
                                 confidence: Some(task_plan.confidence),
                                 total_time_ms: start_time.elapsed().as_millis() as u64,
                             };
-                            
-                            info!("Fallback task planning completed in {}ms with {} steps", processing_time, task_plan.steps.len());
+
+                            info!(
+                                "Fallback task planning completed in {}ms with {} steps",
+                                processing_time,
+                                task_plan.steps.len()
+                            );
                             Json(LLMResponse::success(task_plan, metadata)).into_response()
                         }
                     }
                 }
                 Err(e) => {
                     error!("LLM query failed: {}, using mock planner", e);
-                    
+
                     // Fallback to mock planner
-                    let actions = mock_task_planner(&req.instruction).await.unwrap_or_default();
+                    let actions = mock_task_planner(&req.instruction)
+                        .await
+                        .unwrap_or_default();
                     let task_plan = TaskPlan {
                         steps: actions,
                         confidence: 0.5,
                         estimated_time_seconds: 10,
                         complexity: "medium".to_string(),
                     };
-                    
+
                     let processing_time = processing_start.elapsed().as_millis() as u64;
                     let metadata = LLMResponseMetadata {
                         processing_time_ms: processing_time,
@@ -454,12 +517,16 @@ pub async fn task_planning(
                         confidence: Some(task_plan.confidence),
                         total_time_ms: start_time.elapsed().as_millis() as u64,
                     };
-                    
-                    info!("Mock task planning completed in {}ms with {} steps", processing_time, task_plan.steps.len());
+
+                    info!(
+                        "Mock task planning completed in {}ms with {} steps",
+                        processing_time,
+                        task_plan.steps.len()
+                    );
                     Json(LLMResponse::success(task_plan, metadata)).into_response()
                 }
             }
-        },
+        }
         Err(e) => {
             error!("Failed to create LLM service for task planning: {}", e);
             let metadata = LLMResponseMetadata {
@@ -470,8 +537,14 @@ pub async fn task_planning(
                 confidence: None,
                 total_time_ms: start_time.elapsed().as_millis() as u64,
             };
-            (StatusCode::INTERNAL_SERVER_ERROR,
-             Json(LLMResponse::<()>::error(format!("LLM service initialization failed: {}", e), metadata))).into_response()
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(LLMResponse::<()>::error(
+                    format!("LLM service initialization failed: {}", e),
+                    metadata,
+                )),
+            )
+                .into_response()
         }
     }
 }
@@ -483,7 +556,7 @@ pub async fn execute_command(
 ) -> impl IntoResponse {
     let start_time = Instant::now();
     info!("Processing natural language command: {}", req.command);
-    
+
     // Validate request
     if let Err(validation_error) = validate_execute_command_request(&req) {
         let metadata = LLMResponseMetadata {
@@ -494,10 +567,16 @@ pub async fn execute_command(
             confidence: None,
             total_time_ms: start_time.elapsed().as_millis() as u64,
         };
-        return (StatusCode::BAD_REQUEST,
-               Json(LLMResponse::<()>::error(validation_error.to_string(), metadata))).into_response();
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(LLMResponse::<()>::error(
+                validation_error.to_string(),
+                metadata,
+            )),
+        )
+            .into_response();
     }
-    
+
     // First, plan the task
     let task_planning_req = TaskPlanningRequest {
         instruction: req.command.clone(),
@@ -508,7 +587,7 @@ pub async fn execute_command(
         max_steps: req.max_steps,
         session_id: req.session_id.clone(),
     };
-    
+
     // Get or create browser session
     let _browser = match state.browser_pool.acquire().await {
         Ok(browser) => browser,
@@ -522,45 +601,60 @@ pub async fn execute_command(
                 confidence: None,
                 total_time_ms: start_time.elapsed().as_millis() as u64,
             };
-            return (StatusCode::INTERNAL_SERVER_ERROR,
-                   Json(LLMResponse::<()>::error(format!("Failed to acquire browser: {}", e), metadata))).into_response();
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(LLMResponse::<()>::error(
+                    format!("Failed to acquire browser: {}", e),
+                    metadata,
+                )),
+            )
+                .into_response();
         }
     };
-    
+
     // Create LLM configuration
     let llm_config = create_llm_config_for_planning(&task_planning_req);
     let provider_name = llm_config.default_provider.clone();
-    
+
     match LLMService::new(llm_config) {
         Ok(mut llm_service) => {
             let processing_start = Instant::now();
-            
+
             // Build context for command execution
             let mut context = HashMap::new();
-            context.insert("url".to_string(), serde_json::Value::String(req.url.unwrap_or_else(|| "about:blank".to_string())));
-            context.insert("auto_execute".to_string(), serde_json::Value::Bool(req.auto_execute.unwrap_or(true)));
-            
+            context.insert(
+                "url".to_string(),
+                serde_json::Value::String(req.url.unwrap_or_else(|| "about:blank".to_string())),
+            );
+            context.insert(
+                "auto_execute".to_string(),
+                serde_json::Value::Bool(req.auto_execute.unwrap_or(true)),
+            );
+
             // Build planning prompt and query LLM
             let planning_prompt = build_planning_prompt(&req.command, &context);
-            
+
             match llm_service.query(&planning_prompt).await {
                 Ok(llm_response) => {
                     // Try to parse the response as a task plan
                     match parse_task_plan(&llm_response.content) {
                         Ok(task_plan) => {
                             let planning_time = processing_start.elapsed().as_millis() as u64;
-                            
+
                             // Execute the plan if auto_execute is true
                             let execution_result = if req.auto_execute.unwrap_or(true) {
-                                info!("Auto-executing task plan with {} steps", task_plan.steps.len());
-                                
+                                info!(
+                                    "Auto-executing task plan with {} steps",
+                                    task_plan.steps.len()
+                                );
+
                                 // Use the real task plan executor
                                 let executor = TaskPlanExecutor::new(_browser.browser_arc());
                                 match executor.execute_plan(task_plan.clone()).await {
                                     Ok(exec_result) => {
                                         info!("Task plan execution completed: {} steps completed, {} failed", 
                                               exec_result.steps_completed, exec_result.steps_failed);
-                                        
+
                                         Some(serde_json::json!({
                                             "executed": true,
                                             "success": exec_result.success,
@@ -589,30 +683,39 @@ pub async fn execute_command(
                                 info!("Task plan created but not executed (auto_execute=false)");
                                 None
                             };
-                            
-                            let total_processing_time = processing_start.elapsed().as_millis() as u64;
+
+                            let total_processing_time =
+                                processing_start.elapsed().as_millis() as u64;
                             let metadata = LLMResponseMetadata {
                                 processing_time_ms: total_processing_time,
-                                provider_used: req.provider.unwrap_or_else(|| "default".to_string()),
+                                provider_used: req
+                                    .provider
+                                    .unwrap_or_else(|| "default".to_string()),
                                 tokens_used: llm_response.usage.total_tokens,
-                                estimated_cost_usd: calculate_cost(&llm_response.usage, &provider_name),
+                                estimated_cost_usd: calculate_cost(
+                                    &llm_response.usage,
+                                    &provider_name,
+                                ),
                                 confidence: Some(task_plan.confidence),
                                 total_time_ms: start_time.elapsed().as_millis() as u64,
                             };
-                            
+
                             let response_data = serde_json::json!({
                                 "command": req.command,
                                 "task_plan": task_plan,
                                 "execution_result": execution_result,
                                 "planning_time_ms": planning_time
                             });
-                            
-                            info!("Command processing completed in {}ms", total_processing_time);
+
+                            info!(
+                                "Command processing completed in {}ms",
+                                total_processing_time
+                            );
                             Json(LLMResponse::success(response_data, metadata)).into_response()
                         }
                         Err(e) => {
                             error!("Failed to parse task plan: {}, creating mock plan", e);
-                            
+
                             // Fallback to mock planner
                             let actions = mock_task_planner(&req.command).await.unwrap_or_default();
                             let task_plan = TaskPlan {
@@ -621,64 +724,64 @@ pub async fn execute_command(
                                 estimated_time_seconds: 10,
                                 complexity: "medium".to_string(),
                             };
-                            
+
                             let planning_time = processing_start.elapsed().as_millis() as u64;
                             let execution_result = if req.auto_execute.unwrap_or(true) {
                                 // Execute fallback plan with task executor
                                 let executor = TaskPlanExecutor::new(_browser.browser_arc());
                                 match executor.execute_plan(task_plan.clone()).await {
-                                    Ok(exec_result) => {
-                                        Some(serde_json::json!({
-                                            "executed": true,
-                                            "success": exec_result.success,
-                                            "steps_completed": exec_result.steps_completed,
-                                            "steps_failed": exec_result.steps_failed,
-                                            "execution_time_ms": exec_result.total_execution_time_ms,
-                                            "results": exec_result.final_result,
-                                            "action_results": exec_result.action_results,
-                                            "error": exec_result.error
-                                        }))
-                                    }
-                                    Err(e) => {
-                                        Some(serde_json::json!({
-                                            "executed": true,
-                                            "success": false,
-                                            "steps_completed": 0,
-                                            "steps_failed": task_plan.steps.len(),
-                                            "execution_time_ms": 0,
-                                            "results": "Fallback task execution failed",
-                                            "error": e.to_string()
-                                        }))
-                                    }
+                                    Ok(exec_result) => Some(serde_json::json!({
+                                        "executed": true,
+                                        "success": exec_result.success,
+                                        "steps_completed": exec_result.steps_completed,
+                                        "steps_failed": exec_result.steps_failed,
+                                        "execution_time_ms": exec_result.total_execution_time_ms,
+                                        "results": exec_result.final_result,
+                                        "action_results": exec_result.action_results,
+                                        "error": exec_result.error
+                                    })),
+                                    Err(e) => Some(serde_json::json!({
+                                        "executed": true,
+                                        "success": false,
+                                        "steps_completed": 0,
+                                        "steps_failed": task_plan.steps.len(),
+                                        "execution_time_ms": 0,
+                                        "results": "Fallback task execution failed",
+                                        "error": e.to_string()
+                                    })),
                                 }
                             } else {
                                 None
                             };
-                            
-                            let total_processing_time = processing_start.elapsed().as_millis() as u64;
+
+                            let total_processing_time =
+                                processing_start.elapsed().as_millis() as u64;
                             let metadata = LLMResponseMetadata {
                                 processing_time_ms: total_processing_time,
                                 provider_used: "fallback".to_string(),
                                 tokens_used: llm_response.usage.total_tokens,
-                                estimated_cost_usd: calculate_cost(&llm_response.usage, &provider_name),
+                                estimated_cost_usd: calculate_cost(
+                                    &llm_response.usage,
+                                    &provider_name,
+                                ),
                                 confidence: Some(task_plan.confidence),
                                 total_time_ms: start_time.elapsed().as_millis() as u64,
                             };
-                            
+
                             let response_data = serde_json::json!({
                                 "command": req.command,
                                 "task_plan": task_plan,
                                 "execution_result": execution_result,
                                 "planning_time_ms": planning_time
                             });
-                            
+
                             Json(LLMResponse::success(response_data, metadata)).into_response()
                         }
                     }
                 }
                 Err(e) => {
                     error!("LLM query failed: {}, using mock planner", e);
-                    
+
                     // Fallback to mock planner
                     let actions = mock_task_planner(&req.command).await.unwrap_or_default();
                     let task_plan = TaskPlan {
@@ -687,40 +790,36 @@ pub async fn execute_command(
                         estimated_time_seconds: 10,
                         complexity: "medium".to_string(),
                     };
-                    
+
                     let planning_time = processing_start.elapsed().as_millis() as u64;
                     let execution_result = if req.auto_execute.unwrap_or(true) {
-                        // Execute mock plan with task executor  
+                        // Execute mock plan with task executor
                         let executor = TaskPlanExecutor::new(_browser.browser_arc());
                         match executor.execute_plan(task_plan.clone()).await {
-                            Ok(exec_result) => {
-                                Some(serde_json::json!({
-                                    "executed": true,
-                                    "success": exec_result.success,
-                                    "steps_completed": exec_result.steps_completed,
-                                    "steps_failed": exec_result.steps_failed,
-                                    "execution_time_ms": exec_result.total_execution_time_ms,
-                                    "results": exec_result.final_result,
-                                    "action_results": exec_result.action_results,
-                                    "error": exec_result.error
-                                }))
-                            }
-                            Err(e) => {
-                                Some(serde_json::json!({
-                                    "executed": true,
-                                    "success": false,
-                                    "steps_completed": 0,
-                                    "steps_failed": task_plan.steps.len(),
-                                    "execution_time_ms": 0,
-                                    "results": "Mock task execution failed",
-                                    "error": e.to_string()
-                                }))
-                            }
+                            Ok(exec_result) => Some(serde_json::json!({
+                                "executed": true,
+                                "success": exec_result.success,
+                                "steps_completed": exec_result.steps_completed,
+                                "steps_failed": exec_result.steps_failed,
+                                "execution_time_ms": exec_result.total_execution_time_ms,
+                                "results": exec_result.final_result,
+                                "action_results": exec_result.action_results,
+                                "error": exec_result.error
+                            })),
+                            Err(e) => Some(serde_json::json!({
+                                "executed": true,
+                                "success": false,
+                                "steps_completed": 0,
+                                "steps_failed": task_plan.steps.len(),
+                                "execution_time_ms": 0,
+                                "results": "Mock task execution failed",
+                                "error": e.to_string()
+                            })),
                         }
                     } else {
                         None
                     };
-                    
+
                     let total_processing_time = processing_start.elapsed().as_millis() as u64;
                     let metadata = LLMResponseMetadata {
                         processing_time_ms: total_processing_time,
@@ -730,18 +829,18 @@ pub async fn execute_command(
                         confidence: Some(task_plan.confidence),
                         total_time_ms: start_time.elapsed().as_millis() as u64,
                     };
-                    
+
                     let response_data = serde_json::json!({
                         "command": req.command,
                         "task_plan": task_plan,
                         "execution_result": execution_result,
                         "planning_time_ms": planning_time
                     });
-                    
+
                     Json(LLMResponse::success(response_data, metadata)).into_response()
                 }
             }
-        },
+        }
         Err(e) => {
             error!("Failed to create LLM service for command execution: {}", e);
             let metadata = LLMResponseMetadata {
@@ -752,8 +851,14 @@ pub async fn execute_command(
                 confidence: None,
                 total_time_ms: start_time.elapsed().as_millis() as u64,
             };
-            (StatusCode::INTERNAL_SERVER_ERROR,
-             Json(LLMResponse::<()>::error(format!("LLM service initialization failed: {}", e), metadata))).into_response()
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(LLMResponse::<()>::error(
+                    format!("LLM service initialization failed: {}", e),
+                    metadata,
+                )),
+            )
+                .into_response()
         }
     }
 }
@@ -765,7 +870,7 @@ pub async fn get_usage_metrics(
 ) -> impl IntoResponse {
     let start_time = Instant::now();
     info!("Fetching usage metrics for timeframe: {:?}", req.timeframe);
-    
+
     // For now, return mock usage data
     // In a real implementation, this would query a database or persistent storage
     let usage_metrics = serde_json::json!({
@@ -806,7 +911,7 @@ pub async fn get_usage_metrics(
         "period_end": "2024-01-02T00:00:00Z",
         "generated_at": chrono::Utc::now().to_rfc3339()
     });
-    
+
     let metadata = LLMResponseMetadata {
         processing_time_ms: start_time.elapsed().as_millis() as u64,
         provider_used: "metrics".to_string(),
@@ -815,13 +920,14 @@ pub async fn get_usage_metrics(
         confidence: None,
         total_time_ms: start_time.elapsed().as_millis() as u64,
     };
-    
+
     Json(LLMResponse::success(usage_metrics, metadata)).into_response()
 }
 
 // Request/Response types for LLM API
 
 #[derive(Deserialize)]
+#[allow(dead_code)]
 pub struct LLMQueryRequest {
     pub prompt: String,
     pub provider: Option<String>, // "openai", "claude", "mock"
@@ -831,6 +937,7 @@ pub struct LLMQueryRequest {
 }
 
 #[derive(Deserialize)]
+#[allow(dead_code)]
 pub struct TaskPlanningRequest {
     pub instruction: String,
     pub url: Option<String>,
@@ -853,6 +960,7 @@ pub struct ExecuteCommandRequest {
 }
 
 #[derive(Deserialize)]
+#[allow(dead_code)]
 pub struct UsageMetricsRequest {
     pub timeframe: Option<String>, // "hour", "day", "week", "month"
     pub provider: Option<String>,
@@ -864,73 +972,95 @@ pub struct UsageMetricsRequest {
 
 fn validate_llm_query_request(req: &LLMQueryRequest) -> Result<(), LLMApiError> {
     if req.prompt.trim().is_empty() {
-        return Err(LLMApiError::ValidationError("Prompt cannot be empty".to_string()));
+        return Err(LLMApiError::ValidationError(
+            "Prompt cannot be empty".to_string(),
+        ));
     }
-    
+
     if req.prompt.len() > 32000 {
-        return Err(LLMApiError::ValidationError("Prompt too long (max 32000 characters)".to_string()));
+        return Err(LLMApiError::ValidationError(
+            "Prompt too long (max 32000 characters)".to_string(),
+        ));
     }
-    
+
     if let Some(ref provider) = req.provider {
         let valid_providers = ["openai", "claude", "mock"];
         if !valid_providers.contains(&provider.as_str()) {
+            return Err(LLMApiError::ValidationError(format!(
+                "Invalid provider '{}'. Valid providers: {}",
+                provider,
+                valid_providers.join(", ")
+            )));
+        }
+    }
+
+    if let Some(max_tokens) = req.max_tokens {
+        if max_tokens == 0 || max_tokens > 32000 {
             return Err(LLMApiError::ValidationError(
-                format!("Invalid provider '{}'. Valid providers: {}", provider, valid_providers.join(", "))
+                "max_tokens must be between 1 and 32000".to_string(),
             ));
         }
     }
-    
-    if let Some(max_tokens) = req.max_tokens {
-        if max_tokens == 0 || max_tokens > 32000 {
-            return Err(LLMApiError::ValidationError("max_tokens must be between 1 and 32000".to_string()));
-        }
-    }
-    
+
     if let Some(temperature) = req.temperature {
-        if temperature < 0.0 || temperature > 2.0 {
-            return Err(LLMApiError::ValidationError("temperature must be between 0.0 and 2.0".to_string()));
+        if !(0.0..=2.0).contains(&temperature) {
+            return Err(LLMApiError::ValidationError(
+                "temperature must be between 0.0 and 2.0".to_string(),
+            ));
         }
     }
-    
+
     Ok(())
 }
 
 fn validate_task_planning_request(req: &TaskPlanningRequest) -> Result<(), LLMApiError> {
     if req.instruction.trim().is_empty() {
-        return Err(LLMApiError::ValidationError("Instruction cannot be empty".to_string()));
+        return Err(LLMApiError::ValidationError(
+            "Instruction cannot be empty".to_string(),
+        ));
     }
-    
+
     if req.instruction.len() > 2000 {
-        return Err(LLMApiError::ValidationError("Instruction too long (max 2000 characters)".to_string()));
+        return Err(LLMApiError::ValidationError(
+            "Instruction too long (max 2000 characters)".to_string(),
+        ));
     }
-    
+
     if let Some(ref complexity) = req.complexity {
         let valid_complexities = ["simple", "medium", "complex"];
         if !valid_complexities.contains(&complexity.as_str()) {
+            return Err(LLMApiError::ValidationError(format!(
+                "Invalid complexity '{}'. Valid values: {}",
+                complexity,
+                valid_complexities.join(", ")
+            )));
+        }
+    }
+
+    if let Some(max_steps) = req.max_steps {
+        if max_steps == 0 || max_steps > 50 {
             return Err(LLMApiError::ValidationError(
-                format!("Invalid complexity '{}'. Valid values: {}", complexity, valid_complexities.join(", "))
+                "max_steps must be between 1 and 50".to_string(),
             ));
         }
     }
-    
-    if let Some(max_steps) = req.max_steps {
-        if max_steps == 0 || max_steps > 50 {
-            return Err(LLMApiError::ValidationError("max_steps must be between 1 and 50".to_string()));
-        }
-    }
-    
+
     Ok(())
 }
 
 fn validate_execute_command_request(req: &ExecuteCommandRequest) -> Result<(), LLMApiError> {
     if req.command.trim().is_empty() {
-        return Err(LLMApiError::ValidationError("Command cannot be empty".to_string()));
+        return Err(LLMApiError::ValidationError(
+            "Command cannot be empty".to_string(),
+        ));
     }
-    
+
     if req.command.len() > 1000 {
-        return Err(LLMApiError::ValidationError("Command too long (max 1000 characters)".to_string()));
+        return Err(LLMApiError::ValidationError(
+            "Command too long (max 1000 characters)".to_string(),
+        ));
     }
-    
+
     Ok(())
 }
 
@@ -965,21 +1095,21 @@ fn calculate_cost(usage: &TokenUsage, provider: &str) -> f64 {
             let input_cost = usage.prompt_tokens as f64 * 0.00003;
             let output_cost = usage.completion_tokens as f64 * 0.00006;
             input_cost + output_cost
-        },
+        }
         "claude" => {
             // Claude pricing (approximate)
             let input_cost = usage.prompt_tokens as f64 * 0.000008;
             let output_cost = usage.completion_tokens as f64 * 0.000024;
             input_cost + output_cost
-        },
-        _ => 0.01 // Default/mock cost
+        }
+        _ => 0.01, // Default/mock cost
     }
 }
 
 async fn create_mock_llm_response(req: &LLMQueryRequest) -> RealLLMResponse {
     // Simulate processing time
     tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-    
+
     let response_content = if req.prompt.to_lowercase().contains("navigate") {
         "I'll help you navigate to the specified URL. I'll use the browser automation to load the page and wait for it to be ready."
     } else if req.prompt.to_lowercase().contains("click") {
@@ -1010,7 +1140,7 @@ async fn create_mock_llm_response(req: &LLMQueryRequest) -> RealLLMResponse {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_validate_llm_query_request() {
         let valid_req = LLMQueryRequest {
@@ -1021,7 +1151,7 @@ mod tests {
             model: None,
         };
         assert!(validate_llm_query_request(&valid_req).is_ok());
-        
+
         let invalid_req = LLMQueryRequest {
             prompt: "".to_string(),
             provider: None,
@@ -1031,7 +1161,7 @@ mod tests {
         };
         assert!(validate_llm_query_request(&invalid_req).is_err());
     }
-    
+
     #[test]
     fn test_calculate_cost() {
         let usage = MockTokenUsage {
@@ -1039,13 +1169,13 @@ mod tests {
             completion_tokens: 50,
             total_tokens: 150,
         };
-        
+
         let openai_cost = calculate_cost(&usage, "openai");
         assert!(openai_cost > 0.0);
-        
+
         let claude_cost = calculate_cost(&usage, "claude");
         assert!(claude_cost > 0.0);
-        
+
         // Claude should be cheaper than OpenAI for same usage
         assert!(claude_cost < openai_cost);
     }
